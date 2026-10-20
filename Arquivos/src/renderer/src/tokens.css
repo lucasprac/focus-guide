@@ -1,0 +1,34 @@
+/* Design tokens: the single source for appearance values in both windows.
+   Base values serve the floating window; the main window refines them below.
+   Color rule: purple accent = action and selection; blue info = data and information. */
+:root {
+  --background: #F8F9FD; --panel: #FFFFFF; --text: #25243A; --muted: #62677D;
+  --accent: #6D4AFF; --on-accent: #FFFFFF; --accent-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  --blue: #2F62D9; --soft: #F1EEFF; --blue-soft: #EDF3FF;
+  --line: #DEDDEA; --control-line: #898B9F;
+  --danger: #A4314A; --error-soft: #FFF0F3;
+  --success: #2E7A55; --success-soft: #EAF6EF;
+}
+:root[data-theme="dark"] {
+  --background: #11111B; --panel: #1C1C2A; --text: #F0EFF8; --muted: #B5B5CB;
+  --accent: #AC96FF; --on-accent: #171122; --accent-hover: color-mix(in srgb, var(--accent) 88%, #FFF);
+  --blue: #93B2FF; --soft: #292338; --blue-soft: #202C43;
+  --line: #3E3C51; --control-line: #858199;
+  --danger: #FF94AF; --error-soft: #351D29;
+  --success: #7FD3A6; --success-soft: #1C3229;
+}
+:root:not(.floating-window) {
+  --background: #F5F5FC; --panel: #FFFFFF; --text: #24243D; --muted: #61647B;
+  --line: #E0DFF0; --control-line: #918FA5;
+  --surface-raised: #F9F8FF; --atmosphere-purple: #EAE4FF; --atmosphere-blue: #E7F0FF;
+  --shadow-panel: 0 6px 24px rgba(48, 35, 98, .045);
+  --shadow-overlay: 0 24px 80px rgba(29, 22, 65, .24);
+  --motion-control: 180ms; --motion-page: 280ms;
+}
+:root[data-theme="dark"]:not(.floating-window) {
+  --background: #101020; --panel: #191A2D; --text: #F0EFF8; --muted: #B5B5CB;
+  --line: #39394F; --control-line: #848298; --surface-raised: #222239;
+  --atmosphere-purple: #241D40; --atmosphere-blue: #152942;
+  --shadow-panel: 0 6px 24px rgba(0, 0, 0, .12);
+  --shadow-overlay: 0 24px 80px rgba(0, 0, 0, .45);
+}

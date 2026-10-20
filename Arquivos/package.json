@@ -1,0 +1,77 @@
+{
+  "name": "focus-guide",
+  "version": "1.5.0",
+  "description": "An offline focus and goal-planning companion with a private personal dataset.",
+  "main": "out/main/index.js",
+  "author": "Focus Guide",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "preview": "vite --config preview.vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "build:helper": "node scripts/build-helper.cjs",
+    "build": "npm run build:helper && electron-vite build",
+    "package": "npm run build && electron-builder --win --x64 --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "animejs": "4.5.0",
+    "electron": "44.6.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "radix-ui": "1.7.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "three": "0.186.1",
+    "typescript": "7.0.2",
+    "vite": "7.3.7"
+  },
+  "build": {
+    "appId": "local.focusguide.desktop",
+    "productName": "Focus Guide",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "win": {
+      "target": "dir",
+      "executableName": "FocusGuide",
+      "icon": "build/icon.ico",
+      "signExecutable": false
+    },
+    "npmRebuild": true,
+    "extraResources": [
+      {
+        "from": "native/bin/activity-helper.exe",
+        "to": "activity-helper.exe"
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "scripts/Start-Software-Rendering.cmd",
+        "to": "Start-Software-Rendering.cmd"
+      },
+      {
+        "from": "build/THIRD-PARTY-NOTICES.txt",
+        "to": "THIRD-PARTY-NOTICES.txt"
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+# Packaged app (generated; never source)
+/Aplicativo/
+
+# Dependencies and build output
+node_modules/
+Arquivos/out/
+Arquivos/dist/
+Arquivos/native/bin/
+
+# Local user data (must never be committed)
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*-wal
+*-shm
+*.csv
+focus-guide-backup*.json
+backups/
+
+# Logs, crash dumps, temporary files
+*.log
+npm-debug.log*
+*.dmp
+*.tmp
+*.bak
+*.orig
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Claude Code local config
+.claude/settings.local.json
+.claude/worktrees/
+
+# graphify knowledge graph (local only)
+graphify-out/

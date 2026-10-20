@@ -1,0 +1,73 @@
+/* Renderer stylesheet entry. Tailwind utilities always win over the legacy layer;
+   Preflight stays off until legacy resets are reconciled (see Docs/VISUAL-DESIGN.md). */
+@layer theme, tokens, base, legacy, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@source './';
+
+@import './tokens.css' layer(tokens);
+@import './styles.css' layer(legacy);
+
+/* Keeps the existing data-theme switch as Tailwind's dark variant. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Only semantic tokens are available as utilities; default palettes are cleared on purpose. */
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --text-*: initial;
+
+  --font-sans: 'Segoe UI', system-ui, sans-serif;
+
+  --radius-control: 10px;
+  --radius-card: 18px;
+  --radius-pill: 9999px;
+
+  /* 13px is the smallest size for readable text; 12px is reserved for badges. */
+  --text-badge: 12px;
+  --text-badge--line-height: 1.4;
+  --text-caption: 13px;
+  --text-caption--line-height: 1.5;
+  --text-label: 14px;
+  --text-label--line-height: 1.45;
+  --text-body: 15px;
+  --text-body--line-height: 1.6;
+  --text-title: 16px;
+  --text-title--line-height: 1.4;
+  --text-heading: 20px;
+  --text-heading--line-height: 1.3;
+  --text-display: 28px;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.02em;
+  --text-timer: 64px;
+  --text-timer--line-height: 1.1;
+  --text-timer--letter-spacing: -0.04em;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Theme-aware tokens resolve at runtime from tokens.css, so they are inlined. */
+@theme inline {
+  --color-canvas: var(--background);
+  --color-surface: var(--panel);
+  --color-surface-raised: var(--surface-raised, var(--panel));
+  --color-ink: var(--text);
+  --color-ink-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--soft);
+  --color-on-accent: var(--on-accent);
+  --color-info: var(--blue);
+  --color-info-soft: var(--blue-soft);
+  --color-line: var(--line);
+  --color-line-strong: var(--control-line);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--error-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+
+  --shadow-elevation-1: var(--shadow-panel, none);
+  --shadow-elevation-2: var(--shadow-overlay, none);
+}

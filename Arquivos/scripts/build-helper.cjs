@@ -1,0 +1,10 @@
+const { spawnSync } = require('node:child_process');
+const { mkdirSync, existsSync } = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const compiler = process.env.FOCUS_GUIDE_CXX || 'C:\\msys64\\ucrt64\\bin\\g++.exe';
+if (!existsSync(compiler)) throw new Error('MinGW C++ compiler is required to build the Windows helper. Set FOCUS_GUIDE_CXX.');
+mkdirSync(path.join(root, 'native/bin'), { recursive: true });
+const result = spawnSync(compiler, ['-std=c++17', '-O2', '-Wall', '-Wextra', '-static', '-s', path.join(root, 'native/activity-helper.cpp'), '-o', path.join(root, 'native/bin/activity-helper.exe'), '-luser32'], { windowsHide: true, stdio: 'inherit' });
+if (result.error) throw result.error;
+process.exit(result.status ?? 1);
