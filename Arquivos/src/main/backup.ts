@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { ActivitySample, BackupFile, Dataset, Field, FocusSession, SessionEvent, Task, TaskCategory, WeeklyReview } from '../shared/types';
 import * as v from '../shared/validation';
 import type { Store } from './store';
-import { GOAL_COLLECTIONS, goalData, upgradeGoalRecords } from '../shared/goal-types';
+import { GOAL_COLLECTIONS, LEGACY_GOAL_COLLECTIONS, V8_GOAL_COLLECTIONS, goalData, upgradeGoalRecords } from '../shared/goal-types';
 import { GOAL_LIMITS, validateGoalData } from '../shared/goal-validation';
 
 export const BACKUP_LIMITS = { bytes: 64 * 1024 * 1024, fields: 1000, tasks: 100000, categories: 1000, sessions: 50000, events: 500000, reviews: 5000, activity: 2000000 } as const;
@@ -50,21 +50,34 @@ export function validateBackup(value: unknown): BackupFile {
   }
   if (data.schemaVersion === 3) {
     keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity']);
-    return validateBackup({ ...data, schemaVersion: 4, ...goalData({}),
+    return validateBackup({ ...data, schemaVersion: 4, ...Object.fromEntries(LEGACY_GOAL_COLLECTIONS.map(key => [key, []])),
       tasks: rows(data.tasks,BACKUP_LIMITS.tasks).map(t => ({ ...t,goalId: null,milestoneId: null })),
       sessions: rows(data.sessions,BACKUP_LIMITS.sessions).map(s => ({ ...s,goalId: null,occurrenceId: null })) });
   }
   if (data.schemaVersion === 4) {
-    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...GOAL_COLLECTIONS]);
+    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...LEGACY_GOAL_COLLECTIONS]);
     const upgraded = upgradeGoalRecords({ goals: rows(data.goals, GOAL_LIMITS.goals), milestones: rows(data.milestones, GOAL_LIMITS.milestones) });
     return validateBackup({ ...data, schemaVersion: 5, goals: upgraded.goals, milestones: upgraded.milestones });
   }
   if (data.schemaVersion === 5) {
-    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...GOAL_COLLECTIONS]);
+    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...LEGACY_GOAL_COLLECTIONS]);
     return validateBackup({ ...data, schemaVersion: 6, milestones: upgradeGoalRecords({ milestones: rows(data.milestones, GOAL_LIMITS.milestones) }).milestones });
   }
+  if (data.schemaVersion === 6) {
+    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...LEGACY_GOAL_COLLECTIONS]);
+    return validateBackup({ ...data, schemaVersion: 7, milestones: upgradeGoalRecords({ milestones: rows(data.milestones, GOAL_LIMITS.milestones) }).milestones,
+      sessions: rows(data.sessions, BACKUP_LIMITS.sessions).map(s => ({ ...s, milestoneId: null })) });
+  }
+  if (data.schemaVersion === 7) {
+    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...LEGACY_GOAL_COLLECTIONS]);
+    return validateBackup({ ...data, schemaVersion: 8, agentProposals: [] });
+  }
+  if (data.schemaVersion === 8) {
+    keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...V8_GOAL_COLLECTIONS]);
+    return validateBackup({ ...data, schemaVersion: 9, agentChanges: [] });
+  }
   keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...GOAL_COLLECTIONS]);
-  if (data.format !== 'focus-guide' || data.schemaVersion !== 6) throw new Error('This is not a supported Focus Guide backup (versions 1 to 6).');
+  if (data.format !== 'focus-guide' || data.schemaVersion !== 9) throw new Error('This is not a supported Focus Guide backup (versions 1 to 9).');
   const fields: Field[] = rows(data.fields, BACKUP_LIMITS.fields).map(f => {
     keys(f, ['id', 'name', 'color', 'archived', 'createdAt']);
     return { id: v.id(f.id), name: v.text(f.name, 'Field name', 60, true), color: v.color(f.color), archived: v.bool(f.archived, 'Archived'), createdAt: v.timestamp(f.createdAt) };
@@ -78,7 +91,7 @@ export function validateBackup(value: unknown): BackupFile {
     return { goalId: t.goalId === null ? null : v.id(t.goalId), milestoneId: t.milestoneId === null ? null : v.id(t.milestoneId), categoryId: t.categoryId === null ? null : v.id(t.categoryId), notes: v.text(t.notes, 'Task notes', 2000), priority: v.priority(t.priority), dueDate: v.date(t.dueDate), id: v.id(t.id), fieldId: v.id(t.fieldId), title: v.text(t.title, 'Task title', 200, true), completed: v.bool(t.completed, 'Completed'), archived: v.bool(t.archived, 'Archived'), createdAt: v.timestamp(t.createdAt), updatedAt: v.timestamp(t.updatedAt) };
   });
   const sessions: FocusSession[] = rows(data.sessions, BACKUP_LIMITS.sessions).map(s => {
-    keys(s, ['id', 'fieldId', 'primaryTaskId', 'checklistIds', 'intention', 'plannedMs', 'activeMs', 'status', 'startedAt', 'endedAt', 'timezone', 'energy', 'focus', 'note', 'completionReason', 'excluded', 'recovered', 'timingMode', 'autoOvertime', 'targetReached', 'activityMode', 'behaviourVersion', 'goalId', 'occurrenceId']);
+    keys(s, ['id', 'fieldId', 'primaryTaskId', 'checklistIds', 'intention', 'plannedMs', 'activeMs', 'status', 'startedAt', 'endedAt', 'timezone', 'energy', 'focus', 'note', 'completionReason', 'excluded', 'recovered', 'timingMode', 'autoOvertime', 'targetReached', 'activityMode', 'behaviourVersion', 'goalId', 'occurrenceId', 'milestoneId']);
     if (!['running', 'paused', 'completed'].includes(String(s.status))) throw new Error('Invalid session status.');
     if (![null, 'early', 'timer'].includes(s.completionReason as string | null)) throw new Error('Invalid completion reason.');
     if (s.timingMode !== 'countdown' && s.timingMode !== 'stopwatch') throw new Error('Invalid timing mode.');
@@ -90,7 +103,7 @@ export function validateBackup(value: unknown): BackupFile {
     const status = s.status as FocusSession['status'];
     if ((status === 'completed') !== (s.endedAt !== null) || (status === 'completed') !== (s.completionReason !== null)) throw new Error('Session completion data is inconsistent.');
     if (s.completionReason === 'timer' && Math.abs(activeMs - plannedMs!) > 1) throw new Error('A timer-completed session has inconsistent time.');
-    return { goalId: s.goalId === null ? null : v.id(s.goalId), occurrenceId: s.occurrenceId === null ? null : v.id(s.occurrenceId), activityMode: v.activityMode(s.activityMode), behaviourVersion: v.number(s.behaviourVersion, 'Behaviour version', 0, 3), timingMode: s.timingMode, autoOvertime, targetReached, id: v.id(s.id), fieldId: v.id(s.fieldId), primaryTaskId: s.primaryTaskId === null ? null : v.id(s.primaryTaskId), checklistIds: ids(s.checklistIds), intention: v.text(s.intention, 'Intention', 500), plannedMs, activeMs, status,
+    return { goalId: s.goalId === null ? null : v.id(s.goalId), occurrenceId: s.occurrenceId === null ? null : v.id(s.occurrenceId), milestoneId: s.milestoneId === null ? null : v.id(s.milestoneId), activityMode: v.activityMode(s.activityMode), behaviourVersion: v.number(s.behaviourVersion, 'Behaviour version', 0, 3), timingMode: s.timingMode, autoOvertime, targetReached, id: v.id(s.id), fieldId: v.id(s.fieldId), primaryTaskId: s.primaryTaskId === null ? null : v.id(s.primaryTaskId), checklistIds: ids(s.checklistIds), intention: v.text(s.intention, 'Intention', 500), plannedMs, activeMs, status,
       startedAt: v.timestamp(s.startedAt), endedAt: s.endedAt === null ? null : v.timestamp(s.endedAt), timezone: timezone(s.timezone), energy: v.rating(s.energy), focus: v.rating(s.focus), note: v.text(s.note, 'Note', 2000), completionReason: s.completionReason as FocusSession['completionReason'], excluded: v.bool(s.excluded, 'Excluded'), recovered: v.bool(s.recovered, 'Recovered') };
   });
   const events: SessionEvent[] = rows(data.events, BACKUP_LIMITS.events).map(e => {
@@ -141,10 +154,10 @@ export function validateBackup(value: unknown): BackupFile {
   if (sessions.filter(s => s.status !== 'completed').length > 1) throw new Error('The backup contains multiple unfinished sessions.');
   const settingsInput = v.object(data.settings);
   // Appearance fields are optional in older version-1 backups.
-  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes']);
+  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess']);
   const base: Dataset = { fields,tasks,sessions,events,reviews,categories,settings: v.settings(settingsInput),activity };
   const domain = validateGoalData(Object.fromEntries(GOAL_COLLECTIONS.map(key => [key,data[key]])),base);
-  return { ...base,...domain,format: 'focus-guide',schemaVersion: 6,exportedAt: v.timestamp(data.exportedAt) };
+  return { ...base,...domain,format: 'focus-guide',schemaVersion: 9,exportedAt: v.timestamp(data.exportedAt) };
 }
 export function readBackup(path: string): BackupFile {
   if (statSync(path).size > BACKUP_LIMITS.bytes) throw new Error(capacityMessage);
@@ -153,9 +166,9 @@ export function readBackup(path: string): BackupFile {
   return validateBackup(JSON.parse(content.toString('utf8').replace(/^\uFEFF/, '')));
 }
 export function makeBackup(data: Dataset): BackupFile {
-  return { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 6,exportedAt: new Date().toISOString(),activity: data.activity ?? [],
+  return { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 9,exportedAt: new Date().toISOString(),activity: data.activity ?? [],
     tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),
-    sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,...s })),
+    sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s })),
     events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
 }
 export function serializeBackup(data: Dataset): string {
@@ -192,8 +205,8 @@ export function csvCell(value: unknown): string {
 function csv(headers: string[], rows: unknown[][]): string { return '\uFEFF' + [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n'; }
 export function sessionCSV(data: Dataset): string {
   const fields = new Map(data.fields.map(f => [f.id, f.name])), tasks = new Map(data.tasks.map(t => [t.id, t.title]));
-  return csv(['id', 'field_id', 'field_name', 'primary_task_id', 'primary_task_title', 'checklist_task_ids', 'intention', 'planned_minutes', 'recorded_minutes', 'status', 'started_at_utc', 'ended_at_utc', 'recording_timezone', 'energy_1_5', 'focus_1_5', 'note', 'completion_reason', 'excluded', 'recovered', 'timing_mode', 'overtime_minutes', 'activity_mode', 'goal_id', 'occurrence_id'],
-    data.sessions.map(s => [s.id, s.fieldId, fields.get(s.fieldId), s.primaryTaskId, s.primaryTaskId ? tasks.get(s.primaryTaskId) : null, JSON.stringify(s.checklistIds), s.intention, s.plannedMs === null ? null : s.plannedMs / 60000, s.activeMs / 60000, s.status, s.startedAt, s.endedAt, s.timezone, s.energy, s.focus, s.note, s.completionReason, s.excluded, s.recovered, s.timingMode, s.plannedMs === null ? 0 : Math.max(0, s.activeMs - s.plannedMs) / 60000, s.activityMode ?? 'Unspecified', s.goalId, s.occurrenceId]));
+  return csv(['id', 'field_id', 'field_name', 'primary_task_id', 'primary_task_title', 'checklist_task_ids', 'intention', 'planned_minutes', 'recorded_minutes', 'status', 'started_at_utc', 'ended_at_utc', 'recording_timezone', 'energy_1_5', 'focus_1_5', 'note', 'completion_reason', 'excluded', 'recovered', 'timing_mode', 'overtime_minutes', 'activity_mode', 'goal_id', 'occurrence_id', 'milestone_id'],
+    data.sessions.map(s => [s.id, s.fieldId, fields.get(s.fieldId), s.primaryTaskId, s.primaryTaskId ? tasks.get(s.primaryTaskId) : null, JSON.stringify(s.checklistIds), s.intention, s.plannedMs === null ? null : s.plannedMs / 60000, s.activeMs / 60000, s.status, s.startedAt, s.endedAt, s.timezone, s.energy, s.focus, s.note, s.completionReason, s.excluded, s.recovered, s.timingMode, s.plannedMs === null ? 0 : Math.max(0, s.activeMs - s.plannedMs) / 60000, s.activityMode ?? 'Unspecified', s.goalId, s.occurrenceId, s.milestoneId ?? null]));
 }
 export function eventCSV(data: Dataset): string {
   return csv(['id', 'session_id', 'kind', 'started_at_utc', 'ended_at_utc', 'duration_ms', 'text', 'category', 'active_offset_ms', 'activation_source'], data.events.map(e => [e.id, e.sessionId, e.kind, e.startedAt, e.endedAt, e.durationMs, e.text, e.category, e.activeOffsetMs, e.source]));

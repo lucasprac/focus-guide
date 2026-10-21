@@ -60,3 +60,16 @@ export function blockShortcut(text: string): { kind: MilestoneKind; completed: b
   if (!other) return null;
   return { kind: other[1] ? 'heading' : other[2] ? 'bullet' : 'numbered', completed: false, length: other[0].length };
 }
+
+/* Markdown loses identifiers, so reconnect parsed lines to earlier rows: an exact title match first,
+   then a leftover row of the same kind on the same line (treated as a rename), otherwise a new row.
+   Without `rename`, only exact titles match, so a changed title is a new row and the old row is left out. */
+export function reconnectMilestones<T extends { id: string; title: string; kind: MilestoneKind }>(parsed: MilestoneDraft[], previous: T[], newId: () => string, rename = true): Array<MilestoneDraft & { id: string }> {
+  const used = new Set<string>();
+  const matched = parsed.map(row => { const hit = previous.find(p => !used.has(p.id) && p.title === row.title); if (hit) used.add(hit.id); return hit; });
+  return parsed.map((row, i) => {
+    const same = rename && previous[i] && !used.has(previous[i].id) && previous[i].kind === row.kind ? previous[i] : undefined;
+    if (!matched[i] && same) used.add(same.id);
+    return { id: (matched[i] ?? same)?.id ?? newId(), title: row.title, kind: row.kind, completed: row.completed };
+  });
+}

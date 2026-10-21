@@ -1,4 +1,4 @@
-import type { GoalData } from './goal-types';
+import type { AgentAccess, GoalData } from './goal-types';
 export * from './goal-types';
 export type SessionStatus = 'running' | 'paused' | 'completed';
 export const MIN_INCLUDED_SESSION_MS = 2 * 60000;
@@ -16,7 +16,7 @@ export interface TaskCategory { id: string; name: string; color: string; archive
 export interface Task { id: string; fieldId: string; title: string; completed: boolean; archived: boolean; createdAt: string; updatedAt: string; categoryId: string | null; notes: string; priority: 'low' | 'normal' | 'high'; dueDate: string | null; goalId?: string | null; milestoneId?: string | null }
 export type TimingMode = 'countdown' | 'stopwatch';
 export interface FocusSession {
-  goalId?: string | null; occurrenceId?: string | null;
+  goalId?: string | null; occurrenceId?: string | null; milestoneId?: string | null;
   id: string; fieldId: string; primaryTaskId: string | null; checklistIds: string[];
   intention: string; plannedMs: number | null; activeMs: number; status: SessionStatus;
   timingMode: TimingMode; autoOvertime: boolean; targetReached: boolean;
@@ -37,6 +37,7 @@ export interface Settings {
   theme: 'light' | 'dark'; sidebarCollapsed: boolean;
   autoOvertime: boolean;
   collectActivity?: boolean; returnShortcut?: string; activityModes?: Record<string, ActivityMode>;
+  agentAccess?: AgentAccess;
 }
 export interface WeeklyReview { week: string; adjustment: string; updatedAt: string }
 export interface Dataset extends Partial<GoalData> {
@@ -51,11 +52,14 @@ export interface TimerSnapshot {
   phase: 'idle' | 'countdown' | 'stopwatch' | 'overtime' | 'break'; overtimeMs: number;
   pauseReason: string | null;
 }
-export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus }
-export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 6; exportedAt: string };
+/* Runtime state of the local agent bridge; it never reaches settings, datasets or backups. */
+export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: string; launch: { command: string; args: string[]; env: Record<string, string> } | null }
+export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus }
+export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 9; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
 export type Command =
-  | 'goal.create' | 'goal.update' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide'
+  | 'goal.create' | 'goal.update' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide' | 'goal.behaviour'
+  | 'agent.proposal.apply' | 'agent.proposal.reject' | 'agent.change.undo'
   | 'export.goals'
   | 'field.create' | 'field.update' | 'field.archive' | 'field.delete'
   | 'task.create' | 'task.update' | 'task.delete'

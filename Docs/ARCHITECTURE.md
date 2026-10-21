@@ -1,5 +1,56 @@
 # Architecture — Focus Guide 1.5.0
 
+## Learning workspace and local agent bridge (unreleased)
+
+### Goal workspace
+
+Goals is the first page. `App.tsx` keeps the open goal (`activeGoalId`), so the goal stays open when you go to Focus and back. `GoalWorkspace.tsx` has five sections: Overview, Roadmap, Tasks, Behaviour, and Plan & review. `focusGoal()` in `App.tsx` prepares a session with the goal, its area, an optional roadmap step and task, and the activity mode of the goal's latest session. The main process still owns all timing.
+
+A field is still the parent of goals, tasks and sessions. The interface calls it an "area". Command names, tables and backup keys keep `field`.
+
+### Behaviour profile
+
+`goal.behaviour { goalId, from, to }` is a read command in `GoalService`. Activity samples are not part of `AppState`, so the main process computes the profile with `goalBehaviourProfile()` in `src/shared/behaviour-analytics.ts`. The Behaviour section and the agent bridge use the same function.
+
+### Roadmap steps (schema 7)
+
+Milestone bodies hold step details (estimate, target date, notes, links). `sessions.milestoneId` records the step when the session starts, with the same rule as the goal link: a to-do of the session's goal, fixed at the start. `roadmapEffort()` in `goal-planning.ts` sums recorded time for each step.
+
+### Agent bridge and proposals (schema 8)
+
+```mermaid
+flowchart LR
+    Client[AI client<br/>Claude Code / Claude Desktop]
+    MCP[focus-guide-mcp.cjs<br/>stdio MCP server<br/>FocusGuide.exe with ELECTRON_RUN_AS_NODE=1]
+    File[(agent-bridge.json<br/>pipe name + token<br/>in the data folder)]
+    Bridge[agent-bridge.ts<br/>named pipe, token check,<br/>agent tool allowlist]
+    Queue[Command queue]
+    Agent[AgentService<br/>read tools, proposals]
+    Store[(SQLite)]
+    UI[Goal pages<br/>Apply / Edit / Reject]
+    Client <--> MCP
+    MCP --> File
+    MCP <--> Bridge
+    Bridge --> Queue --> Agent --> Store
+    UI -->|agent.proposal.apply / reject over IPC| Queue
+```
+
+- The MCP server (`src/mcp/server.ts`) holds no data and never opens the database. It reads `agent-bridge.json`, sends one JSON line for each tool call to the named pipe, and returns the reply.
+- `AgentBridge` (`src/main/agent-bridge.ts`) listens only while `settings.agentAccess` is not `off`. Each start makes a new random pipe name and a 256-bit token, and writes them to `agent-bridge.json` in the data folder. A request must carry the token, compared in constant time. Requests are limited to 64 KiB. The bridge accepts only the tools in `src/shared/agent-tools.ts`, never renderer commands. Each call runs in the command queue.
+- `AgentService` (`src/main/agent-service.ts`) checks the access level again (`off` < `read` < `propose` < `edit`). Read tools return copies of records. Propose tools validate a payload against the current records and save an `agentProposals` row. They change nothing else.
+- The user applies a proposal with `agent.proposal.apply`. The service validates the payload again, with the user's edits, then runs the normal commands (`goal.create`, `goal.milestones.sync`, `task.create`, `goal.action.save`, `goal.review.save`) and marks the proposal `applied` in one transaction. A roadmap proposal whose basis fingerprint no longer matches becomes `stale` and needs `confirmStale`.
+- `AppState.agent` is a runtime-only status with the launch command for client configuration. It never reaches settings, datasets or backups.
+
+- At the `edit` level (schema 9), `AgentEditor` (`src/main/agent-edits.ts`) runs the same validated commands at once. In one transaction it reads the changed fields, applies the change and saves an `agentChanges` record with the state before and after. The app writes the summary. The editor refuses deletion, `achieved` and `archived` goal status, step completion, and tasks without a goal, and allows 60 direct changes per hour. `agent.change.undo` puts back the earlier state through the normal commands and asks for confirmation when the record changed after the agent's change.
+- Roadmap writes carry a revision (`roadmapRevision()` and `rowsRevision()` in `goal-planning.ts`). `update_roadmap` requires the revision from `get_goal`, and the editor in `MilestoneChecklist.tsx` sends the revision of the rows that it last saved. A stale `goal.milestones.sync` fails without a change, so an edit never archives rows that the agent added. Agent roadmap writes match rows by exact title only.
+
+Invariants:
+
+- Below the `edit` level, an agent never changes records directly. At the `edit` level, every agent change has an `agentChanges` record from the same transaction, and the user can undo it.
+- An agent never deletes records, marks a goal achieved or archived, or ticks a roadmap step.
+- Agent access is `off` after the schema 8 migration and after every restore.
+- The pipe never accepts timer, deletion, restore, export or settings commands.
+
 ## Goal planning boundary (1.4.0)
 
 `GoalService` adds validated commands for goals, milestones, actions, occurrences, progress, reviews and suggestion decisions. These commands use the existing bridge, which checks the sender and serializes commands. Store schema 4 keeps goal relationships in indexed columns. Flexible plans and revisions go in validated JSON bodies.
@@ -79,14 +130,17 @@ flowchart LR
 | `src/main/index.ts` | Native windows, tray and power events, local protocol, sender checks, command queue, backup and export dialogs |
 | `src/main/coordination.ts` | Serialized mutations, dialog preparation outside the queue, ownership of collector transitions |
 | `src/main/timer.ts` | Clock, checkpoints, pause, resume and finish, recovery, break clock |
-| `src/main/store.ts` | Prepared SQL statements, schema version 6, migration, persistence and restore transactions |
+| `src/main/store.ts` | Prepared SQL statements, schema version 8, migration, persistence and restore transactions |
 | `src/main/service.ts` | Validated application commands and business rules |
 | `src/main/backup.ts` | Versioned JSON validation, atomic exports, safe CSV cells |
+| `src/main/agent-bridge.ts`, `agent-service.ts`, `agent-edits.ts` | Local named-pipe endpoint for the MCP server, agent read tools, proposals with apply/reject, direct edits with their audit log and undo |
+| `src/mcp/server.ts` | Stdio MCP server, bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
+| `src/shared/behaviour-analytics.ts`, `agent-tools.ts` | Goal behaviour profile; agent tool list and bridge file contract |
 | `src/preload/index.ts` | Narrow `focusGuide` bridge |
 | `src/shared/types.ts` | Dataset, state, command names and event interfaces |
 | `src/shared/analytics.ts` | Local-date splits, filters, averages, Spearman calculation with tied ranks |
 | `src/shared/demo.ts` | Invented example observations. It writes nothing to storage. |
-| `src/renderer/src` | Seven main views, mini-window, progressive Three.js and SVG visuals, styles |
+| `src/renderer/src` | Seven main views (Goals opens a goal workspace), mini-window, progressive Three.js and SVG visuals, styles |
 | `src/renderer/src/components.tsx` | Main-window `Brain`, compact `FloatingBrain`, icons, formatting and shared controls |
 | `src/renderer/src/NeuralVisual.tsx`, `ThreeScene.tsx` | Local lazy loading of Three.js, bounded geometry, scene lifecycle and SVG fallback |
 | `src/renderer/src/BrainScene.ts` | Procedural Focus brain: seeded fold geometry, progress shaders, lighting and per-frame update |

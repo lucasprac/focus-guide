@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ActivitySample, Dataset, Field, FocusSession, SessionEvent, Settings, Task, TaskCategory, WeeklyReview } from '../shared/types';
 import { settings } from '../shared/validation';
-import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalOccurrence } from '../shared/goal-types';
+import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalMilestone, type GoalOccurrence } from '../shared/goal-types';
 
 export const defaultSettings: Settings = {
   timezone: 'America/Fortaleza', defaultMinutes: 90, animation: true, sound: false, palette: 'cyan', weeklyGoalMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true
@@ -18,7 +18,7 @@ export class Store {
     this.path = join(directory, 'focus-guide.sqlite');
     this.db = new Database(this.path);
     const originalVersion = Number(this.db.pragma('user_version', { simple: true }));
-    if (originalVersion > 6) { this.db.close(); throw new Error('This dataset was created by a newer Focus Guide version.'); }
+    if (originalVersion > 9) { this.db.close(); throw new Error('This dataset was created by a newer Focus Guide version.'); }
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('synchronous = FULL');
@@ -103,7 +103,7 @@ export class Store {
         this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v5-' + Date.now() + '.sqlite'));
       }
       this.db.transaction(() => {
-        const upgraded = upgradeGoalRecords(this.goalData());
+        const upgraded = upgradeGoalRecords({ goals: this.bodies<Goal>('goals'), milestones: this.bodies<GoalMilestone>('milestones') });
         upgraded.goals.forEach(row => this.putGoalRecord('goals', row));
         upgraded.milestones.forEach(row => this.putGoalRecord('milestones', row));
         this.db.pragma('user_version = 5');
@@ -116,8 +116,51 @@ export class Store {
         this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v6-' + Date.now() + '.sqlite'));
       }
       this.db.transaction(() => {
-        upgradeGoalRecords(this.goalData()).milestones.forEach(row => this.putGoalRecord('milestones', row));
+        upgradeGoalRecords({ milestones: this.bodies<GoalMilestone>('milestones') }).milestones.forEach(row => this.putGoalRecord('milestones', row));
         this.db.pragma('user_version = 6');
+      })();
+    }
+    if (originalVersion < 7) {
+      // Schema 7 links a session to the roadmap step it served and adds step details inside the milestone JSON bodies.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v7-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        const columns = this.db.pragma('table_info(sessions)') as Array<{ name: string }>;
+        if (!columns.some(c => c.name === 'milestoneId')) this.db.exec('ALTER TABLE sessions ADD COLUMN milestoneId TEXT REFERENCES milestones(id);');
+        this.db.exec('CREATE INDEX IF NOT EXISTS session_goal ON sessions(goalId); CREATE INDEX IF NOT EXISTS session_milestone ON sessions(milestoneId);');
+        upgradeGoalRecords({ milestones: this.bodies<GoalMilestone>('milestones') }).milestones.forEach(row => this.putGoalRecord('milestones', row));
+        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error('Migration found invalid roadmap links.');
+        this.db.pragma('user_version = 7');
+      })();
+    }
+    if (originalVersion < 8) {
+      // Schema 8 adds proposals from a local AI agent. A new-goal proposal has no goal, so goalId can be null.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v8-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        this.db.exec(`CREATE TABLE IF NOT EXISTS agentProposals (id TEXT PRIMARY KEY, goalId TEXT REFERENCES goals(id) ON DELETE CASCADE, body TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS proposal_goal ON agentProposals(goalId);`);
+        const previous = this.getMeta<Settings>('settings');
+        if (previous) this.setMeta('settings', { ...settings(previous), agentAccess: 'off' });
+        this.db.pragma('user_version = 8');
+      })();
+    }
+    if (originalVersion < 9) {
+      // Schema 9 adds the log of changes that a local AI agent made directly. Every change belongs to a goal.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v9-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        this.db.exec(`CREATE TABLE IF NOT EXISTS agentChanges (id TEXT PRIMARY KEY, goalId TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE, body TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS change_goal ON agentChanges(goalId);`);
+        const previous = this.getMeta<Settings>('settings');
+        if (previous) this.setMeta('settings', { ...settings(previous), agentAccess: 'off' });
+        this.db.pragma('user_version = 9');
       })();
     }
     if (!this.getMeta('settings')) {
@@ -146,6 +189,7 @@ export class Store {
     const categories = (this.db.prepare('SELECT * FROM categories ORDER BY createdAt, id').all() as Array<TaskCategory>).map(c => ({ ...c, archived: !!c.archived }));
     return { fields, tasks, sessions, events, categories, settings: this.getSettings(), reviews, ...this.goalData(), ...(includeActivity ? { activity: this.activity() } : {}) };
   }
+  private bodies<T = Record<string, unknown>>(table: 'goals' | 'milestones'): T[] { return (this.db.prepare(`SELECT body FROM ${table} ORDER BY id`).all() as Array<{ body: string }>).map(row => JSON.parse(row.body) as T); }
   goalData(): GoalData {
     return Object.fromEntries(GOAL_COLLECTIONS.map(key => [key, (this.db.prepare(`SELECT body FROM ${key} ORDER BY id`).all() as Array<{ body: string }>).map(row => JSON.parse(row.body))])) as unknown as GoalData;
   }
@@ -155,6 +199,8 @@ export class Store {
     const values = Object.fromEntries(columns.map(column => [column, record[column]]));
     this.db.prepare(`INSERT INTO ${key} (${columns.join(',')},body) VALUES (${columns.map(c => '@' + c).join(',')},@body) ON CONFLICT(id) DO UPDATE SET ${columns.filter(c => c !== 'id').map(c => c + '=excluded.' + c).join(',')},body=excluded.body`).run({ ...values, body: JSON.stringify(row) });
   }
+  // The change log keeps its newest entries; the oldest ones leave when the log is full.
+  pruneAgentChanges(keep: number): void { this.db.prepare("DELETE FROM agentChanges WHERE id IN (SELECT id FROM agentChanges ORDER BY json_extract(body, '$.at') DESC LIMIT -1 OFFSET ?)").run(keep); }
   removeGoalProgress(id: string): void { this.db.prepare('DELETE FROM goalProgress WHERE id=?').run(id); }
   field(id: string): Field | undefined { return this.allFields().find(f => f.id === id); }
   allFields(): Field[] { return (this.db.prepare('SELECT * FROM fields').all() as Array<Omit<Field, 'archived'> & { archived: number }>).map(f => ({ ...f, archived: !!f.archived })); }
@@ -189,9 +235,9 @@ export class Store {
     this.db.prepare('INSERT INTO tasks (id,fieldId,title,completed,archived,createdAt,updatedAt,categoryId,notes,priority,dueDate,goalId,milestoneId) VALUES (@id,@fieldId,@title,@completed,@archived,@createdAt,@updatedAt,@categoryId,@notes,@priority,@dueDate,@goalId,@milestoneId) ON CONFLICT(id) DO UPDATE SET title=excluded.title,completed=excluded.completed,archived=excluded.archived,updatedAt=excluded.updatedAt,categoryId=excluded.categoryId,notes=excluded.notes,priority=excluded.priority,dueDate=excluded.dueDate,goalId=excluded.goalId,milestoneId=excluded.milestoneId').run({ goalId: null, milestoneId: null, ...t, completed: +t.completed, archived: +t.archived });
   }
   putSession(s: FocusSession): void {
-    this.db.prepare(`INSERT INTO sessions VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId)
-      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId`)
-      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, ...s, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
+    this.db.prepare(`INSERT INTO sessions VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId)
+      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId`)
+      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
   }
   putEvent(e: SessionEvent): void {
     this.db.prepare('INSERT INTO events VALUES (@id,@sessionId,@kind,@startedAt,@endedAt,@durationMs,@text,@category,@activeOffsetMs,@source) ON CONFLICT(id) DO UPDATE SET endedAt=excluded.endedAt,durationMs=excluded.durationMs,text=excluded.text,category=excluded.category').run({ activeOffsetMs: null, source: null, ...e });
@@ -218,13 +264,13 @@ export class Store {
   removeReturn(id: string): void { this.db.prepare("DELETE FROM events WHERE id=? AND kind='attention-return'").run(id); }
   restore(data: Dataset): void {
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM events; DELETE FROM sessions; DELETE FROM tasks; DELETE FROM goals; DELETE FROM fields; DELETE FROM categories; DELETE FROM reviews;');
+      this.db.exec('DELETE FROM events; DELETE FROM sessions; DELETE FROM tasks; DELETE FROM agentProposals; DELETE FROM agentChanges; DELETE FROM goals; DELETE FROM fields; DELETE FROM categories; DELETE FROM reviews;');
       data.fields.forEach(f => this.putField(f)); data.categories.forEach(c => this.putCategory(c));
       for (const key of GOAL_COLLECTIONS) for (const row of data[key] ?? []) this.putGoalRecord(key,row);
       data.tasks.forEach(t => this.putTask(t));
       data.sessions.forEach(s => this.putSession(s)); data.events.forEach(e => this.putEvent(e));
       (data.activity ?? []).forEach(sample => this.putActivity(sample));
-      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false });
+      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off' });
     })();
   }
   async backup(path: string): Promise<void> { await this.db.backup(path); }

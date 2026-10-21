@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import type { ViewProps } from './App';
 import { sortMilestones, type Goal, type GoalMilestone, type MilestoneKind } from '../../shared/types';
-import { MILESTONE_LIMITS, blockShortcut, formatMilestoneMarkdown, listNumber, parseMilestoneMarkdown } from '../../shared/milestone-markdown';
+import { ROADMAP_CHANGED, rowsRevision } from '../../shared/goal-planning';
+import { MILESTONE_LIMITS, blockShortcut, formatMilestoneMarkdown, listNumber, parseMilestoneMarkdown, reconnectMilestones } from '../../shared/milestone-markdown';
 import { Button, CheckControl, IconButton, Segments, cn } from './ui';
 
 /* A light block editor for a goal's milestones. Each row is a to-do, heading, bullet, numbered item or
@@ -16,16 +17,8 @@ export function checklistItems(rows: Array<{ id?: string; title: string; kind: M
 const tidy = (title: string) => title.replace(/\s+/g, ' ').trim();
 export function filledItems(items: ChecklistItem[]): ChecklistItem[] { return items.filter(i => tidy(i.title)).map(i => ({ ...i, title: tidy(i.title) })); }
 
-/* Markdown loses identifiers, so reconnect parsed lines to earlier rows: an exact title match first,
-   then a leftover row of the same kind on the same line (treated as a rename), otherwise a new row. */
 function reconnect(markdown: string, previous: ChecklistItem[]): ChecklistItem[] {
-  const parsed = parseMilestoneMarkdown(markdown).slice(0, MILESTONE_LIMITS.count), used = new Set<string>();
-  const matched = parsed.map(row => { const hit = previous.find(p => !used.has(p.id) && p.title === row.title); if (hit) used.add(hit.id); return hit; });
-  return parsed.map((row, i) => {
-    const same = previous[i] && !used.has(previous[i].id) && previous[i].kind === row.kind ? previous[i] : undefined;
-    if (!matched[i] && same) used.add(same.id);
-    return { id: (matched[i] ?? same)?.id ?? newId(), title: row.title, kind: row.kind, completed: row.completed };
-  });
+  return reconnectMilestones(parseMilestoneMarkdown(markdown).slice(0, MILESTONE_LIMITS.count), previous, newId);
 }
 
 export function MilestoneChecklist({ items, onChange, onCommit, disabled, removeLabel = 'Remove' }: {
@@ -154,29 +147,40 @@ export function MilestoneChecklist({ items, onChange, onCommit, disabled, remove
 
 /* The checklist on the goal page. Ticking a saved to-do saves that milestone; every other edit saves the
    whole checklist at once, archiving any row that was removed. Saves run one at a time, and while focus
-   is in the editor the rows on screen stay the source of truth. */
+   is in the editor the rows on screen stay the source of truth. Each save names the rows that it is based on,
+   so an edit never archives rows that an AI agent added meanwhile: the user chooses what to keep. */
 export function GoalMilestones({ goal, milestones, act, busy }: { goal: Goal; milestones: GoalMilestone[]; act: ViewProps['act']; busy?: boolean }) {
   const active = sortMilestones(milestones.filter(m => !m.archived)), latest = useRef(active); latest.current = active;
   const signature = JSON.stringify(active.map(m => [m.id, m.title, m.kind, m.completed]));
-  const [items, setItems] = useState(() => checklistItems(active)), [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState('');
-  const pending = useRef<{ rows: ChecklistItem[]; change: Change } | null>(null), running = useRef(false);
-  useEffect(() => { if (!editing && !saving && !pending.current) setItems(checklistItems(latest.current)); }, [signature, editing, saving]);
+  const [items, setItems] = useState(() => checklistItems(active)), [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState(''), [conflict, setConflict] = useState(false);
+  const pending = useRef<{ rows: ChecklistItem[]; change: Change } | null>(null), running = useRef(false), base = useRef<ChecklistItem[]>(checklistItems(active));
+  useEffect(() => { if (!editing && !saving && !pending.current && !conflict) { setItems(checklistItems(latest.current)); base.current = checklistItems(latest.current); } }, [signature, editing, saving, conflict]);
   const run = async () => {
     if (running.current) return;
     running.current = true; setSaving(true);
     try {
       while (pending.current) {
         const { rows, change } = pending.current; pending.current = null;
-        const result = change.type === 'toggle' && latest.current.some(m => m.id === change.item.id)
-          ? await act('goal.milestone.save', { id: change.item.id, goalId: goal.id, completed: change.item.completed })
-          : await act('goal.milestones.sync', { goalId: goal.id, rows: filledItems(rows).map(i => ({ id: i.id, title: i.title, kind: i.kind, completed: i.completed })) });
-        if (!result.ok) { pending.current = null; setError(result.error); setItems(checklistItems(latest.current)); }
+        if (change.type === 'toggle' && latest.current.some(m => m.id === change.item.id)) {
+          const result = await act('goal.milestone.save', { id: change.item.id, goalId: goal.id, completed: change.item.completed });
+          if (result.ok) base.current = base.current.map(i => i.id === change.item.id ? { ...i, completed: change.item.completed } : i);
+          else { pending.current = null; setError(result.error); setItems(checklistItems(latest.current)); }
+          continue;
+        }
+        const sent = filledItems(rows).map(i => ({ id: i.id, title: i.title, kind: i.kind, completed: i.completed }));
+        const result = await window.focusGuide.command('goal.milestones.sync', { goalId: goal.id, rows: sent, revision: rowsRevision(base.current) });
+        if (result.ok) base.current = sent;
+        else if (result.error === ROADMAP_CHANGED) { pending.current = null; setConflict(true); }
+        else { pending.current = null; setError(result.error); setItems(checklistItems(latest.current)); }
       }
     } finally { running.current = false; setSaving(false); }
   };
   // A later save carries the whole checklist, so it replaces any save still waiting.
-  const save = (rows: ChecklistItem[], change: Change) => { setError(''); pending.current = { rows, change: pending.current ? { type: 'structure' } : change }; void run(); };
+  const save = (rows: ChecklistItem[], change: Change) => { if (conflict) { setItems(rows); return; } setError(''); pending.current = { rows, change: pending.current ? { type: 'structure' } : change }; void run(); };
+  const reload = () => { setConflict(false); setItems(checklistItems(latest.current)); base.current = checklistItems(latest.current); };
+  const keepMine = () => { base.current = checklistItems(latest.current); setConflict(false); pending.current = { rows: items, change: { type: 'structure' } }; void run(); };
   return <div onFocus={() => setEditing(true)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setEditing(false); }}>
+    {conflict && <div className="alert notice roadmap-conflict" role="alert"><span>Your AI agent changed this roadmap while you were editing it. Your edits are not saved yet.</span><div className="goal-button-row"><Button size="sm" onClick={reload}>Show the agent’s version</Button><Button size="sm" variant="ghost" onClick={keepMine}>Keep my version</Button></div><span className="hint">Keep my version saves your rows; rows that only the agent added are archived and can be restored. The agent’s change also stays in Agent activity, where you can undo it.</span></div>}
     <MilestoneChecklist items={items} onChange={setItems} onCommit={save} disabled={busy} removeLabel="Archive milestone" />
     {error && <p className="goal-form-error" role="alert">{error}</p>}
   </div>;

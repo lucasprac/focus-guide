@@ -1,10 +1,12 @@
 import * as v from './validation';
 import type { Dataset } from './types';
-import { GOAL_COLLECTIONS, MILESTONE_KINDS, WHY_TAG_LIMITS, goalData, type GoalData, type Goal, type GoalActionPlan, type GoalAction, type GoalMilestone, type GoalOccurrence, type GoalProgressEntry, type GoalReview, type GoalStatus, type GoalBarrier, type MilestoneKind } from './goal-types';
+import { AGENT_CHANGE_TARGETS, GOAL_COLLECTIONS, MILESTONE_DETAIL_LIMITS, MILESTONE_KINDS, PROPOSAL_KINDS, WHY_TAG_LIMITS, goalData, type AgentChange, type AgentChangeTarget, type AgentProposal, type GoalData, type Goal, type GoalActionPlan, type GoalAction, type GoalMilestone, type GoalOccurrence, type GoalProgressEntry, type GoalReview, type GoalStatus, type GoalBarrier, type MilestoneDetails, type MilestoneKind, type MilestoneResource } from './goal-types';
 import { occurrenceId } from './goal-planning';
 import { monday } from './analytics';
 
-export const GOAL_LIMITS = { goals: 1000, milestones: 10000, goalActions: 10000, goalOccurrences: 100000, goalProgress: 50000, goalReviews: 20000 };
+export const GOAL_LIMITS = { goals: 1000, milestones: 10000, goalActions: 10000, goalOccurrences: 100000, goalProgress: 50000, goalReviews: 20000, agentProposals: 5000, agentChanges: 20000 };
+export const CHANGE_LIMITS = { summary: 500, rationale: 4000, source: 100, tool: 40, state: 60000, perHour: 60 };
+export const PROPOSAL_LIMITS = { summary: 500, rationale: 4000, source: 100, payload: 30000, basis: 4000, pending: 50 };
 function exact(row: Record<string, unknown>, keys: string[]) { if (Object.keys(row).some(k => !keys.includes(k)) || keys.some(k => !(k in row))) throw new Error('Goal data contains unsupported or missing fields.'); }
 function collection(value: unknown, limit: number) { if (!Array.isArray(value) || value.length > limit) throw new Error('Invalid or oversized goal collection.'); return value; }
 export function goalStatus(value: unknown): GoalStatus { if (typeof value !== 'string' || !['draft', 'active', 'paused', 'achieved', 'archived'].includes(value)) throw new Error('Choose a valid goal status.'); return value as GoalStatus; }
@@ -17,6 +19,22 @@ export function goalPlan(value: unknown): GoalActionPlan {
   return { effectiveDate: goalDate(p.effectiveDate), timezone: v.timezone(p.timezone), weekdays: [...days].sort(), cue: v.text(p.cue, 'Cue', 500, true), normal: v.text(p.normal, 'Normal action', 500, true), smaller: v.text(p.smaller, 'Smaller action', 500, true), obstacle: v.text(p.obstacle, 'Obstacle', 500), response: v.text(p.response, 'Obstacle response', 500), estimatedMinutes: p.estimatedMinutes === null ? null : v.number(p.estimatedMinutes, 'Estimated minutes', 1, 1440), activityMode: v.activityMode(p.activityMode), enabled: v.bool(p.enabled, 'Enabled action') };
 }
 export function milestoneKind(value: unknown): MilestoneKind { if (typeof value !== 'string' || !MILESTONE_KINDS.includes(value as MilestoneKind)) throw new Error('Choose a valid milestone kind.'); return value as MilestoneKind; }
+export function milestoneResource(value: unknown): MilestoneResource {
+  const r = v.object(value); exact(r, ['title','url']);
+  const url = v.text(r.url, 'Link', MILESTONE_DETAIL_LIMITS.url, true);
+  let protocol = '';
+  try { protocol = new URL(url).protocol; } catch { throw new Error('Use a full link, such as https://example.com.'); }
+  if (!['http:','https:','file:'].includes(protocol)) throw new Error('Links must start with http, https or file.');
+  return { title: v.text(r.title, 'Link title', MILESTONE_DETAIL_LIMITS.resourceTitle, true), url };
+}
+/* Only a to-do is a roadmap step with an estimate and a target date; every kind can keep notes and links. */
+export function milestoneDetails(value: Record<string, unknown>, kind: MilestoneKind): MilestoneDetails {
+  const estimatedMinutes = value.estimatedMinutes === null ? null : v.number(value.estimatedMinutes, 'Estimated minutes', 1, MILESTONE_DETAIL_LIMITS.estimatedMinutes);
+  if (estimatedMinutes !== null && !Number.isInteger(estimatedMinutes)) throw new Error('Estimate whole minutes.');
+  const targetDate = v.date(value.targetDate);
+  if (kind !== 'todo' && (estimatedMinutes !== null || targetDate !== null)) throw new Error('Only a to-do step can have an estimate or a target date.');
+  return { estimatedMinutes, targetDate, notes: v.text(value.notes, 'Step notes', MILESTONE_DETAIL_LIMITS.notes), resources: collection(value.resources, MILESTONE_DETAIL_LIMITS.resources).map(milestoneResource) };
+}
 export function whyTags(value: unknown): string[] {
   const tags = collection(value ?? [], WHY_TAG_LIMITS.count).map(tag => v.text(tag, 'Reason tag', WHY_TAG_LIMITS.length, true).replace(/\s+/g, ' '));
   if (new Set(tags.map(tag => tag.toLocaleLowerCase())).size !== tags.length) throw new Error('Each reason tag can be chosen once.');
@@ -33,12 +51,29 @@ export function validateGoalRecord(key: keyof GoalData, value: unknown): GoalDat
     if ((baseline === null) !== (target === null) || target !== null && (!unit || baseline === target)) throw new Error('A numeric measure needs a baseline, a different target, and a unit.');
     return { id, fieldId: v.id(r.fieldId), title: v.text(r.title,'Goal title',200,true), outcome: v.text(r.outcome,'Outcome',2000,status === 'active' || status === 'achieved'), why: v.text(r.why,'Why this matters',2000), whyTags: whyTags(r.whyTags), deadline: v.date(r.deadline), baseline, target, unit, status, statusHistory: history, createdAt: v.timestamp(r.createdAt), updatedAt: v.timestamp(r.updatedAt) } as Goal;
   }
+  if (key === 'agentProposals') {
+    exact(r, ['id','goalId','kind','summary','rationale','source','payload','basis','status','createdAt','decidedAt']);
+    if (typeof r.kind !== 'string' || !(PROPOSAL_KINDS as readonly string[]).includes(r.kind) || typeof r.status !== 'string' || !['pending','applied','rejected','stale'].includes(r.status)) throw new Error('Invalid agent proposal kind or status.');
+    const payload = v.object(r.payload);
+    if (JSON.stringify(payload).length > PROPOSAL_LIMITS.payload) throw new Error('An agent proposal is too large.');
+    if ((r.kind === 'goal.create') !== (r.goalId === null)) throw new Error('Only a new-goal proposal has no goal.');
+    const decidedAt = r.decidedAt === null ? null : v.timestamp(r.decidedAt);
+    if ((r.status === 'applied' || r.status === 'rejected') !== (decidedAt !== null)) throw new Error('Invalid agent proposal decision time.');
+    return { id, goalId: r.goalId === null ? null : v.id(r.goalId), kind: r.kind, summary: v.text(r.summary,'Proposal summary',PROPOSAL_LIMITS.summary,true), rationale: v.text(r.rationale,'Proposal rationale',PROPOSAL_LIMITS.rationale), source: v.text(r.source,'Proposal source',PROPOSAL_LIMITS.source), payload, basis: r.basis === null ? null : v.text(r.basis,'Proposal basis',PROPOSAL_LIMITS.basis), status: r.status, createdAt: v.timestamp(r.createdAt), decidedAt } as AgentProposal;
+  }
+  if (key === 'agentChanges') {
+    exact(r, ['id','goalId','at','source','tool','target','summary','rationale','before','after','undoneAt']);
+    if (!AGENT_CHANGE_TARGETS.includes(r.target as AgentChangeTarget)) throw new Error('Invalid agent change target.');
+    const before = v.object(r.before), after = v.object(r.after);
+    if (JSON.stringify(before).length > CHANGE_LIMITS.state || JSON.stringify(after).length > CHANGE_LIMITS.state) throw new Error('An agent change record is too large.');
+    return { id, goalId: v.id(r.goalId), at: v.timestamp(r.at), source: v.text(r.source,'Change source',CHANGE_LIMITS.source), tool: v.text(r.tool,'Change tool',CHANGE_LIMITS.tool,true), target: r.target, summary: v.text(r.summary,'Change summary',CHANGE_LIMITS.summary,true), rationale: v.text(r.rationale,'Change rationale',CHANGE_LIMITS.rationale), before, after, undoneAt: r.undoneAt === null ? null : v.timestamp(r.undoneAt) } as AgentChange;
+  }
   const goalId = v.id(r.goalId), updatedAt = v.timestamp(r.updatedAt);
   if (key === 'milestones') {
-    exact(r, ['id','goalId','title','kind','completed','archived','position','createdAt','updatedAt']); const position = v.number(r.position,'Milestone position',0,1e6); if (!Number.isInteger(position)) throw new Error('Invalid milestone position.');
+    exact(r, ['id','goalId','title','kind','completed','archived','position','createdAt','updatedAt','estimatedMinutes','targetDate','notes','resources']); const position = v.number(r.position,'Milestone position',0,1e6); if (!Number.isInteger(position)) throw new Error('Invalid milestone position.');
     const kind = milestoneKind(r.kind), completed = v.bool(r.completed,'Completed milestone');
     if (completed && kind !== 'todo') throw new Error('Only a to-do milestone can be done.');
-    return { id, goalId, title: v.text(r.title,'Milestone',200,true), kind, completed, archived: v.bool(r.archived,'Archived milestone'), position, createdAt: v.timestamp(r.createdAt), updatedAt } as GoalMilestone;
+    return { id, goalId, title: v.text(r.title,'Milestone',200,true), kind, completed, archived: v.bool(r.archived,'Archived milestone'), position, createdAt: v.timestamp(r.createdAt), updatedAt, ...milestoneDetails(r,kind) } as GoalMilestone;
   }
   if (key === 'goalActions') {
     exact(r, ['id','goalId','title','archived','plans','createdAt','updatedAt']); const plans = collection(r.plans, 1000).map(goalPlan);
@@ -73,11 +108,11 @@ export function validateGoalData(value: Partial<GoalData>, base: Dataset): GoalD
   }
   const goals = new Map(domain.goals.map(g => [g.id,g])), actions = new Map(domain.goalActions.map(a => [a.id,a])), milestones = new Map(domain.milestones.map(m => [m.id,m])), occurrences = new Map(domain.goalOccurrences.map(o => [o.id,o]));
   for (const goal of domain.goals) if (!base.fields.some(f => f.id === goal.fieldId)) throw new Error('Goal refers to an unknown field.');
-  for (const key of GOAL_COLLECTIONS.filter(k => k !== 'goals')) for (const row of domain[key]) if (!goals.has(row.goalId)) throw new Error('Goal record refers to an unknown goal.');
+  for (const key of GOAL_COLLECTIONS.filter(k => k !== 'goals')) for (const row of domain[key]) if (row.goalId !== null && !goals.has(row.goalId)) throw new Error('Goal record refers to an unknown goal.');
   const dates = new Set<string>();
   for (const row of domain.goalOccurrences) { if (actions.get(row.actionId)?.goalId !== row.goalId || row.plan.timezone !== actions.get(row.actionId)!.plans[0].timezone) throw new Error('Occurrence belongs to an unknown action.'); const key = `${row.actionId}_${row.date}`; if (dates.has(key)) throw new Error('Duplicate scheduled action dates.'); dates.add(key); }
   for (const row of domain.goalProgress) if (goals.get(row.goalId)?.target === null) throw new Error('Progress needs a goal measure.');
   for (const task of base.tasks) { if (task.goalId && goals.get(task.goalId)?.fieldId !== task.fieldId || task.milestoneId && (!task.goalId || milestones.get(task.milestoneId)?.goalId !== task.goalId || milestones.get(task.milestoneId)?.kind !== 'todo')) throw new Error('Task goal links are inconsistent.'); }
-  for (const session of base.sessions) if (session.goalId && goals.get(session.goalId)?.fieldId !== session.fieldId || session.occurrenceId && (!session.goalId || occurrences.get(session.occurrenceId)?.goalId !== session.goalId)) throw new Error('Session goal links are inconsistent.');
+  for (const session of base.sessions) if (session.goalId && goals.get(session.goalId)?.fieldId !== session.fieldId || session.occurrenceId && (!session.goalId || occurrences.get(session.occurrenceId)?.goalId !== session.goalId) || session.milestoneId && (!session.goalId || milestones.get(session.milestoneId)?.goalId !== session.goalId || milestones.get(session.milestoneId)?.kind !== 'todo')) throw new Error('Session goal links are inconsistent.');
   return domain;
 }

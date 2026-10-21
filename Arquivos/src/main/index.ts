@@ -8,6 +8,8 @@ import { TimerEngine } from './timer';
 import { FocusService } from './service';
 import { BehaviourCollector } from './behaviour';
 import { CommandQueue, TransitionCoordinator } from './coordination';
+import { AgentBridge } from './agent-bridge';
+import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
 import { localDay, totalMinutes } from '../shared/analytics';
 import type { AppEvent, AppState, BackupFile, Command } from '../shared/types';
@@ -31,6 +33,7 @@ let store: Store;
 let timer: TimerEngine;
 let service: FocusService;
 let collector: BehaviourCollector;
+let bridge: AgentBridge | null = null;
 let quitting = false;
 let quitPending = false;
 let backupStatus = 'Your data stays on this computer.';
@@ -48,7 +51,7 @@ const applicationIcon = join(__dirname, '../renderer/icon.png');
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? 'Your timer ended — overtime is recording' : 'Focus session complete' : 'Your break is complete', body: mode === 'focus' ? timer?.current?.autoOvertime ? 'Extra time stays in this session. Finish when you are ready.' : 'Take a breath. Your session has been saved.' : 'Choose your next intention when you are ready.', silent: !store.getSettings().sound }).show();
 }
-function state(): AppState { return { ...store.all(), timer: timer.snapshot(), collector: collector?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
+function state(): AppState { return { ...store.all(), timer: timer.snapshot(), collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'An unexpected error occurred.'; }
@@ -187,7 +190,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     if (next.palette !== previous.palette && hours < ({ cyan: 0, violet: 5, amber: 20, rose: 50 }[next.palette])) throw new Error('This palette is not yet available.');
     // Registration rejection leaves collection untouched; unrelated preferences remain editable.
     if (next.returnShortcut !== previous.returnShortcut) await collector.configureShortcut(next.returnShortcut ?? 'Ctrl+Alt+Space');
-    try { return await transitions.run(() => service.run(command, input)); }
+    try { const value = await transitions.run(() => service.run(command, input)); bridge?.sync(); return value; }
     catch (error) { await collector.configureShortcut(previous.returnShortcut ?? 'Ctrl+Alt+Space').catch(() => {}); throw error; }
   }
   if (['session.pause', 'session.resume', 'session.finish', 'activity.delete', 'field.delete'].includes(command)) {
@@ -221,6 +224,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
       await store.backup(join(directory, `before-restore-${Date.now()}.sqlite`));
       const data = pendingRestore.data; store.restore(data); pendingRestore = null; timer.recover();
       try { await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); } catch { /* Conflict stays visible in status. */ }
+      bridge?.sync();
       backupStatus = 'Restored successfully. A copy of the previous database is in backups.'; return;
     }
     default: {
@@ -252,7 +256,7 @@ app.on('before-quit', e => {
     } catch (error) { quitPending = false; showMain(); report(error); changed(); }
   })();
 });
-app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); tray?.destroy(); store?.close(); });
+app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); bridge?.stop(); tray?.destroy(); store?.close(); });
 app.on('window-all-closed', () => { /* The tray owns the application lifetime. */ });
 
 if (locked) void app.whenReady().then(async () => {
@@ -263,7 +267,7 @@ if (locked) void app.whenReady().then(async () => {
     mkdirSync(directory, { recursive: true });
     const file = join(directory, `before-field-delete-${Date.now()}-${randomUUID()}.json`);
     atomicWrite(file, serializeBackup(store.all(true)));
-    backupStatus = 'A recovery backup was saved before field deletion.';
+    backupStatus = 'A recovery backup was saved before area deletion.';
   });
   collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, 'activity-helper.exe') : resolve(__dirname, '../../native/bin/activity-helper.exe'),
     () => {
@@ -277,6 +281,18 @@ if (locked) void app.whenReady().then(async () => {
     () => { if (mainWindow) publish({ type: 'state', state: state() }); });
   try { await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); } catch { /* Status exposes a conflict; the floating button still works. */ }
   transitions = new TransitionCoordinator(timer, collector);
+  // The MCP server runs as plain Node.js inside this executable, so no separate Node.js installation is needed.
+  const mcpScript = app.isPackaged ? join(process.resourcesPath, 'mcp', 'focus-guide-mcp.cjs') : resolve(__dirname, '../mcp/focus-guide-mcp.cjs');
+  bridge = new AgentBridge({ directory: store.directory, access: () => store.getSettings().agentAccess ?? 'off',
+    launch: { command: process.execPath, args: [mcpScript], env: { ELECTRON_RUN_AS_NODE: '1', FOCUS_GUIDE_DATA_DIR: store.directory } }, onStatus: () => { if (mainWindow) publish({ type: 'state', state: state() }); },
+    call: (tool, input, source) => commandQueue.run(async () => {
+      if (quitPending) throw new Error('Focus Guide is saving and closing.');
+      const value = service.agentTool(tool, input, source);
+      if (isAgentTool(tool) && AGENT_TOOLS[tool] !== 'read') changed();
+      if (isAgentTool(tool) && AGENT_TOOLS[tool] === 'edit') publish({ type: 'notice', message: `Your AI agent: ${(value as { summary?: string }).summary ?? 'changed your goals'}. You can undo it in Goals.` });
+      return value;
+    }) });
+  bridge.sync();
   collector.reconcile();
   const rendererRoot = resolve(__dirname, '../renderer');
   protocol.handle('focus', async request => {

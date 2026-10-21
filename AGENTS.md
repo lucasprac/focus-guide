@@ -11,6 +11,7 @@ Focus Guide uses Electron, React, TypeScript, and SQLite.
   - `src/main/`: desktop lifecycle, authoritative timer, persistence, backups, and optional activity collection.
   - `src/preload/` and `src/shared/`: restricted IPC bridge, types, validation, and analytics.
   - `src/renderer/src/`: React pages, shared controls, styles, and `assets/`.
+  - `src/mcp/`: stdio MCP server for a local AI agent; it relays tool calls to the app over a named pipe.
   - `native/`: Windows C++ activity helper (`bin/` holds the compiled helper).
   - `scripts/`: helper build script and the software-rendering launcher.
   - `build/`: app icon and third-party notices copied into packages.

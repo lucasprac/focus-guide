@@ -1,6 +1,6 @@
 # Focus Guide — data dictionary
 
-This dictionary describes schema version 3. The section [Goal planning records (schema 4)](#goal-planning-records-schema-4) describes the schema 4 additions.
+This dictionary describes schema version 3. Later sections describe the additions of schemas 4 to 8: [goal planning](#goal-planning-records-schema-4), [goal reasons and milestone order](#goal-reasons-and-milestone-order-schema-5), [milestone block kinds](#milestone-block-kinds-schema-6), [roadmap steps](#roadmap-steps-schema-7) and [agent proposals](#agent-proposals-schema-8) and the [agent change log](#agent-change-log-schema-9). The interface calls a field an "area".
 
 General conventions:
 
@@ -323,3 +323,64 @@ Included completed time leaves the totals and charts. Shared categories, weekly 
 - `numbered` rows have no stored number. The app counts from 1 in each run of consecutive numbered rows.
 - The migration and the JSON import of versions 1–5 give every milestone `kind: 'todo'`, because every earlier milestone was a to-do. JSON exports are version 6. The app rejects JSON versions above 6.
 - `goal.milestones.sync` accepts a new row with an identifier that the editor made. If no milestone has that identifier, the service creates the milestone with it. If a milestone of another goal has it, the service refuses the save. So a repeated save does not create duplicates.
+
+## Roadmap steps (schema 7)
+
+| Field | Record | Meaning |
+|---|---|---|
+| `estimatedMinutes` | Milestone | Your estimate for a step, in whole minutes from 1 to 60,000, or `null`. |
+| `targetDate` | Milestone | A `YYYY-MM-DD` date, or `null`. It is guidance. A passed date does not change the step. |
+| `notes` | Milestone | Text, up to 2000 characters. |
+| `resources` | Milestone | Up to 20 links. Each link has a `title` (up to 200 characters) and a `url` that starts with `http:`, `https:` or `file:`. |
+| `milestoneId` | Session | The roadmap step that the session served, or `null`. The app records it when the session starts. |
+
+- Only a `todo` row can have an estimate or a target date. Every kind can have notes and links.
+- `goal.milestones.sync` keeps the details of each row that it keeps. A row that stops being a to-do loses its estimate and its target date.
+- A session step must be a to-do of the session's goal. A to-do with linked sessions stays a to-do.
+- A step's recorded time is the sum of `activeMs` of the finished, included sessions with that `milestoneId`.
+- The Session CSV adds `milestone_id` at the end.
+- The migration and the JSON import of versions 1–6 give every milestone empty details and every session `milestoneId: null`.
+
+## Agent proposals (schema 8)
+
+| Field | Meaning |
+|---|---|
+| `id` | Proposal identifier. |
+| `goalId` | The goal that the proposal changes. `null` only for `goal.create`. |
+| `kind` | `goal.create`, `roadmap.replace`, `tasks.add`, `action.add` or `review.note`. |
+| `summary`, `rationale` | Text from the agent, up to 500 and 4000 characters. |
+| `source` | The client label, up to 100 characters. |
+| `payload` | The proposed change, as validated JSON (up to 30,000 characters). After an apply, it holds the version that you applied, with your edits. |
+| `basis` | For `roadmap.replace`, a fingerprint of the roadmap when the agent wrote the proposal. Otherwise `null`. |
+| `status` | `pending`, `stale`, `applied` or `rejected`. |
+| `createdAt`, `decidedAt` | UTC times. `decidedAt` is set only for `applied` and `rejected`. |
+
+- A proposal changes no other record. When you apply it, the app runs the normal validated commands and marks the proposal `applied` in the same transaction.
+- `stale` means that the roadmap changed after the proposal. The app asks you to confirm before it applies a stale roadmap.
+- At most 50 proposals can be open (`pending` or `stale`). The dataset keeps up to 5000 proposals.
+- Deleting a goal or its area deletes the goal's proposals. A restore replaces all proposals.
+- `settings.agentAccess` is `off`, `read`, `propose` or `edit` (edit from schema 9). The default is `off`. The schema 8 and 9 migrations and every restore set it to `off`.
+- The JSON backup adds the `agentProposals` collection. Version 8 is the export format. The app rejects JSON versions above 8.
+
+## Agent change log (schema 9)
+
+One record for each change that an agent made directly, at the `edit` access level.
+
+| Field | Meaning |
+|---|---|
+| `id` | Change identifier. |
+| `goalId` | The goal that the change belongs to. A change always belongs to a goal. |
+| `at` | UTC time of the change. |
+| `source`, `tool` | The client label and the tool, for example `update_roadmap`. |
+| `target` | `goal`, `roadmap`, `step`, `task`, `action` or `review`. |
+| `summary` | Text that the app writes, up to 500 characters. It does not come from the agent. |
+| `rationale` | The agent's reason, up to 4000 characters. |
+| `before`, `after` | For each changed record, its changed fields before and after the change. `null` in `before` means that the change created the record. Each side holds up to 60,000 characters. |
+| `undoneAt` | UTC time of the user's undo, or `null`. |
+
+- The app saves the record in the same transaction as the change.
+- A roadmap record holds the rows (identifier, title, kind, state, archive flag, position). A goal record holds title, outcome, reasons, deadline and status. A task record holds title, notes, priority, due date, step, completion and archive flag. A weekly action record holds title, archive flag and latest plan. A review record holds the adjustment text.
+- Undo puts back `before` through the normal commands. A created goal, task or action is archived. If the record changed after the agent's change, the app asks for confirmation first.
+- The log keeps the newest 20,000 records. Deleting a goal or its area deletes its records. A restore replaces them.
+- `goal.milestones.sync` accepts an optional `revision`. If the active roadmap no longer matches it, the command fails and changes nothing.
+- The JSON backup adds the `agentChanges` collection. Version 9 is the export format. The app rejects JSON versions above 9.

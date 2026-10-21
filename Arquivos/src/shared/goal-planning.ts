@@ -58,12 +58,18 @@ export function weeklyWorkload(data: Dataset, now = Date.now()) {
   const rows = plannedOccurrences(data, week, addDays(week, 6), undefined, now).filter(row => goalData(data).goals.find(g => g.id === row.goalId)?.status === 'active' && !goalData(data).goalActions.find(a => a.id === row.actionId)?.archived);
   return { minutes: rows.reduce((sum,row) => sum + (row.plan.estimatedMinutes ?? 0), 0), unknown: rows.filter(row => row.plan.estimatedMinutes === null).length, capacity: data.settings.weeklyCapacityMinutes ?? 0 };
 }
-export function durationSuggestion(data: Dataset, fieldId: string, activityMode: ActivityMode, now = Date.now()) {
+/* With a goal, the goal's own sessions come first; the area's sessions are used only when the goal
+   alone does not meet the same gate. */
+export function durationSuggestion(data: Dataset, fieldId: string, activityMode: ActivityMode, now = Date.now(), goalId?: string) {
   const today = localDay(now, data.settings.timezone), from = addDays(today, -27);
-  const sessions = data.sessions.filter(s => s.fieldId === fieldId && (s.activityMode ?? 'Unspecified') === activityMode && s.status === 'completed' && !s.excluded && localDay(s.startedAt, s.timezone) >= from && localDay(s.startedAt, s.timezone) <= today);
-  const days = [...new Set(sessions.map(s => localDay(s.startedAt, s.timezone)))].sort();
-  const spanDays = days.length ? Math.round((Date.parse(days.at(-1)!) - Date.parse(days[0])) / 86400000) + 1 : 0;
-  return { eligible: sessions.length >= 10 && spanDays >= 14, minutes: sessions.length >= 10 && spanDays >= 14 ? Math.max(1, Math.min(1440, Math.round(median(sessions.map(s => s.activeMs / 60000))!))) : null, n: sessions.length, spanDays, sessionIds: sessions.map(s => s.id), from, to: today };
+  const gate = (scope: 'goal' | 'area') => {
+    const sessions = data.sessions.filter(s => (scope === 'goal' ? s.goalId === goalId : s.fieldId === fieldId) && (s.activityMode ?? 'Unspecified') === activityMode && s.status === 'completed' && !s.excluded && localDay(s.startedAt, s.timezone) >= from && localDay(s.startedAt, s.timezone) <= today);
+    const days = [...new Set(sessions.map(s => localDay(s.startedAt, s.timezone)))].sort();
+    const spanDays = days.length ? Math.round((Date.parse(days.at(-1)!) - Date.parse(days[0])) / 86400000) + 1 : 0;
+    return { scope, eligible: sessions.length >= 10 && spanDays >= 14, minutes: sessions.length >= 10 && spanDays >= 14 ? Math.max(1, Math.min(1440, Math.round(median(sessions.map(s => s.activeMs / 60000))!))) : null, n: sessions.length, spanDays, sessionIds: sessions.map(s => s.id), from, to: today };
+  };
+  const own = goalId ? gate('goal') : null;
+  return own?.eligible ? own : gate('area');
 }
 export interface GoalSuggestion { id: string; goalId: string; actionId: string; barrier: GoalBarrier; title: string; proposal: string; records: GoalOccurrence[] }
 export function barrierSuggestions(data: Dataset, goalId: string, now = Date.now()): GoalSuggestion[] {
@@ -87,3 +93,22 @@ export function barrierSuggestions(data: Dataset, goalId: string, now = Date.now
   }
   return result;
 }
+/* Recorded effort per roadmap step: finished, included sessions that were started for that step. */
+export function roadmapEffort(data: Dataset, goalId: string): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const s of data.sessions) if (s.goalId === goalId && s.milestoneId && s.status === 'completed' && !s.excluded) result.set(s.milestoneId, (result.get(s.milestoneId) ?? 0) + s.activeMs / 60000);
+  return result;
+}
+/* A short, stable fingerprint of a goal's active roadmap rows. Writers send the revision they read, so a
+   save based on an older roadmap is refused instead of archiving rows that someone else added. */
+export function roadmapRevision(data: Dataset, goalId: string): string {
+  return rowsRevision(sortMilestones(goalData(data).milestones.filter(m => m.goalId === goalId && !m.archived)));
+}
+/* The same fingerprint for rows in their order, for example the rows that an editor last saved. */
+export function rowsRevision(rows: Array<{ id: string; title: string; kind: string; completed: boolean }>): string {
+  const text = JSON.stringify(rows.map(m => [m.id, m.title, m.kind, m.completed]));
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 0x01000193) >>> 0; }
+  return `${text.length}:${hash.toString(16)}`;
+}
+export const ROADMAP_CHANGED = 'The roadmap changed while you were editing it.';
