@@ -13,6 +13,17 @@ Focus shows a procedural 3D brain (`BrainScene.ts`) with a fixed camera. The vie
 - **Meaning.** The brain is a metaphor for session progress. The progress value comes from the existing timer projection. It does not measure attention. It does not change timer accounting.
 - **Motion.** During a running session, the brain sways and breathes slightly, the sparks twinkle and soft pulses travel through the lit area. Animation time advances only while the scene moves, so a pause freezes the pose. A paused, reduced-motion or hidden scene renders one still frame and stops its loop.
 
+### Session gauge (optional Focus visual)
+
+When `settings.focusVisual` is `instrument`, Focus shows an isometric SVG dial indicator (`figures/session-gauge/`) instead of the brain. The drawing follows the Anatomy skill: a real object made of many small solid parts, four neutral tones and one lit part.
+
+- **Object.** A surface plate on feet with a ruler strip and a label plate, a magnetic stand with a post, a clamp and an arm, a dial indicator with a knurled bezel, and a screw jack under the plunger. The parts are about 60 solids and lines.
+- **Meaning.** One needle turn is one 10-minute milestone (`BRAIN_MILESTONE_MS`). The small dial counts turns up to 12 (`BRAIN_MILESTONES`, 2 hours), so the gauge and the floating brain keep the same pace. The marker outside the small dial shows `plannedMs`; before a session it follows the prepared duration. The jack lifts the anvil and the plunger by one world unit for each turn, so the plunger height and the needle come from the same value.
+- **Truth.** `model.ts` reads only `elapsedMs` and `plannedMs` from the main-process snapshot. The figure does not measure time.
+- **Colour.** The needle and the plunger are the lit part: `--accent` for focus and `--blue` for breaks, through `--figure-lit` on the SVG.
+- **Motion.** While the timer runs, the moving parts ease toward each new snapshot value in about 0.35 s and then stop the frame loop. They draw at 30 frames per second at most. A paused, hidden, reduced-motion or animation-off figure jumps to the value without a loop. Only the needle, the small hand, the wheel index, the screw and the lifted group change; they are written through refs, so a timer update does not re-render the static art.
+- **Geometry.** `geometry.ts` builds every static path once at module load with `iso/iso-kit.ts`. The exposed part of the jack screw is the only solid that is rebuilt per frame.
+
 ### Floating timer
 
 The floating timer shows a constellation of neurons in the shape of a brain (`NeuronScene.ts`), seen from the left side. It uses the same 108 × 90 slot as the old brain sprite. The canvas is transparent.
@@ -115,10 +126,14 @@ The app does not import Tailwind Preflight yet. This is intentional. Preflight r
 | Type | `text-badge` 12, `text-caption` 13 (smallest readable text), `text-label` 14, `text-body` 15, `text-title` 16, `text-heading` 20, `text-display` 28, `text-timer` 64 |
 | Elevation | `shadow-elevation-1` (panels), `shadow-elevation-2` (overlays) |
 | Motion | `--motion-control` 180ms, `--motion-page` 280ms, with `ease-standard` |
+| Mono and lift | `font-mono` (plates and engraved figure text), `shadow-elevation-lift` (plates) |
+| Isometric figures | `--anatomy-paper`, `--anatomy-shade-0`…`3`, `--anatomy-hi`, `--anatomy-mid`, `--anatomy-lo`, `--anatomy-faint`, mixed from `--panel` and `--text`. `iso/iso.css` derives `--anatomy-lit` per figure from `--figure-lit` (default `--accent`). |
 
 Color rule: purple `accent` marks actions and selection. Blue `info` marks data and information.
 
 Text pairs have a contrast of 4.5:1 at minimum. Control borders have 3:1 at minimum. These limits apply in both windows and both themes. For this reason, the main light `--control-line` is #918FA5 and `--blue` is #2F62D9.
+
+In figures, `--anatomy-hi` and `--anatomy-mid` have 3:1 at minimum against `--anatomy-paper` (measured: light 15.1 and 3.5, dark 11.3 and 4.2). `--anatomy-lo` and `--anatomy-faint` are lower on purpose, because they draw minor ticks, grooves and seams only.
 
 ## Base components
 
@@ -129,6 +144,7 @@ Text pairs have a contrast of 4.5:1 at minimum. Control borders have 3:1 at mini
 | `Button` | `primary`, `secondary`, `text-button` (ghost), `danger-button` | Props: `variant`, `size` (`md` is a 44px target, `sm` is 36px), optional leading `icon`. Secondary uses `line-strong` borders and `ink` text, so it does not look disabled. |
 | `IconButton` | `icon-button` | The required `label` becomes the `aria-label` and the tooltip. Use `tone="danger"` for destructive actions. |
 | `Card` | `panel`, `section-title` | Optional `title`, `icon`, `actions`, `headingLevel`. |
+| `Plate` | `plate`, `panel` | A figure-plate frame: `Fig n` and the `title` heading at the top, a `hint` and a `readout` at the bottom (`data-readout`, not a live region). It keeps the legacy `.panel` base, so page rules such as `.focus-stage` still apply. Used by the Focus card and the first three Patterns charts. |
 | `PageHeader` | `page-heading` | Title, optional one-line description and actions. |
 | `Field` | `field` | Links the label, hint and error to its single control (`id`, `aria-describedby`, `aria-invalid`). |
 | `Badge` | `badge` | Tones `neutral`, `accent`, `info`, `success`, `danger`. The contrast test includes every tone pair. |
@@ -199,7 +215,7 @@ Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one
   3. Goal and field filters.
 - The app calculates the selected range from the dates. Thus a custom range selects no shortcut.
 - KPI labels use sentence case at caption size. Values use `text-display` with tabular figures.
-- Charts, correlations, the weekly review and the weekly intention use `Card`. Rho is in the correlation header. Interruption tags are neutral `Badge` components.
+- The three main charts (areas, weekdays, activity modes) use `Plate` as Fig 1–3. Each readout shows the total or the largest row. The other charts, correlations, the weekly review and the weekly intention use `Card`. Rho is in the correlation header. Interruption tags are neutral `Badge` components.
 - While the example shows, **Explore an example** changes to a primary **Return to my dataset** button.
 - `Card` headers align to the start. Thus the legacy rule `.charts-grid .section-title` (space-between) no longer moves an icon away from its title.
 

@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased — session gauge and figure plates
+
+- **Session gauge.** Settings > **Focus visual** can replace the Focus brain with an isometric dial indicator. Its needle turns once for each 10 minutes of session time, its small dial counts up to 12 turns (2 hours), and a marker shows the planned length. Breaks show it in blue. It is SVG only, so software rendering also shows it. The brain stays the default.
+- **Figure plates.** The Focus card and the three main Patterns charts use a plate frame: "Fig n" and the title at the top, a hint and a live value at the bottom, in a monospace font with a thin layered shadow.
+- The isometric drawing kit comes from the Anatomy skill (MIT licence). Its colours come from the app's tokens: four neutral tones and one accent part.
+- Settings add the optional `focusVisual` key. The schema version does not change, and backups without the key restore with the brain. A backup that contains the key cannot be restored by 2.0.0 or earlier, because those versions reject unknown settings keys.
+
 ## Unreleased — goals as learning workspaces and a local AI agent
 
 Focus Guide now puts goals at the centre. A goal is the place where you learn: it has a roadmap, focus sessions, tasks and a behaviour profile.
