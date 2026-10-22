@@ -7,6 +7,7 @@ import { Store } from './store';
 import { TimerEngine } from './timer';
 import { FocusService } from './service';
 import { BehaviourCollector } from './behaviour';
+import { ProbeScheduler } from './probes';
 import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
@@ -33,6 +34,8 @@ let store: Store;
 let timer: TimerEngine;
 let service: FocusService;
 let collector: BehaviourCollector;
+let probes: ProbeScheduler;
+let hideProbeFloat = false;
 let bridge: AgentBridge | null = null;
 let quitting = false;
 let quitPending = false;
@@ -51,7 +54,7 @@ const applicationIcon = join(__dirname, '../renderer/icon.png');
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? 'Your timer ended — overtime is recording' : 'Focus session complete' : 'Your break is complete', body: mode === 'focus' ? timer?.current?.autoOvertime ? 'Extra time stays in this session. Finish when you are ready.' : 'Take a breath. Your session has been saved.' : 'Choose your next intention when you are ready.', silent: !store.getSettings().sound }).show();
 }
-function state(): AppState { return { ...store.all(), timer: timer.snapshot(), collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
+function state(): AppState { return { ...store.all(), timer: timer.snapshot(), probe: probes?.pending ?? null, collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'An unexpected error occurred.'; }
@@ -112,23 +115,47 @@ function createMain(): void {
   loadWindow(mainWindow);
 }
 function showMain(): void { if (!mainWindow || mainWindow.isDestroyed()) createMain(); else { mainWindow.show(); if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus(); } }
-function showFloating(): void {
-  if (floatingWindow && !floatingWindow.isDestroyed()) { floatingWindow.show(); return; }
+function showFloating(inactive = false): void {
+  if (!inactive) hideProbeFloat = false;
+  if (floatingWindow && !floatingWindow.isDestroyed()) { if (!inactive) floatingWindow.show(); return; }
   const a = screen.getPrimaryDisplay().workArea;
   const defaults = { x: a.x + a.width - 152, y: a.y + Math.min(55, Math.max(0, a.height - 156)), width: 132, height: 156 };
   floatingWindow = new BrowserWindow({ ...safeBounds('floatBounds', defaults), minWidth: 132, minHeight: 156, maxWidth: 132, maxHeight: 156, frame: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, show: false, backgroundColor: '#00000000', icon: applicationIcon,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
-  showWhenLoaded(floatingWindow);
+  if (!inactive) showWhenLoaded(floatingWindow);
   observeVisibility(floatingWindow);
-  floatingWindow.on('close', e => { saveBounds(floatingWindow!, 'floatBounds'); if (!quitting) { e.preventDefault(); floatingWindow!.hide(); } });
+  floatingWindow.on('close', e => { saveBounds(floatingWindow!, 'floatBounds'); if (!quitting) { e.preventDefault(); hideProbeFloat = false; floatingWindow!.hide(); if (probes?.cancel()) changed(); } });
   loadWindow(floatingWindow, true);
+}
+// A check-in never steals focus: without a focused main window it appears in the floating timer, shown inactive.
+function presentProbe(): void {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isFocused()) return;
+  showFloating(true);
+  if (!floatingWindow!.isVisible()) { hideProbeFloat = true; floatingWindow!.showInactive(); }
+}
+function dismissProbe(): void {
+  if (hideProbeFloat && floatingWindow && !floatingWindow.isDestroyed()) floatingWindow.hide();
+  hideProbeFloat = false;
+}
+function pollProbes(): void {
+  const result = probes.tick(timer.snapshot(), timer.current, !!store.getSettings().attentionProbes);
+  if (!result) return;
+  if (result.type === 'show') presentProbe(); else dismissProbe();
+  if (result.type === 'expire') {
+    const { probe, offsetMs } = result;
+    void enqueue(async () => {
+      if (timer.current?.id !== probe.sessionId || timer.current.status !== 'running') return;
+      timer.recordProbe('missed', offsetMs, null, null); collector.flush(); changed();
+    });
+  }
+  changed();
 }
 function updateTray(): void {
   if (!tray) return;
   const snapshot = timer.snapshot();
   tray.setToolTip(snapshot.mode === 'idle' ? 'Focus Guide — choose an intention' : snapshot.phase === 'stopwatch' ? `Focus Guide — ${Math.floor(snapshot.elapsedMs / 60000)} min recorded` : snapshot.phase === 'overtime' ? `Focus Guide — overtime +${Math.floor(snapshot.overtimeMs / 60000)} min` : `Focus Guide — ${Math.ceil(snapshot.remainingMs / 60000)} min remaining`);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Focus Guide', click: showMain }, { label: 'Show floating timer', click: showFloating },
+    { label: 'Open Focus Guide', click: showMain }, { label: 'Show floating timer', click: () => showFloating() },
     { label: snapshot.running ? 'Pause timer' : 'Resume timer', enabled: snapshot.mode !== 'idle', click: () => { try { void enqueue(async () => { await transitions.run(() => { timer.snapshot().running ? timer.pause() : timer.resume(); }); changed(); }); } catch (e) { report(e); } } },
     { type: 'separator' }, { label: 'Quit (save and pause)', click: () => app.quit() }
   ]));
@@ -200,7 +227,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     case 'shortcut.retry': await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); return;
     case 'window.float': showFloating(); return;
     case 'window.main': showMain(); return;
-    case 'window.hide': floatingWindow?.hide(); return;
+    case 'window.hide': probes.cancel(); hideProbeFloat = false; floatingWindow?.hide(); return;
     case 'backup.create': await dailyBackup(true); return backupStatus;
     case 'export.sessions': case 'export.events': case 'export.backup': case 'export.activity': case 'export.goals': {
       const filePath = selectedFile;
@@ -229,7 +256,9 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     }
     default: {
       const value = service.run(command, input);
-      if (command === 'attention.return') { collector.flush(); acknowledgeReturn(value); }
+      if (['attention.return', 'interruption.record', 'thought.record', 'probe.answer'].includes(command)) collector.flush();
+      if (command === 'attention.return') acknowledgeReturn(value);
+      if (command === 'probe.answer') dismissProbe();
       return value;
     }
   }
@@ -262,13 +291,14 @@ app.on('window-all-closed', () => { /* The tray owns the application lifetime. *
 if (locked) void app.whenReady().then(async () => {
   store = new Store(app.getPath('userData'));
   timer = new TimerEngine(store, undefined, notify);
+  probes = new ProbeScheduler();
   service = new FocusService(store, timer, () => {
     const directory = join(store.directory, 'backups');
     mkdirSync(directory, { recursive: true });
     const file = join(directory, `before-field-delete-${Date.now()}-${randomUUID()}.json`);
     atomicWrite(file, serializeBackup(store.all(true)));
     backupStatus = 'A recovery backup was saved before area deletion.';
-  });
+  }, probes);
   collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, 'activity-helper.exe') : resolve(__dirname, '../../native/bin/activity-helper.exe'),
     () => {
       if (shortcutCaptureUntil > Date.now() && mainWindow?.isFocused()) {
@@ -312,7 +342,7 @@ if (locked) void app.whenReady().then(async () => {
   const systemPause = (reason: string) => {
     try {
       // Freeze time synchronously: the OS may suspend before a queued drain runs.
-      timer.pause(reason); transitions.needsRecovery = true;
+      timer.pause(reason); if (probes.cancel()) dismissProbe(); transitions.needsRecovery = true;
       publish({ type: 'state', state: state() }); updateTray();
       void enqueue(async () => { await transitions.run(() => {}); changed(); });
     } catch (error) { report(error); }
@@ -329,6 +359,7 @@ if (locked) void app.whenReady().then(async () => {
       if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error('Invalid command input.');
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
+        if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
         if (command === 'shortcut.capture') {
           if (event.sender !== mainWindow?.webContents || typeof args.enabled !== 'boolean') throw new Error('Invalid shortcut capture request.');
           if (args.enabled && !mainWindow.isFocused()) throw new Error('Focus this window before configuring a shortcut.');
@@ -341,12 +372,15 @@ if (locked) void app.whenReady().then(async () => {
     } catch (e) { report(e); return { ok: false, error: errorMessage(e) }; }
   });
   updateInterval = setInterval(() => {
-    if (transitions.busy || transitions.needsRecovery) return;
+    // A failed transition leaves the timer waiting for recovery; a check-in shown then could never be answered.
+    if (transitions.needsRecovery && probes.cancel()) { dismissProbe(); changed(); }
+    if (quitPending || transitions.busy || transitions.needsRecovery) return;
     try {
       if (timer.current?.status === 'running' && timer.current.timingMode === 'countdown' && !timer.current.autoOvertime && timer.snapshot().remainingMs <= 0) {
         void enqueue(async () => { await transitions.run(() => timer.tick()); changed(); });
       } else if (timer.tick()) changed();
       collector.reconcile(); publish({ type: 'timer', timer: timer.snapshot() });
+      pollProbes();
     } catch (e) { report(e); changed(); }
   }, 250);
   checkpointInterval = setInterval(() => { void enqueue(async () => { timer.checkpoint(); collector.flush(); }); }, 5000);

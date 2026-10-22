@@ -292,5 +292,7 @@ export class Store {
     })();
   }
   async backup(path: string): Promise<void> { await this.db.backup(path); }
+  /** Rows changed through this connection since it opened; any INSERT, UPDATE or DELETE moves it. Null means: do not cache. */
+  revision(): number | null { return (this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n; }
   close(): void { this.db.close(); }
 }

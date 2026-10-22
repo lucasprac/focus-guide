@@ -3,12 +3,16 @@ import { Store } from './store';
 import { TimerEngine } from './timer';
 import type { Command, FocusSession, Task } from '../shared/types';
 import * as v from '../shared/validation';
-import { totalMinutes } from '../shared/analytics';
-import { GoalService } from './goal-service';
+import { selectedSessions, totalMinutes } from '../shared/analytics';
+import { focusInsights } from '../shared/focus-insights';
+import type { ProbeScheduler } from './probes';
+import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
 
 export class FocusService {
-  constructor(readonly store: Store, readonly timer: TimerEngine, private beforeFieldDelete?: () => void) {}
+  constructor(readonly store: Store, readonly timer: TimerEngine, private beforeFieldDelete?: () => void, readonly probes?: ProbeScheduler) {}
+  // Runtime-only results of insights.read, keyed by the input and the data revision; never persisted.
+  private insights: Array<{ key: string; value: unknown }> = [];
   private categoryInput(value: unknown): string | null {
     if (value === null || value === undefined || value === '') return null;
     const id = v.id(value), category = this.store.category(id);
@@ -94,7 +98,7 @@ export class FocusService {
         const plannedMs = timingMode === 'stopwatch' ? null : v.number(input.durationMinutes,'Duration',1,1440) * 60000;
         try { this.store.db.transaction(() => {
           if (links.occurrence) this.store.putGoalRecord('goalOccurrences',links.occurrence);
-          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 3,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy });
+          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null });
           this.store.setMeta('settings',{ ...this.store.getSettings(),activityModes: { ...this.store.getSettings().activityModes,[f.id]: activityMode } });
         })(); } catch (error) { this.timer.recover(); throw error; }
         return this.timer.current!.id;
@@ -105,10 +109,12 @@ export class FocusService {
       case 'session.review': case 'session.edit': case 'session.exclude': case 'session.delete': {
         const s = this.store.session(v.id(input.id)); if (!s || s.status !== 'completed') throw new Error('Only a finished session can be edited or removed.');
         if (command === 'session.delete') { this.store.removeSession(s.id); return; }
-        const before = { fieldId: s.fieldId, intention: s.intention, energy: s.energy, focus: s.focus, note: s.note, excluded: s.excluded };
+        const before = { fieldId: s.fieldId, intention: s.intention, energy: s.energy, focus: s.focus, note: s.note, excluded: s.excluded, detractor: s.detractor ?? null, challenge: s.challenge ?? null };
         if (command === 'session.exclude') s.excluded = v.bool(input.excluded, 'Excluded');
         else {
           s.focus = v.rating(input.focus); s.note = v.text(input.note ?? '', 'Note', 2000);
+          if ('detractor' in input) s.detractor = v.detractor(input.detractor);
+          if ('challenge' in input) s.challenge = v.challenge(input.challenge);
           if (command === 'session.edit') {
             const f = this.store.field(v.id(input.fieldId)); if (!f) throw new Error('Choose an existing area.');
             if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; s.milestoneId = null; }
@@ -124,6 +130,26 @@ export class FocusService {
         return this.timer.recordReturn(source);
       }
       case 'attention.remove': this.store.removeReturn(v.id(input.id)); return;
+      case 'probe.answer': {
+        const id = v.id(input.id), answer = v.probeAnswer(input.answer), source = input.source;
+        if (source !== 'main' && source !== 'floating') throw new Error('Invalid check-in source.');
+        const pending = this.probes?.pending;
+        if (!pending || pending.id !== id || pending.sessionId !== this.timer.current?.id || this.timer.current.status !== 'running') throw new Error('This check-in has expired.');
+        const { offsetMs, latencyMs } = this.probes!.answer(id);
+        return this.timer.recordProbe(answer, offsetMs, source, latencyMs);
+      }
+      case 'insights.read': {
+        const { from, to } = dateRange(input);
+        const fieldId = input.fieldId == null || input.fieldId === '' ? undefined : v.id(input.fieldId);
+        const goalId = input.goalId == null || input.goalId === '' ? undefined : v.id(input.goalId);
+        const revision = this.store.revision(), key = JSON.stringify([revision, from, to, fieldId ?? '', goalId ?? '']);
+        const hit = revision === null ? undefined : this.insights.find(entry => entry.key === key);
+        if (hit) return structuredClone(hit.value);
+        const data = this.store.all(), sessions = selectedSessions(data, from, to, fieldId, goalId);
+        const value = focusInsights(data, sessions.flatMap(s => this.store.activity(s.id)), { from, to, fieldId, goalId, now: Date.parse(now) });
+        if (revision !== null) this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
+        return value;
+      }
       case 'behaviour.read': {
         const sessionId = v.id(input.id); if (!this.store.session(sessionId)) throw new Error('Session no longer exists.');
         return this.store.activity(sessionId);

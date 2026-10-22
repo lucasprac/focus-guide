@@ -17,6 +17,7 @@ import PatternsPage from './PatternsPage';
 import WorldPage from './WorldPage';
 import SettingsPage from './SettingsPage';
 import { BehaviourReview, ReturnFeedback } from './Behaviour';
+import ProbePrompt, { ProbeAnnouncer } from './ProbePrompt';
 
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
 export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
@@ -93,6 +94,8 @@ export default function App() {
   };
   if (!data) return mini ? <div className="mini-app mini-loading" role="status"><Icon name="world" size={32} /><span>{error || 'Opening timer…'}</span></div> : <div className="loading-screen"><Icon name="world" size={42} /><h1>Focus Guide</h1><p>{error || 'Opening your focus space…'}</p></div>;
   if (mini) return <div className="mini-app" tabIndex={0} role="group" aria-label="Floating timer. Hover or focus to reveal time and controls.">
+    {data.timer.mode === 'focus' && <ProbeAnnouncer probe={data.probe} />}
+    {data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} mini />}
     <div className="mini-drag" title="Drag the brain to move the floating timer">
       <ReturnFeedback sessionId={data.timer.sessionId} animation={data.settings.animation} neutral={brainColorProgress(data.timer.elapsedMs, visualDuration(data.timer)) === 0}><FloatingNetwork elapsedMs={data.timer.elapsedMs} progress={brainColorProgress(data.timer.elapsedMs, visualDuration(data.timer))} running={data.timer.running} pause={data.timer.mode === 'break'} animation={data.settings.animation} software={data.graphicsMode === 'software'} /></ReturnFeedback>
     </div>
@@ -139,6 +142,8 @@ export default function App() {
       </div></div>
       {error && <div className="alert error" role="alert"><Icon name="shield" size={18} /><span>{error}</span><button className="icon-button" aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close" size={17} /></button></div>}
       {notice && <div className="alert notice" role="status"><Icon name="check" size={18} /><span>{notice}</span></div>}
+      {data.timer.mode === 'focus' && <ProbeAnnouncer probe={data.probe} />}
+      {data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} />}
       <div className="page-content">
         <div hidden={page !== 'Focus'}><FocusPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} visible={page === 'Focus'} /></div>
         {page === 'Goals' && <GoalsPage data={data} act={act} startAction={startAction} openTasks={openGoalTasks} focusGoal={focusGoal} activeGoalId={activeGoalId} openGoal={setActiveGoalId} />}

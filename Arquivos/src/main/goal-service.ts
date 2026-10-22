@@ -9,6 +9,13 @@ import { ROADMAP_CHANGED, barrierSuggestions, plannedOccurrences, roadmapRevisio
 import { localDay, monday, selectedSessions } from '../shared/analytics';
 import { goalBehaviourProfile } from '../shared/behaviour-analytics';
 
+/** An analysis range of any length: valid dates with from <= to. */
+export function dateRange(input: Record<string, unknown>): { from: string; to: string } {
+  let from: string, to: string;
+  try { from = goalDate(input.from); to = goalDate(input.to); } catch { throw new Error('Choose a valid date range.'); }
+  if (from > to) throw new Error('Choose a start date on or before the end date.');
+  return { from, to };
+}
 export class GoalService {
   constructor(private store: Store) {}
   private records() { return goalData(this.store.all()); }
@@ -172,8 +179,7 @@ export class GoalService {
         })(); return;
       }
       case 'goal.behaviour': {
-        const goal = this.goal(input.goalId), from = goalDate(input.from), to = goalDate(input.to);
-        if (from > to || Date.parse(to) - Date.parse(from) > 3660 * 86400000) throw new Error('Choose a date range of up to ten years.');
+        const goal = this.goal(input.goalId), { from, to } = dateRange(input);
         const data = this.store.all(), sessions = selectedSessions(data, from, to, '', goal.id);
         return goalBehaviourProfile(data, sessions.flatMap(s => this.store.activity(s.id)), goal.id, from, to, Date.parse(now));
       }

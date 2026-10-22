@@ -67,10 +67,12 @@ export class BehaviourCollector {
           const epoch = number(value.epoch, 'Helper generation', 1, Number.MAX_SAFE_INTEGER);
           const counts = ['keys', 'clicks', 'scrolls'].map(key => number(value[key], key, 0, 1000000));
           const movementMs = number(value.movementMs, 'Movement', 0, duration);
+          const switches = value.switches === undefined ? null : number(value.switches, 'Window switches', 0, 1000);
+          if (switches !== null && !Number.isSafeInteger(switches)) throw new Error('Invalid window switches.');
           if (![end, duration, epoch, ...counts].every(Number.isSafeInteger) || end < duration) throw new Error('Invalid aggregate counters.');
           if (epoch !== this.span?.epoch || !this.span.enabled) continue;
           this.heartbeat = Date.now();
-          const packet: Packet = { startMs: this.span.start + end - duration, endMs: this.span.start + end, observedMs: duration, keys: counts[0], clicks: counts[1], scrolls: counts[2], movementMs };
+          const packet: Packet = { startMs: this.span.start + end - duration, endMs: this.span.start + end, observedMs: duration, keys: counts[0], clicks: counts[1], scrolls: counts[2], movementMs, inputMs: counts.some(count => count > 0) || movementMs > 0 ? duration : 0, switches };
           const snapshot = this.timer.snapshot();
           const limit = snapshot.sessionId === this.span.sessionId ? snapshot.elapsedMs + 100 : (this.store.session(this.span.sessionId)?.activeMs ?? 0) + 2500;
           // Scheduling gaps and post-pause tails cannot locate their counters in active time.
@@ -147,6 +149,8 @@ export class BehaviourCollector {
         const complete = packet && end >= packet.endMs && next === end;
         this.store.putActivity({ id: randomUUID(), sessionId: span.sessionId, startMs: start, endMs: next, status,
           observedMs: status === 'recorded' ? next - start : 0, movementMs: packet?.movementMs ? Math.min(next - start, packet.movementMs) : 0,
+          inputMs: status === 'recorded' && packet ? (packet.inputMs ? next - start : 0) : null,
+          switches: status === 'recorded' && packet?.switches != null ? (complete ? packet.switches : 0) : null,
           keys: complete ? packet.keys : 0, clicks: complete ? packet.clicks : 0, scrolls: complete ? packet.scrolls : 0 });
         start = next;
       }

@@ -1,5 +1,6 @@
 import { TimerEngine } from '../../main/timer';
 import { FocusService } from '../../main/service';
+import { DEFAULT_PROBE_OPTIONS, FAST_PROBE_OPTIONS, ProbeScheduler } from '../../main/probes';
 import type { Store } from '../../main/store';
 import { GOAL_COLLECTIONS, goalData, milestoneDefaults, upgradeGoalRecords, type GoalData } from '../../shared/goal-types';
 import type { Dataset, FocusGuideAPI, AppEvent, FocusSession, SessionEvent, Task, Field, TaskCategory, WeeklyReview, ActivitySample } from '../../shared/types';
@@ -98,7 +99,20 @@ class PreviewStore {
   category(id: string) { return structuredClone(this.data.categories.find(c => c.id === id)); }
   getSettings() { return structuredClone(this.data.settings); }
   getMeta() { return null; }
+  revision() { return null; } // No insights cache in the preview.
   activity(id?: string) { return structuredClone((this.data.activity ?? []).filter(a => !id || a.sessionId === id)); }
+  putActivity(sample: ActivitySample) {
+    const rows = this.data.activity ??= [];
+    let previous: ActivitySample | undefined;
+    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].sessionId === sample.sessionId) { previous = rows[i]; break; }
+    if (previous && previous.status === sample.status && previous.endMs === sample.startMs && Math.floor(previous.startMs / 60000) === Math.floor(sample.startMs / 60000)) {
+      const add = (a?: number | null, b?: number | null) => a == null || b == null ? null : a + b;
+      Object.assign(previous, { endMs: sample.endMs, observedMs: previous.observedMs + sample.observedMs,
+        keys: previous.keys + sample.keys, clicks: previous.clicks + sample.clicks, scrolls: previous.scrolls + sample.scrolls,
+        movementMs: previous.movementMs + sample.movementMs, inputMs: add(previous.inputMs, sample.inputMs), switches: add(previous.switches, sample.switches) });
+    } else rows.push(sample);
+    this.save();
+  }
   removeActivity() { this.db.transaction(() => {
     this.data.activity = [];
     for (const session of this.data.sessions) this.activityCursors[session.id] = session.activeMs;
@@ -154,11 +168,12 @@ export function installPreview(): void {
   const timer = new TimerEngine(store as unknown as Store, { utc: () => Date.now(), monotonic: () => performance.now() }, mode => {
     emit({ type: 'notice', message: mode === 'break' ? 'Demo break complete.' : timer.current ? 'Timer ended. Overtime is recording in this session.' : 'Demo session saved.' });
   });
+  const probes = new ProbeScheduler(Math.random, new URLSearchParams(location.search).get('probes') === 'fast' ? FAST_PROBE_OPTIONS : DEFAULT_PROBE_OPTIONS);
   const service = new FocusService(store as unknown as Store, timer, () => {
     const data = store.all();
     const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 10,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
     localStorage.setItem(`${key}-before-field-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
-  });
+  }, probes);
   const simulate = () => {
     const session = timer.current; if (!session || session.status !== 'running') return;
     const enabled = !!store.getSettings().collectActivity;
@@ -168,14 +183,14 @@ export function installPreview(): void {
       store.data.activity ??= [];
       for (let start = startMs; start < endMs;) {
         const end = Math.min(endMs, (Math.floor(start / 60000) + 1) * 60000);
-        store.data.activity.push({ id: crypto.randomUUID(), sessionId: session.id, startMs: start, endMs: end, observedMs: enabled ? end - start : 0, keys: enabled ? Math.round((end - start) / 1000 * 2) : 0, clicks: enabled ? Math.round((end - start) / 5000) : 0, scrolls: 0, movementMs: enabled ? (end - start) * .4 : 0, status: enabled ? 'recorded' : 'disabled' } satisfies ActivitySample);
+        store.putActivity({ id: crypto.randomUUID(), sessionId: session.id, startMs: start, endMs: end, observedMs: enabled ? end - start : 0, keys: enabled ? Math.round((end - start) / 1000 * 2) : 0, clicks: enabled ? Math.round((end - start) / 5000) : 0, scrolls: 0, movementMs: enabled ? (end - start) * .4 : 0, inputMs: enabled ? (end - start) * .8 : null, switches: enabled ? Math.floor(end / 15000) - Math.floor(start / 15000) : null, status: enabled ? 'recorded' : 'disabled' } satisfies ActivitySample);
         start = end;
       }
       store.activityCursors[session.id] = endMs;
       store.save();
     })();
   };
-  const state = () => ({ graphicsMode: 'auto' as const, ...store.all(), timer: timer.snapshot(), dataPath: 'Isolated browser demo — your Windows data is not connected', collector: { state: store.getSettings().collectActivity && timer.snapshot().running ? 'recording' as const : 'disabled' as const, shortcut: 'unavailable' as const, message: 'Synthetic activity preview · global shortcuts and native collection require Windows.' }, backupStatus: 'Demo changes stay in this browser profile.' });
+  const state = () => ({ graphicsMode: 'auto' as const, ...store.all(), timer: timer.snapshot(), probe: probes.pending, dataPath: 'Isolated browser demo — your Windows data is not connected', collector: { state: store.getSettings().collectActivity && timer.snapshot().running ? 'recording' as const : 'disabled' as const, shortcut: 'unavailable' as const, message: 'Synthetic activity preview · global shortcuts and native collection require Windows.' }, backupStatus: 'Demo changes stay in this browser profile.' });
   window.focusGuide = {
     getState: async () => state(),
     command: async (command, input = {}) => {
@@ -191,8 +206,15 @@ export function installPreview(): void {
     onEvent: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }
   } satisfies FocusGuideAPI;
   const tick = window.setInterval(() => { try { if (timer.tick()) emit({ type: 'state', state: state() }); emit({ type: 'timer', timer: timer.snapshot() }); } catch (error) { emit({ type: 'error', message: String(error) }); } }, 250);
+  const probeTick = window.setInterval(() => {
+    try {
+      const result = probes.tick(timer.snapshot(), timer.current, !!store.getSettings().attentionProbes);
+      if (result?.type === 'expire' && timer.current?.id === result.probe.sessionId && timer.current.status === 'running') timer.recordProbe('missed', result.offsetMs, null, null);
+      if (result) emit({ type: 'state', state: state() });
+    } catch (error) { emit({ type: 'error', message: String(error) }); }
+  }, 1000);
   const checkpoint = window.setInterval(() => { try { timer.checkpoint(); simulate(); } catch (error) { emit({ type: 'error', message: String(error) }); } }, 5000);
   const pause = () => { try { timer.pause('Demo paused — resume when ready'); emit({ type: 'state', state: state() }); } catch (error) { emit({ type: 'error', message: String(error) }); } };
-  window.addEventListener('pagehide', () => { pause(); clearInterval(tick); clearInterval(checkpoint); });
+  window.addEventListener('pagehide', () => { pause(); clearInterval(tick); clearInterval(probeTick); clearInterval(checkpoint); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 }

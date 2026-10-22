@@ -74,3 +74,13 @@
   --shadow-elevation-2: var(--shadow-overlay, none);
   --shadow-elevation-lift: var(--shadow-lift, none);
 }
+
+.probe-prompt { padding: 12px; margin: 0 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+.probe-prompt p { margin: 0 0 8px; font-size: 13px; }
+.probe-prompt > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.probe-mini { position: absolute; inset: 2px; z-index: 20; margin: 0; padding: 6px; -webkit-app-region: no-drag; }
+.probe-mini p { font-size: 11px; line-height: 1.2; margin-bottom: 5px; }
+.probe-mini > div { display: grid; gap: 3px; }
+.probe-mini button { min-height: 27px; height: 27px; padding: 2px 4px; font-size: 11px; }
+.mini-app:has(.probe-mini) > :is(.mini-drag, .mini-return, .mini-reveal) { display: none; }
+.mini-app:has(.probe-mini) > .mini-error { z-index: 21; }

@@ -1,6 +1,6 @@
 # Behaviour Data Science no Focus Guide — design da fase 1
 
-Estado: proposta para aprovação, 22 de outubro de 2026. Nenhum código foi alterado. Nenhuma operação foi feita sobre dados pessoais.
+Estado: design da fase 1, 22 de outubro de 2026. Contratos, persistência e motor de análise já estão na branch `Behaviour-data`; a task 2 (execução) está implementada no código-fonte. Interface completa, MCP e integração final continuam nas tarefas seguintes. Nenhuma operação foi feita sobre dados pessoais e a instalação em `Aplicativo/` não foi substituída.
 
 ## 1. Objetivo
 
@@ -399,6 +399,17 @@ O coordenador escreve o contrato (seção 9) e depois distribui as tarefas. Cada
 | 3a | Interface | `PatternsPage.tsx`, novo `InsightsPanel.tsx`, `App.tsx`, `FocusPage.tsx`, `CalendarPage.tsx`, `SettingsPage.tsx`, CSS | 1b, 2 |
 | 3b | Agente e documentação | `agent-tools.ts`, `agent-service.ts`, `mcp/server.ts`, `Docs/*` | 1b, 2 (em paralelo com 3a) |
 | 4 | Integração e verificação | seção 13 | todas |
+
+### Entrega da task 2 — 22/10/2026
+
+- Helper com contagem de trocas por janela raiz, exclusão das janelas do Focus Guide e reinício da referência a cada coleta. O coletor aceita helpers sem `switches`, preserva `null` e soma `inputMs` dentro do tempo durável.
+- `ProbeScheduler` compartilhado pelo desktop e preview: agenda por tempo ativo, expira por relógio monotônico e limita a seis apresentações. Pausa, fim, pausa curta, desativação, Offline e uma transição que falhou (recuperação pendente) cancelam a sonda sem registro. Fechar ou esconder a janela flutuante também cancela a sonda pendente sem registro; a seção 5.2 não lista esse caso. Uma sonda só aparece com pelo menos 5 min 45 s restantes na contagem regressiva, para poder expirar antes dos últimos cinco minutos; depois disso, a próxima passa para `plannedMs + 15 min` (só acontece no tempo extra). Quando as sondas são ligadas no meio de uma sessão, a primeira vem de 8 a 20 minutos ativos depois.
+- Apresentação mínima da pergunta na janela principal e na flutuante para permitir a verificação da execução. A flutuante usa `showInactive` e volta a ficar escondida quando foi aberta só pela sonda. O IPC deriva a origem da resposta da janela remetente.
+- Gravação atômica de sondas, interrupções e pensamentos junto ao total ativo; novas sessões usam `behaviourVersion = 4`. Reflexões validam detrator/desafio, preservam chaves omitidas e permitem limpar respostas com `null`.
+- `insights.read` retorna o motor existente somente com a atividade das sessões filtradas. Ele e `goal.behaviour` aceitam o intervalo All time. Preview sintético compartilha o agendador, aceita `&probes=fast` e agrega a atividade por minuto.
+- Verificação em pastas de rascunho externas ao repositório: typecheck, `build:helper`, agendador com relógio falso, execução com `Store` temporário (marcadores, sondas, backup, reflexão, intervalos All time, coletor sem `switches`, tempo de `insights.read`) helper real e preview com `&probes=fast` (sonda mostrada, respondida e expirada como `missed`, console sem erros). As janelas do Electron (`showInactive`, volta da visibilidade, origem da resposta por IPC) ainda não foram verificadas.
+
+O interruptor de Settings, os campos de reflexão na interface, a aba Insights, sugestões no Focus e a ferramenta MCP permanecem no escopo das tasks 3a/3b. Uma revisão independente aprovou a task 2 em 22/10/2026. O comportamento das janelas do Electron ainda precisa de uma verificação manual em `npm run dev`.
 
 ## 16. Decisões deixadas ao construtor
 
