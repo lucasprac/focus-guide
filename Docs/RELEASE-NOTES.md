@@ -7,7 +7,7 @@
 - The isometric drawing kit comes from the Anatomy skill (MIT licence). Its colours come from the app's tokens: four neutral tones and one accent part.
 - Settings add the optional `focusVisual` key. The schema version does not change, and backups without the key restore with the brain. A backup that contains the key cannot be restored by 2.0.0 or earlier, because those versions reject unknown settings keys.
 
-## Unreleased — goals as learning workspaces and a local AI agent
+## 2.0.0 — goals as learning workspaces and a local AI agent
 
 Focus Guide now puts goals at the centre. A goal is the place where you learn: it has a roadmap, focus sessions, tasks and a behaviour profile.
 

@@ -34,6 +34,7 @@ npm-debug.log*
 *.key
 *.pfx
 *.p12
+.mcp.json
 
 # Editors and OS
 .vscode/

@@ -1,4 +1,4 @@
-# Goal planning — Focus Guide 1.5.0
+# Goal planning — Focus Guide 2.0
 
 Focus Guide helps with study, work and personal goals. You define an outcome, plan repeatable actions, check in when you want to, and adjust the plan each week. All data stays in the existing local profile. Personal guidance uses transparent rules, not a remote model.
 

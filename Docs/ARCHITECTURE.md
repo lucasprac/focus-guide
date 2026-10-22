@@ -1,4 +1,4 @@
-# Architecture — Focus Guide 1.5.0
+# Architecture — Focus Guide 2.0
 
 ## Learning workspace and local agent bridge (unreleased)
 

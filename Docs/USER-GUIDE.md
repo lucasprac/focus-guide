@@ -1,6 +1,6 @@
 # Focus Guide — user guide
 
-Version 1.5.0 · Windows x64 · English · offline
+Version 2.0.0 · Windows x64 · English · offline
 
 This guide describes the app in the `Aplicativo` folder. For the current interface, see [Visual design](VISUAL-DESIGN.md).
 
@@ -23,7 +23,7 @@ You can make a Windows shortcut to the executable in **Aplicativo**. The app kee
 3. Open **Focus Guide.lnk**.
 4. Resume a paused session manually, if one exists.
 
-Version 1.5.0 upgrades older databases to schema 5. Before the upgrade, it saves a snapshot of the database. To go back to an older app, you need the database snapshot that matches it.
+Version 2.0.0 upgrades older databases to schema 5. Before the upgrade, it saves a snapshot of the database. To go back to an older app, you need the database snapshot that matches it.
 
 The milestone block editor upgrades the database to schema 6 in the same way. It saves a `before-schema-v6` snapshot first, and every existing milestone becomes a to-do.
 
