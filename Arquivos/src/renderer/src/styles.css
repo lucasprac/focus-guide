@@ -721,6 +721,55 @@ button:active:not(:disabled) { filter: brightness(.94); }
   .constellation-controls button { min-width: 40px; height: 40px; }
   .constellation-toolbar { gap: 8px; }
 }
+/* Neural World: the goal network, its inspector and the goal list. Area colors mark goals; the palette tints the sky. */
+.goal-world-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 20px; align-items: start; }
+.goal-world-scene { min-width: 0; }
+.goal-world-stage { height: clamp(340px, 54vh, 540px); overflow: hidden; margin-top: 12px; }
+.goal-world-stage .neural-visual { position: absolute; inset: 0; }
+.app-shell .world-page .goal-world-map { color: var(--world-color); width: 100%; height: 100%; max-height: none; margin: 0; user-select: none; }
+.goal-world-map .world-field-name { fill: var(--text); font-size: 13px; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.goal-world-label { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+.goal-world-label > span { display: block; transform: translate(-50%, calc(-100% - 22px)); max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 88%, transparent); color: var(--text); font-size: 12px; }
+.goal-world-inspector { display: grid; gap: 14px; padding: 18px; border-color: color-mix(in srgb, var(--area-color) 35%, var(--line)); }
+.goal-world-inspector h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.goal-world-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.goal-world-area { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); }
+.goal-world-area > i { width: 8px; height: 8px; border-radius: 50%; background: var(--area-color); box-shadow: 0 0 8px color-mix(in srgb, var(--area-color) 60%, transparent); }
+.goal-world-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.goal-world-stats > div { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--background); }
+.goal-world-stats dt { color: var(--muted); font-size: 11px; }
+.goal-world-stats dd { margin: 2px 0 0; color: var(--text); }
+.goal-world-progress { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; color: var(--muted); }
+.goal-world-progress strong { color: var(--text); font-weight: 500; }
+.goal-world-progress .horizon-progress { grid-column: 1 / -1; }
+.app-shell .world-page .goal-world-progress .horizon-progress > span { background: var(--area-color); }
+.goal-world-roadmap .section-title { margin-bottom: 6px; }
+.goal-world-roadmap ol { display: grid; gap: 2px; max-height: 260px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.goal-world-step { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); text-align: left; }
+.goal-world-step:hover { background: var(--soft); }
+.goal-world-step[aria-pressed="true"] { border-color: color-mix(in srgb, var(--area-color) 55%, var(--line)); background: color-mix(in srgb, var(--area-color) 9%, var(--panel)); }
+.goal-world-step.is-done, .goal-world-step.is-next { color: var(--text); }
+.goal-world-step-mark { display: grid; place-items: center; width: 14px; height: 14px; border: 1.5px solid color-mix(in srgb, var(--area-color) 70%, var(--muted)); border-radius: 50%; color: var(--panel); }
+.goal-world-step.is-done .goal-world-step-mark { background: var(--area-color); border-color: var(--area-color); }
+.goal-world-step.is-next .goal-world-step-mark { box-shadow: 0 0 0 3px color-mix(in srgb, var(--area-color) 25%, transparent); }
+.goal-world-step-title { overflow-wrap: anywhere; }
+.goal-world-step-title small { color: var(--muted); font-size: 11px; }
+.goal-world-step-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.goal-world-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.goal-world-list { display: grid; gap: 4px; padding-top: 14px; }
+.goal-world-list-area { display: grid; gap: 2px; }
+.goal-world-list-area .constellation-fields { padding: 6px 0 8px; }
+.goal-world-list-area .constellation-field-mark { background: var(--area-color); }
+.goal-world-list-area .constellation-fields button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--area-color) 65%, var(--control-line)); background: color-mix(in srgb, var(--area-color) 10%, var(--panel)); }
+.goal-world-list-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); }
+.goal-world-list-footer .goal-toggle { margin-left: 0; }
+@container workspace (max-width: 900px) {
+  .app-shell .goal-world-main { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .goal-world-stage { height: 340px; }
+  .goal-world-stats { grid-template-columns: minmax(0, 1fr); }
+}
 .app-shell .fold-content[data-state="open"] { overflow: visible; }
 .app-shell .disclosure + .disclosure { margin-top: 20px; }
 @container workspace (max-width: 1100px) {

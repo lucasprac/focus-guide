@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased — Neural World as a goal network
+
+- **Goal network.** Neural World now shows goals instead of area clusters. Each goal is a neuron: focus time grows its soma, roadmap steps form its axon (finished steps lit, the next step pulsing), done and smaller actions of the last 28 days add sparks, and a measured goal shows a progress arc. Drafts are translucent, paused goals are muted, and achieved goals move to an outer ring.
+- **Explore and act.** Click a neuron or a goal button to turn the world and move the camera to the goal. A side panel shows its roadmap, time, actions and progress. **Focus on next step** prepares a session for that goal and step; **Open goal** opens the workspace. **Esc** returns to the overview.
+- Area colours identify goals. The earned palette now tints the sky and the light. Palette unlock rules do not change.
+- The page reads records only. The schema, backups and commands do not change. The SVG fallback draws the same network.
+
 ## Unreleased — session gauge and figure plates
 
 - **Session gauge.** Settings > **Focus visual** can replace the Focus brain with an isometric dial indicator. Its needle turns once for each 10 minutes of session time, its small dial counts up to 12 turns (2 hours), and a marker shows the planned length. Breaks show it in blue. It is SVG only, so software rendering also shows it. The brain stays the default.

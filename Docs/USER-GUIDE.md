@@ -280,24 +280,26 @@ The weekly review shows totals, the rating distribution and the most frequent in
 
 ## Neural World
 
-Each field adds to a persistent constellation. Its growth uses the recorded time of finished, included sessions.
+Neural World shows your goals as a network of neurons. It reads your records only; it changes nothing.
 
-- Open **Palettes & horizons** to select a cosmetic palette. Palettes unlock at 5, 20 and 50 recorded hours.
-- Palettes change the world illustration only. Your light or dark interface choice is separate.
-- **Focus by field** shows the totals of all fields.
+- **Soma.** Each goal is a neuron. Its body grows with the recorded focus time of the goal (finished, included sessions), on a scale that slows down for large totals.
+- **Axon.** The to-do steps of the roadmap sit along the axon in roadmap order. Finished steps are lit. The next step is larger and pulses slowly when animations are on. Later steps are faint. A long roadmap shows 12 steps around the next step; the side panel lists every step.
+- **Sparks.** Each action that you recorded as done in the last 28 days adds a spark around the soma. A smaller version adds a smaller spark. Skipped or unrecorded actions add nothing.
+- **Progress arc.** A goal with a baseline and a target shows an arc for its latest progress value.
+- **Status.** Active goals have full colour. Drafts are translucent with a dashed axon. Paused goals are muted and do not pulse. Achieved goals move to an outer ring. Archived goals do not appear.
+- **Areas.** Goals of the same area stay together and use the area colour. The layout comes from identities, so it does not move when totals change.
+- Open **Palettes & horizons** to select a palette. The palette tints the sky and the light of the world. Palettes unlock at 5, 20 and 50 recorded hours. Your light or dark interface choice is separate.
+- **Focus by area** shows the totals of all areas.
 - Days off do not erase progress. There are no penalties for a broken streak.
-- The app draws a bounded number of stars and field regions. The dataset keeps every field and its full time total.
 
-### Explore the constellation
+### Explore the network
 
-In the current development build, **Your Focus Constellation** uses a Three.js perspective scene with an SVG fallback.
-
-- To select a cluster, click it or its field button.
-- To turn the scene, drag it, use the rotate and tilt buttons, or give the scene focus and use the arrow keys.
-- **+** and **−** zoom. **Home** resets the view. The toolbar has the same commands.
-- Select a field below the scene to highlight its name and recorded time.
-- **Pause orbit** stops the automatic rotation. Rotation also pauses while the pointer is on the constellation or the constellation has focus. Rotation obeys Gentle animations, system reduced motion and window visibility.
-- The scene shows eight fields at most. **Focus by field** keeps the full list.
+- To select a goal, click its neuron or its button below the scene. The world turns and the camera moves to that goal. **Overview**, **Esc** or **Home** go back.
+- Click a synapse, or a step in the side panel, to select that step.
+- The side panel shows the goal's status, area, focus time, the last 28 days, recorded actions, progress and roadmap. **Focus on next step** (or **Focus on this step** for a selected open step) prepares a session for the goal and the step and opens Focus. Only active goals can start a session. **Open goal** opens the goal workspace.
+- To turn the scene, drag it, use the rotate and tilt buttons, or give the scene focus and use the arrow keys. **+** and **−** zoom.
+- **Pause orbit** stops the automatic rotation. Rotation also pauses while the pointer is on the scene, the scene has focus, or a goal is in view. Rotation obeys Gentle animations, system reduced motion and window visibility.
+- **Show achieved goals** hides or shows the outer ring. The scene shows 24 goals at most; the list below it shows every goal.
 - View controls do not change recorded time.
 
 The **Year overview** in Calendar contains the annual heatmap and the day comparisons. Patterns keeps the field charts and weekday charts visible. **Session distributions** and **Possible associations** show more charts and their limits.

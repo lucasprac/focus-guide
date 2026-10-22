@@ -145,7 +145,7 @@ export default function App() {
         {page === 'Tasks' && <TasksPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} initialGoalId={taskGoalId} openFocus={() => setPage('Focus')} />}
         {page === 'Calendar' && <CalendarPage data={data} act={act} />}
         {page === 'Patterns' && <PatternsPage data={data} act={act} />}
-        {page === 'Neural World' && <WorldPage data={data} act={act} />}
+        {page === 'Neural World' && <WorldPage data={data} act={act} openGoal={id => { setActiveGoalId(id); setPage('Goals'); }} focusGoal={focusGoal} />}
         {settingsVisited && <div hidden={page !== 'Settings'}><SettingsPage data={data} act={act} visible={page === 'Settings'} /></div>}
       </div>
     </main>

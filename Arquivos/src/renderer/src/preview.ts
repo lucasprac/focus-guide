@@ -5,6 +5,7 @@ import { GOAL_COLLECTIONS, goalData, milestoneDefaults, upgradeGoalRecords, type
 import type { Dataset, FocusGuideAPI, AppEvent, FocusSession, SessionEvent, Task, Field, TaskCategory, WeeklyReview, ActivitySample } from '../../shared/types';
 import { exampleDataset } from '../../shared/demo';
 import { settings } from '../../shared/validation';
+import { addDays, localDay } from '../../shared/analytics';
 
 const key = 'focus-guide-isolated-demo-v2';
 function seed(): Dataset {
@@ -15,6 +16,31 @@ function seed(): Dataset {
   const goalId = 'demo-linear-algebra', study = data.fields[0].id;
   data.goals = [{ id: goalId, fieldId: study, title: 'Learn linear algebra', outcome: 'Solve eigenvalue problems and explain each step without notes.', why: '', whyTags: ['Learning', 'Career'], deadline: null, baseline: null, target: null, unit: '', status: 'active', statusHistory: [{ at: now, status: 'active' }], createdAt: now, updatedAt: now }];
   data.milestones = ([['heading', 'Foundations'], ['todo', 'Vectors and linear combinations', true], ['todo', 'Matrix multiplication'], ['heading', 'Core ideas'], ['todo', 'Determinants'], ['todo', 'Eigenvalues and eigenvectors']] as const).map((row, position) => ({ id: `demo-step-${position}`, goalId, title: row[1], kind: row[0], completed: row.length > 2, archived: false, position, createdAt: now, updatedAt: now, ...milestoneDefaults(), estimatedMinutes: row[0] === 'todo' ? 240 : null }));
+  // More synthetic goals, one per status, so Neural World shows every kind of neuron.
+  const work = data.fields[1].id, create = data.fields[2].id, zone = 'America/Fortaleza', today = localDay(Date.now(), zone);
+  const goal = (id: string, fieldId: string, title: string, outcome: string, status: 'active' | 'draft' | 'paused' | 'achieved', measure: [number, number, string] | null = null) => ({ id, fieldId, title, outcome, why: '', whyTags: [], deadline: null, baseline: measure?.[0] ?? null, target: measure?.[1] ?? null, unit: measure?.[2] ?? '', status, statusHistory: [{ at: now, status }], createdAt: now, updatedAt: now });
+  data.goals.push(
+    goal('demo-statistics', study, 'Read a statistics textbook', 'Finish all chapters with the exercises.', 'active', [0, 20, 'chapters']),
+    goal('demo-sketch', create, 'Sketch every week', 'Fill one sketchbook with studies from life.', 'active'),
+    goal('demo-portfolio', create, 'Publish a portfolio', 'A small site with ten finished pieces.', 'achieved'),
+    goal('demo-writing', work, 'Write a short guide', 'A practical guide of about 30 pages.', 'draft'),
+    goal('demo-launch', work, 'Prepare a side project', 'A first public version.', 'paused'));
+  const steps: Array<[string, string, boolean]> = [
+    ['demo-statistics', 'Descriptive statistics', true], ['demo-statistics', 'Probability basics', false], ['demo-statistics', 'Sampling distributions', false], ['demo-statistics', 'Hypothesis tests', false],
+    ['demo-sketch', 'Gesture drawing', true], ['demo-sketch', 'Light and shadow', true], ['demo-sketch', 'Perspective', false], ['demo-sketch', 'Portraits', false], ['demo-sketch', 'Urban sketching', false],
+    ['demo-portfolio', 'Choose ten pieces', true], ['demo-portfolio', 'Build the site', true], ['demo-portfolio', 'Publish', true],
+    ['demo-writing', 'Outline the chapters', false], ['demo-writing', 'Write the first chapter', false],
+    ['demo-launch', 'Define the scope', true], ['demo-launch', 'Build the prototype', false], ['demo-launch', 'Invite testers', false]];
+  data.milestones = [...data.milestones ?? [], ...steps.map(([goalIdOf, title, completed], position) => ({ id: `demo-world-step-${position}`, goalId: goalIdOf, title, kind: 'todo' as const, completed, archived: false, position, createdAt: now, updatedAt: now, ...milestoneDefaults() }))];
+  data.goalProgress = [{ id: 'demo-progress-statistics', goalId: 'demo-statistics', date: today, value: 6, note: '', createdAt: now, updatedAt: now }];
+  const plan = { effectiveDate: addDays(today, -30), timezone: zone, weekdays: [0, 1, 2, 3, 4, 5, 6], cue: 'After lunch', normal: 'Draw for 20 minutes', smaller: 'Draw for 5 minutes', obstacle: 'No time', response: 'Draw one line', estimatedMinutes: 20, activityMode: 'Unspecified' as const, enabled: true };
+  data.goalActions = [{ id: 'demo-sketch-action', goalId: 'demo-sketch', title: 'Daily sketch', archived: false, plans: [plan], createdAt: now, updatedAt: now }];
+  data.goalOccurrences = (['done', 'done', 'smaller', 'done', 'skipped', 'done', 'smaller', 'done'] as const).map((status, i) => {
+    const day = addDays(today, -(i + 1) * 2);
+    return { id: `demo-sketch-action_${day}`, goalId: 'demo-sketch', actionId: 'demo-sketch-action', originalDate: day, date: day, status, barrier: null, note: '', rescheduleHistory: [], plan, updatedAt: now };
+  });
+  data.sessions.filter(s => s.fieldId === create).forEach(s => { s.goalId = 'demo-sketch'; s.milestoneId = 'demo-world-step-5'; });
+  data.sessions.filter(s => s.fieldId === work).forEach(s => { s.goalId = 'demo-launch'; s.milestoneId = 'demo-world-step-14'; });
   data.sessions.filter(s => s.fieldId === study).forEach((s, i) => { s.goalId = goalId; s.activityMode = (['Reading', 'Writing/coding', 'Video/lecture'] as const)[i % 3]; s.milestoneId = i < 8 ? 'demo-step-1' : 'demo-step-2'; });
   // Synthetic agent proposals. The roadmap proposal has an old basis, so the preview also shows the stale case.
   const proposal = { source: 'Demo agent', status: 'pending' as const, createdAt: now, decidedAt: null };
