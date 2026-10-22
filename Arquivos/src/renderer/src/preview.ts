@@ -156,7 +156,7 @@ export function installPreview(): void {
   });
   const service = new FocusService(store as unknown as Store, timer, () => {
     const data = store.all();
-    const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 9,exportedAt: new Date().toISOString(),activity: data.activity ?? [],tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
+    const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 10,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
     localStorage.setItem(`${key}-before-field-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
   });
   const simulate = () => {

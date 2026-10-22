@@ -18,7 +18,7 @@ export class Store {
     this.path = join(directory, 'focus-guide.sqlite');
     this.db = new Database(this.path);
     const originalVersion = Number(this.db.pragma('user_version', { simple: true }));
-    if (originalVersion > 9) { this.db.close(); throw new Error('This dataset was created by a newer Focus Guide version.'); }
+    if (originalVersion > 10) { this.db.close(); throw new Error('This dataset was created by a newer Focus Guide version.'); }
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('synchronous = FULL');
@@ -163,6 +163,22 @@ export class Store {
         this.db.pragma('user_version = 9');
       })();
     }
+    if (originalVersion < 10) {
+      // Schema 10 adds the optional reflection answers of a session and, per activity block, input time and window switches. Old rows keep null; attention check-ins start off.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v10-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        this.db.exec(`ALTER TABLE sessions ADD COLUMN detractor TEXT;
+          ALTER TABLE sessions ADD COLUMN challenge TEXT;
+          ALTER TABLE activity ADD COLUMN inputMs REAL;
+          ALTER TABLE activity ADD COLUMN switches INTEGER;`);
+        const previous = this.getMeta<Settings>('settings');
+        if (previous) this.setMeta('settings', { ...settings(previous), attentionProbes: false });
+        this.db.pragma('user_version = 10');
+      })();
+    }
     if (!this.getMeta('settings')) {
       this.db.transaction(() => {
         this.setMeta('settings', defaultSettings);
@@ -235,9 +251,9 @@ export class Store {
     this.db.prepare('INSERT INTO tasks (id,fieldId,title,completed,archived,createdAt,updatedAt,categoryId,notes,priority,dueDate,goalId,milestoneId) VALUES (@id,@fieldId,@title,@completed,@archived,@createdAt,@updatedAt,@categoryId,@notes,@priority,@dueDate,@goalId,@milestoneId) ON CONFLICT(id) DO UPDATE SET title=excluded.title,completed=excluded.completed,archived=excluded.archived,updatedAt=excluded.updatedAt,categoryId=excluded.categoryId,notes=excluded.notes,priority=excluded.priority,dueDate=excluded.dueDate,goalId=excluded.goalId,milestoneId=excluded.milestoneId').run({ goalId: null, milestoneId: null, ...t, completed: +t.completed, archived: +t.archived });
   }
   putSession(s: FocusSession): void {
-    this.db.prepare(`INSERT INTO sessions VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId)
-      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId`)
-      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
+    this.db.prepare(`INSERT INTO sessions (id,fieldId,primaryTaskId,checklistIds,intention,plannedMs,activeMs,status,startedAt,endedAt,timezone,energy,focus,note,completionReason,excluded,recovered,timingMode,autoOvertime,targetReached,activityMode,behaviourVersion,goalId,occurrenceId,milestoneId,detractor,challenge) VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId,@detractor,@challenge)
+      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId,detractor=excluded.detractor,challenge=excluded.challenge`)
+      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, detractor: s.detractor ?? null, challenge: s.challenge ?? null, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
   }
   putEvent(e: SessionEvent): void {
     this.db.prepare('INSERT INTO events VALUES (@id,@sessionId,@kind,@startedAt,@endedAt,@durationMs,@text,@category,@activeOffsetMs,@source) ON CONFLICT(id) DO UPDATE SET endedAt=excluded.endedAt,durationMs=excluded.durationMs,text=excluded.text,category=excluded.category').run({ activeOffsetMs: null, source: null, ...e });
@@ -257,8 +273,10 @@ export class Store {
     if (!session || sample.startMs < 0 || sample.endMs > session.activeMs || sample.endMs <= sample.startMs) throw new Error('Activity must fit durable session time.');
     const previous = this.db.prepare('SELECT * FROM activity WHERE sessionId=? ORDER BY endMs DESC LIMIT 1').get(sample.sessionId) as ActivitySample | undefined;
     if (previous && previous.status === sample.status && previous.endMs === sample.startMs && Math.floor(previous.startMs / 60000) === Math.floor(sample.startMs / 60000)) {
-      this.db.prepare('UPDATE activity SET endMs=?,observedMs=observedMs+?,keys=keys+?,clicks=clicks+?,scrolls=scrolls+?,movementMs=movementMs+? WHERE id=?').run(sample.endMs, sample.observedMs, sample.keys, sample.clicks, sample.scrolls, sample.movementMs, previous.id);
-    } else this.db.prepare('INSERT INTO activity VALUES (@id,@sessionId,@startMs,@endMs,@observedMs,@keys,@clicks,@scrolls,@movementMs,@status)').run(sample);
+      // An unknown (null) measure on either side keeps the merged block unknown; it never turns into a sum of the known part.
+      const add = (a?: number | null, b?: number | null) => a == null || b == null ? null : a + b;
+      this.db.prepare('UPDATE activity SET endMs=?,observedMs=observedMs+?,keys=keys+?,clicks=clicks+?,scrolls=scrolls+?,movementMs=movementMs+?,inputMs=?,switches=? WHERE id=?').run(sample.endMs, sample.observedMs, sample.keys, sample.clicks, sample.scrolls, sample.movementMs, add(previous.inputMs, sample.inputMs), add(previous.switches, sample.switches), previous.id);
+    } else this.db.prepare('INSERT INTO activity (id,sessionId,startMs,endMs,observedMs,keys,clicks,scrolls,movementMs,status,inputMs,switches) VALUES (@id,@sessionId,@startMs,@endMs,@observedMs,@keys,@clicks,@scrolls,@movementMs,@status,@inputMs,@switches)').run({ ...sample, inputMs: sample.inputMs ?? null, switches: sample.switches ?? null });
   }
   removeActivity(): void { this.db.prepare('DELETE FROM activity').run(); }
   removeReturn(id: string): void { this.db.prepare("DELETE FROM events WHERE id=? AND kind='attention-return'").run(id); }
@@ -270,7 +288,7 @@ export class Store {
       data.tasks.forEach(t => this.putTask(t));
       data.sessions.forEach(s => this.putSession(s)); data.events.forEach(e => this.putEvent(e));
       (data.activity ?? []).forEach(sample => this.putActivity(sample));
-      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off' });
+      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off', attentionProbes: false });
     })();
   }
   async backup(path: string): Promise<void> { await this.db.backup(path); }

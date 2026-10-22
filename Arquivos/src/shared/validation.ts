@@ -1,9 +1,24 @@
 import type { AgentAccess, FocusVisual, Settings } from './types';
-import { ACTIVITY_MODES, type ActivityMode } from './types';
+import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, PROBE_ANSWERS, type ActivityMode, type Challenge, type Detractor, type ProbeAnswer } from './types';
 
 export function activityMode(value: unknown): ActivityMode {
   if (!ACTIVITY_MODES.includes(value as ActivityMode)) throw new Error('Choose a valid activity mode.');
   return value as ActivityMode;
+}
+/* Reflection answers are optional; an absent answer stays null. */
+export function detractor(value: unknown): Detractor | null {
+  if (value === null || value === undefined) return null;
+  if (!DETRACTORS.includes(value as Detractor)) throw new Error('Choose a valid main distraction.');
+  return value as Detractor;
+}
+export function challenge(value: unknown): Challenge | null {
+  if (value === null || value === undefined) return null;
+  if (!CHALLENGES.includes(value as Challenge)) throw new Error('Choose a valid challenge level.');
+  return value as Challenge;
+}
+export function probeAnswer(value: unknown): ProbeAnswer {
+  if (!PROBE_ANSWERS.includes(value as ProbeAnswer)) throw new Error('Choose a valid check-in answer.');
+  return value as ProbeAnswer;
 }
 export function shortcut(value: unknown): string {
   const result = text(value, 'Return shortcut', 80);
@@ -69,7 +84,8 @@ export function settings(value: unknown): Settings {
     autoOvertime: v.autoOvertime === undefined ? true : bool(v.autoOvertime, 'Automatic overtime'),
     theme, sidebarCollapsed: v.sidebarCollapsed === undefined ? false : bool(v.sidebarCollapsed, 'Collapsed side panel'),
     agentAccess: agentAccess(v.agentAccess ?? 'off'),
-    focusVisual: focusVisual(v.focusVisual ?? 'brain')
+    focusVisual: focusVisual(v.focusVisual ?? 'brain'),
+    attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, 'Attention check-ins')
   };
 }
 function focusVisual(value: unknown): FocusVisual {
