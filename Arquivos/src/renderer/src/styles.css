@@ -45,7 +45,7 @@ select { padding-right: 24px; }
 .sidebar-footer { border-top: 1px solid var(--line); padding: 18px 9px 0; color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
 .status-light { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: var(--panel); margin-right: 7px; vertical-align: middle; }
 .status-light.running { background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent); }
-.main-content { flex: 1; min-width: 0; overflow-y: auto; scroll-padding-top: 84px; }
+.main-content { position: relative; flex: 1; min-width: 0; overflow-y: auto; scroll-padding-top: 84px; }
 .topbar { position: sticky; top: 0; z-index: 5; background: var(--background); height: 64px; margin: 0 31px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .topbar>div { display: flex; gap: 22px; align-items: center; }
 .timer-chip { border: 1px solid var(--line); background: var(--panel); border-radius: 18px; padding: 7px 12px; font-size: 12px; }
