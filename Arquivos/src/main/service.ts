@@ -10,7 +10,7 @@ import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
 
 export class FocusService {
-  constructor(readonly store: Store, readonly timer: TimerEngine, private beforeFieldDelete?: () => void, readonly probes?: ProbeScheduler) {}
+  constructor(readonly store: Store, readonly timer: TimerEngine, private beforeDelete?: (kind: 'field' | 'goal') => void, readonly probes?: ProbeScheduler) {}
   // Runtime-only results of insights.read, keyed by the input and the data revision; never persisted.
   private insights: Array<{ key: string; value: unknown }> = [];
   private categoryInput(value: unknown): string | null {
@@ -30,13 +30,19 @@ export class FocusService {
     }
     return { primaryTaskId, checklistIds };
   }
+  // Agent code runs commands through this; permanent deletion stays a user command only.
+  private agentCommand = (command: Command, input: Record<string, unknown>): unknown => {
+    if (command === 'goal.delete' || command === 'field.delete') throw new Error('An agent cannot delete records.');
+    return this.run(command, input);
+  };
   // The local agent bridge calls only this method; it never reaches the renderer commands directly.
-  agentTool(name: unknown, input: Record<string, unknown>, source: string): unknown { return new AgentService(this.store,(c,i) => this.run(c,i)).tool(name,input,source); }
+  agentTool(name: unknown, input: Record<string, unknown>, source: string): unknown { return new AgentService(this.store,this.agentCommand).tool(name,input,source); }
   run(command: Command, input: Record<string, unknown> = {}): unknown {
     const now = new Date().toISOString();
     const goals = new GoalService(this.store);
+    if (command === 'goal.delete') { goals.remove(input, this.timer.current?.goalId ?? null, this.beforeDelete); return; }
     if (command.startsWith('goal.')) return goals.run(command,input,now);
-    if (command.startsWith('agent.')) return new AgentService(this.store,(c,i) => this.run(c,i)).run(command,input,now);
+    if (command.startsWith('agent.')) return new AgentService(this.store,this.agentCommand).run(command,input,now);
     switch (command) {
       case 'field.create': {
         if (this.store.allFields().length >= 1000) throw new Error('The area limit has been reached.');
@@ -53,8 +59,8 @@ export class FocusService {
         const id = v.id(input.id);
         if (!this.store.field(id)) throw new Error('This area no longer exists.');
         if (this.timer.current?.fieldId === id || this.store.all().sessions.some(s => s.fieldId === id && s.status !== 'completed')) throw new Error('Finish this area’s running or paused session before deleting it.');
-        if (!this.beforeFieldDelete) throw new Error('A recovery backup is required before deleting an area.');
-        this.beforeFieldDelete();
+        if (!this.beforeDelete) throw new Error('A recovery backup is required before deleting an area.');
+        this.beforeDelete('field');
         this.store.removeField(id); return;
       }
       case 'category.create': {

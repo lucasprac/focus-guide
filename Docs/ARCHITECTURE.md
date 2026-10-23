@@ -550,6 +550,23 @@ A dataset with no fields is valid. Selection and filter cleanup follow the state
 - Field lists and Calendar history grow with the page scroll.
 - Palette color passes down through the constellation groups. Field colors stay available in other places.
 
+## Goal deletion (unreleased)
+
+The typed `goal.delete` command takes a goal id. It follows the field deletion design, with one difference: tasks and sessions stay.
+
+1. `FocusService` sends the command to `GoalService.remove` with the goal of the timer's current session and the host backup callback. `GoalService` rejects a goal that does not exist. It also rejects the deletion if the current session, or any unfinished session, has this goal. The reason: the timer writes the full in-memory session at each checkpoint, so a detached link would come back and break the foreign key.
+2. The native host runs the command through the serialized transition coordinator, as for `field.delete`. The host saves a validated, atomic JSON backup at `backups/before-goal-delete-<timestamp>-<uuid>.json`. If the backup fails, the deletion stops.
+3. In one SQLite transaction, `Store.removeGoal`:
+   1. Sets `goalId`, `occurrenceId` and `milestoneId` to `NULL` on sessions that point to the goal, its occurrences or its milestones. `activeMs`, events and activity do not change, so recorded time still equals the sum of durable intervals.
+   2. Sets `goalId` and `milestoneId` to `NULL` on tasks that point to the goal or its milestones.
+   3. Deletes the goal. `ON DELETE CASCADE` removes its milestones, actions, occurrences, progress, goal reviews, agent proposals and agent changes. This matches field deletion, where the same cascade removes agent records. A `goal.create` proposal has a null `goalId`, so it stays as an audit record.
+
+No schema migration or backup format change is necessary. The browser preview saves its recovery copy in synthetic `localStorage` and does the same changes in one transaction (`PreviewStore.removeGoal`).
+
+The agent can never reach this command. No agent tool maps to it, and the command callback that `FocusService` gives to `AgentService` and `AgentEditor` refuses `goal.delete` and `field.delete`.
+
+The goal workspace opens a shared destructive dialog. It counts the planning records that leave and the tasks, sessions and time that stay. It blocks the button while a session of the goal is unfinished and cannot close while the deletion is pending. After a success, it goes back to the goal list. Filters and session preparation that pointed to the goal clear themselves at the next state broadcast.
+
 ## Version 1.5.0: goal creation usability
 
 ### Schema 5

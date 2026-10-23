@@ -296,6 +296,26 @@ Included completed time leaves the totals and charts. Shared categories, weekly 
 - Existing exports and backups keep their copies.
 - The operation is transactional. It does not change schema version 3 or JSON format version 3.
 
+## Permanent goal deletion
+
+Archive keeps the data. Goal deletion (`goal.delete`) removes these items permanently:
+
+- The goal.
+- Its milestones (roadmap rows), actions, occurrences (action check-ins), numeric progress and goal reviews.
+- Its agent proposals and agent change records. A `goal.create` proposal has no goal, so it stays.
+
+These items stay. Their links are set to `null`:
+
+| Record | Cleared links | Why |
+|---|---|---|
+| Task | `goalId`, `milestoneId` | A task belongs to its field. It stays open, done or archived as before. |
+| Session | `goalId`, `occurrenceId`, `milestoneId` | A session is a time record. `activeMs`, events and activity do not change, so totals per field stay the same. |
+
+- An unfinished session of the goal prevents deletion.
+- The app must first save a validated JSON recovery backup (`backups/before-goal-delete-<timestamp>-<uuid>.json`).
+- Existing exports and backups keep their copies.
+- The operation is one transaction. It does not change schema version 10 or the JSON backup format.
+
 ## Goal planning records (schema 4)
 
 | Record | What it stores |

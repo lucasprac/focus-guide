@@ -88,6 +88,15 @@ export class GoalService {
     const week = monday(localDay(now,this.store.getSettings().timezone));
     return this.records().goalReviews.find(r => r.goalId === goalId && r.week === week) ?? { id: `${goalId}_${week}`, goalId, week, adjustment: '', previousOutcome: 'undecided', decisions: [], updatedAt: now };
   }
+  // goal.delete: FocusService calls this with the goal of the timer's current session and the host's recovery backup.
+  // A session that is not finished still writes its goal link, so deletion waits until it ends.
+  remove(input: Record<string, unknown>, currentGoalId: string | null, backup?: (kind: 'goal') => void): void {
+    const goal = this.goal(input.id);
+    if (currentGoalId === goal.id || this.store.all().sessions.some(s => s.goalId === goal.id && s.status !== 'completed')) throw new Error('Finish this goal’s running or paused session before deleting it.');
+    if (!backup) throw new Error('A recovery backup is required before deleting a goal.');
+    backup('goal');
+    this.store.removeGoal(goal.id);
+  }
   run(command: Command, input: Record<string, unknown>, now: string): unknown {
     switch (command) {
       case 'goal.create': case 'goal.update': {

@@ -243,6 +243,15 @@ export class Store {
       this.setMeta('settings', { ...preferences, activityModes });
     })();
   }
+  // Tasks and sessions keep their area and recorded time; only their links to the goal, its steps and its planned actions are cleared.
+  // The goal's own rows (roadmap, actions, check-ins, observations, reviews, agent proposals and changes) go with it by cascade.
+  removeGoal(id: string): void {
+    this.db.transaction(() => {
+      this.db.prepare('UPDATE sessions SET goalId = NULL, occurrenceId = NULL, milestoneId = NULL WHERE goalId = ? OR occurrenceId IN (SELECT id FROM goalOccurrences WHERE goalId = ?) OR milestoneId IN (SELECT id FROM milestones WHERE goalId = ?)').run(id, id, id);
+      this.db.prepare('UPDATE tasks SET goalId = NULL, milestoneId = NULL WHERE goalId = ? OR milestoneId IN (SELECT id FROM milestones WHERE goalId = ?)').run(id, id);
+      this.db.prepare('DELETE FROM goals WHERE id = ?').run(id);
+    })();
+  }
   category(id: string): TaskCategory | undefined { return this.all().categories.find(c => c.id === id); }
   putCategory(c: TaskCategory): void {
     this.db.prepare('INSERT INTO categories VALUES (@id,@name,@color,@archived,@createdAt) ON CONFLICT(id) DO UPDATE SET name=excluded.name,color=excluded.color,archived=excluded.archived').run({ ...c, archived: +c.archived });

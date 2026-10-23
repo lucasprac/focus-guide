@@ -43,6 +43,21 @@ The app opens on **Goals**. A goal is the place where you learn something, for e
 
 Areas are the former focus fields. They group goals. You manage them in **Settings > Your areas**. You can still start a session without a goal: select **Free focus** on the Focus page.
 
+### Delete a goal
+
+To hide a goal but keep all of it, set its status to **Archived** in **Edit goal**. To remove a goal permanently:
+
+1. Finish any running or paused session of the goal.
+2. Open the goal. Select **Delete goal** (the trash icon next to **Edit goal**).
+3. Look at the number of planning records that will be removed, and the tasks and sessions that will stay.
+4. Select one of these:
+   - **Keep goal** to cancel.
+   - **Back up & delete goal** to remove the goal. The app goes back to the goal list.
+
+The app removes the goal's roadmap, weekly actions, action check-ins, outcome observations, weekly reviews, and agent proposals and changes. Tasks and focus sessions stay in their area with all their recorded time; only their link to the goal is removed.
+
+Before it removes records, the app saves a JSON recovery backup in the `backups` directory of the data folder. If the backup fails, the goal does not change. To get the goal back, restore that backup (a restore replaces the full dataset). An AI agent cannot delete a goal.
+
 For the full rules, see [Goal planning](GOAL-PLANNING.md).
 
 ## Connect an AI agent (MCP)
@@ -325,6 +340,12 @@ How to read the figures:
 - The model card shows effects only when the model predicts your next rating at least 5% better than your average rating. If not, it shows the two errors.
 - Under the three chart figures, **Show values** opens a table with the same numbers. A screen reader can read it. The other figures already show their numbers as text.
 - Each suggestion has a label, **Tentative** or **Moderate evidence**, and shows the numbers behind it. **Try next week** adds the suggestion to your weekly adjustment on the Overview tab. Then you can edit and save it.
+
+### Behaviour tutorial
+
+The **Behaviour tutorial** is a short guide with 9 steps. It explains keyboard and mouse totals, attention check-ins, the **I'm back** marker, reflection questions, the Insights tab, how to read the numbers, the Behaviour section of a goal and the agent tool `get_focus_insights`. Some steps have a button, for example **Open Settings**, that closes the tutorial and opens the right page.
+
+To open it, select **Open tutorial** in Settings, in the Activity & shortcuts group. Or select **Behaviour tutorial** at the top of Patterns. Use **Back** and **Next** to move between steps. The tutorial does not change your settings or your data.
 
 ### Example data
 

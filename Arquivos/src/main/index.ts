@@ -223,7 +223,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     try { const value = await transitions.run(() => service.run(command, input)); bridge?.sync(); return value; }
     catch (error) { await collector.configureShortcut(previous.returnShortcut ?? 'Ctrl+Alt+Space').catch(() => {}); throw error; }
   }
-  if (['session.pause', 'session.resume', 'session.finish', 'activity.delete', 'field.delete'].includes(command)) {
+  if (['session.pause', 'session.resume', 'session.finish', 'activity.delete', 'field.delete', 'goal.delete'].includes(command)) {
     return transitions.run(() => service.run(command, input));
   }
   switch (command) {
@@ -295,12 +295,12 @@ if (locked) void app.whenReady().then(async () => {
   store = new Store(app.getPath('userData'));
   timer = new TimerEngine(store, undefined, notify);
   probes = new ProbeScheduler();
-  service = new FocusService(store, timer, () => {
+  service = new FocusService(store, timer, kind => {
     const directory = join(store.directory, 'backups');
     mkdirSync(directory, { recursive: true });
-    const file = join(directory, `before-field-delete-${Date.now()}-${randomUUID()}.json`);
+    const file = join(directory, `before-${kind}-delete-${Date.now()}-${randomUUID()}.json`);
     atomicWrite(file, serializeBackup(store.all(true)));
-    backupStatus = 'A recovery backup was saved before area deletion.';
+    backupStatus = `A recovery backup was saved before ${kind === 'goal' ? 'goal' : 'area'} deletion.`;
   }, probes);
   collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, 'activity-helper.exe') : resolve(__dirname, '../../native/bin/activity-helper.exe'),
     () => {

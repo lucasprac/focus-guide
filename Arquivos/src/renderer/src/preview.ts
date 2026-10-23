@@ -142,6 +142,16 @@ class PreviewStore {
       this.data.settings = { ...this.data.settings, activityModes }; this.save();
     })();
   }
+  removeGoal(id: string) {
+    this.db.transaction(() => {
+      const domain = goalData(this.data), steps = new Set(domain.milestones.filter(m => m.goalId === id).map(m => m.id)), planned = new Set(domain.goalOccurrences.filter(o => o.goalId === id).map(o => o.id));
+      this.data.sessions = this.data.sessions.map(s => s.goalId === id || (s.occurrenceId && planned.has(s.occurrenceId)) || (s.milestoneId && steps.has(s.milestoneId)) ? { ...s, goalId: null, occurrenceId: null, milestoneId: null } : s);
+      this.data.tasks = this.data.tasks.map(t => t.goalId === id || (t.milestoneId && steps.has(t.milestoneId)) ? { ...t, goalId: null, milestoneId: null } : t);
+      this.data.goals = domain.goals.filter(g => g.id !== id);
+      for (const name of GOAL_COLLECTIONS.filter(k => k !== 'goals')) (this.data[name] as Array<{ goalId: string | null }>) = domain[name].filter(row => row.goalId !== id);
+      this.save();
+    })();
+  }
   putCategory(c: TaskCategory) { this.put(this.data.categories, c); this.save(); }
   putSession(s: FocusSession) { this.put(this.data.sessions, s); this.save(); }
   putEvent(e: SessionEvent) { this.put(this.data.events, e); this.save(); }
@@ -169,10 +179,10 @@ export function installPreview(): void {
     emit({ type: 'notice', message: mode === 'break' ? 'Demo break complete.' : timer.current ? 'Timer ended. Overtime is recording in this session.' : 'Demo session saved.' });
   });
   const probes = new ProbeScheduler(Math.random, new URLSearchParams(location.search).get('probes') === 'fast' ? FAST_PROBE_OPTIONS : DEFAULT_PROBE_OPTIONS);
-  const service = new FocusService(store as unknown as Store, timer, () => {
+  const service = new FocusService(store as unknown as Store, timer, kind => {
     const data = store.all();
     const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 10,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
-    localStorage.setItem(`${key}-before-field-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
+    localStorage.setItem(`${key}-before-${kind}-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
   }, probes);
   const simulate = () => {
     const session = timer.current; if (!session || session.status !== 'running') return;
@@ -197,7 +207,7 @@ export function installPreview(): void {
       try {
         if (command === 'shortcut.capture') return { ok: true };
         if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.')) throw new Error('This native feature is available in the Windows app. The demo is isolated from your files.');
-        if (command === 'session.pause' || command === 'session.finish' || command === 'settings.update' || command === 'field.delete' || command === 'activity.delete') { timer.checkpoint(); simulate(); }
+        if (command === 'session.pause' || command === 'session.finish' || command === 'settings.update' || command === 'field.delete' || command === 'goal.delete' || command === 'activity.delete') { timer.checkpoint(); simulate(); }
         const value = service.run(command, input);
         if (command === 'attention.return' && value) { const marker = value as SessionEvent; emit({ type: 'attention-return', sessionId: marker.sessionId, eventId: marker.id, savedAt: marker.startedAt }); }
         emit({ type: 'state', state: state() }); return { ok: true, value };

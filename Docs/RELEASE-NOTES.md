@@ -1,5 +1,19 @@
 # Release notes
 
+## Unreleased — goal deletion
+
+- **Delete a goal.** The goal workspace has a **Delete goal** button (trash icon) next to **Edit goal**. The dialog shows what is removed and what stays, then **Back up & delete goal** saves a recovery backup and deletes the goal permanently.
+- The goal's roadmap, weekly actions, action check-ins, outcome observations, weekly reviews, agent proposals and agent change records are removed with it.
+- Tasks and focus sessions stay in their area with their recorded time. Only their links to the goal, its roadmap steps and its planned actions are cleared.
+- You cannot delete a goal while its session is running or paused. Archive (in **Edit goal**) still keeps everything.
+- The new `goal.delete` command is for the user only. The AI agent has no delete tool, and the agent's command path refuses `goal.delete` and `field.delete`.
+- No schema or backup format change.
+
+## Unreleased — behaviour tutorial
+
+- **Behaviour tutorial.** A 9-step guide explains how to turn on keyboard and mouse totals, how attention check-ins work, the **I'm back** marker, reflection questions, the Insights tab and its minimum data, the Behaviour section of a goal and the `get_focus_insights` agent tool. Open it with **Open tutorial** in Settings or **Behaviour tutorial** in Patterns. Steps can open the matching page.
+- The tutorial changes no settings, schema or backup. It shows only text and keeps its step in memory.
+
 ## Unreleased — behaviour insights
 
 Focus Guide now looks for patterns in your own records. It shows them with their uncertainty. It does not score your attention.

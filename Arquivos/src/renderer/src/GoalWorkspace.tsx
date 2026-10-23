@@ -118,9 +118,38 @@ function RoadmapSteps({ data,act,goal,canFocus,focusGoal }: ViewProps & { goal: 
   </section>;
 }
 
+// Permanent deletion, like area deletion: the main process saves a recovery backup first. Tasks and sessions stay, unlinked.
+function DeleteGoal({ data,act,goal,onClose,onDeleted }: ViewProps & { goal: Goal; onClose: () => void; onDeleted: () => void }) {
+  const [busy,setBusy] = useState(false), [error,setError] = useState(''); const pending = useRef(false);
+  const domain = goalData(data), own = <T extends { goalId: string | null }>(rows: T[]) => rows.filter(r => r.goalId === goal.id);
+  const steps = new Set(own(domain.milestones).map(m => m.id));
+  const tasks = data.tasks.filter(t => t.goalId === goal.id || (t.milestoneId && steps.has(t.milestoneId)));
+  const sessions = data.sessions.filter(s => s.goalId === goal.id || (s.milestoneId && steps.has(s.milestoneId)));
+  const blocked = sessions.some(s => s.status !== 'completed'), minutes = sessions.reduce((sum,s) => sum + s.activeMs / 60000,0);
+  const planning = own(domain.milestones).length + own(domain.goalActions).length + own(domain.goalOccurrences).length + own(domain.goalProgress).length + own(domain.goalReviews).length;
+  const agent = own(domain.agentProposals).length + own(domain.agentChanges).length;
+  const remove = async () => {
+    if (pending.current || blocked) return;
+    pending.current = true; setBusy(true); setError('');
+    try { const result = await act('goal.delete',{ id: goal.id }); if (result.ok) onDeleted(); else setError(result.error); }
+    catch (e) { setError(String(e)); }
+    finally { pending.current = false; setBusy(false); }
+  };
+  return <Modal open destructive busy={busy} title="Delete this goal?" description="Permanently removes this goal and its planning records after saving a recovery backup." onClose={() => { if (!pending.current) onClose(); }}>
+    <p className="hint">Removes {planning} planning {planning === 1 ? 'record' : 'records'}: roadmap rows, weekly actions, action check-ins, outcome observations and weekly reviews{agent ? `, and ${agent} agent proposals and change records` : ''}. These are included in the recovery backup.</p>
+    <p className="modal-intro">Delete <strong>{goal.title}</strong>?</p>
+    <div className="delete-impact"><span><strong>{tasks.length}</strong> tasks unlinked</span><span><strong>{sessions.length}</strong> sessions unlinked</span><span><strong>{minutesLabel(minutes)}</strong> recorded time kept</span></div>
+    <p>Tasks and focus sessions stay in their area with their recorded time. Only their link to this goal and its steps is removed.</p>
+    <p className="hint">Archive (in Edit goal) keeps the goal. Delete removes it from this dataset. A recovery backup is saved first; existing backups retain their copies.</p>
+    {blocked && <p className="restore-error" role="alert">Finish this goal’s running or paused session before deleting it.</p>}
+    {error && <p className="restore-error" role="alert">{error}</p>}
+    <div className="modal-actions"><Button disabled={busy} onClick={onClose}>Keep goal</Button><Button variant="danger" disabled={busy || blocked} onClick={() => void remove()}>{busy ? 'Backing up & deleting…' : 'Back up & delete goal'}</Button></div>
+  </Modal>;
+}
+
 export function GoalWorkspace({ data,act,goal,startAction,openTasks,focusGoal,onBack }: ViewProps & { goal: Goal; startAction: (row: GoalOccurrence) => void; openTasks: (goal: Goal) => void; focusGoal: (goal: Goal,options?: GoalFocusOptions) => void; onBack: () => void }) {
   const domain = goalData(data), today = localDay(Date.now(),data.settings.timezone), currentWeek = monday(today);
-  const [section,setSection] = useState<Section>('overview'), [editing,setEditing] = useState(false), [achieving,setAchieving] = useState(false);
+  const [section,setSection] = useState<Section>('overview'), [editing,setEditing] = useState(false), [achieving,setAchieving] = useState(false), [deleting,setDeleting] = useState(false);
   const [actionEditor,setActionEditor] = useState<{ goal: Goal; action: GoalAction | null; suggestion?: GoalSuggestion; decision?: 'applied' | 'edited' } | null>(null);
   const [week,setWeek] = useState(currentWeek), [busy,setBusy] = useState(false); const pending = useRef(false);
   const summary = goalSummary(data,goal.id,addDays(today,-27),today), area = data.fields.find(f => f.id === goal.fieldId);
@@ -136,7 +165,7 @@ export function GoalWorkspace({ data,act,goal,startAction,openTasks,focusGoal,on
   };
   return <div className="goal-workspace">
     <Button variant="ghost" size="sm" icon="chevron-left" className="goal-back" onClick={onBack}>All goals</Button>
-    <PageHeader title={goal.title} description={goal.outcome || 'Define an outcome when you are ready.'} actions={<><Button variant="ghost" size="sm" icon="edit" onClick={() => setEditing(true)}>Edit goal</Button><Button variant="primary" icon="focus" disabled={!canFocus} onClick={() => focusGoal(goal)}>Focus on this goal</Button></>} />
+    <PageHeader title={goal.title} description={goal.outcome || 'Define an outcome when you are ready.'} actions={<><Button variant="ghost" size="sm" icon="edit" onClick={() => setEditing(true)}>Edit goal</Button><IconButton icon="trash" tone="danger" label="Delete goal" onClick={() => setDeleting(true)} /><Button variant="primary" icon="focus" disabled={!canFocus} onClick={() => focusGoal(goal)}>Focus on this goal</Button></>} />
     <div className="goal-workspace-meta"><Badge tone={goal.status === 'active' ? 'accent' : goal.status === 'achieved' ? 'success' : 'neutral'} className="capitalize">{goal.status}</Badge><span className="hint"><i className="field-dot" style={{ background: area?.color }} />{area?.name}{area?.archived ? ' (archived)' : ''}{goal.deadline ? ` · Due ${goal.deadline}` : ''}</span>{!!goal.whyTags.length && <span className="goal-why-tags" aria-label="Why it matters">{goal.whyTags.map(tag => <Badge key={tag} tone="accent">{tag}</Badge>)}</span>}</div>
     {goal.status !== 'active' && <p className="alert notice" role="status">This goal is {goal.status}. Change its status in Edit goal to focus on it and to receive planned actions.</p>}
     <Segments className="segmented goal-workspace-nav" label="Goal workspace section" value={section} onChange={value => { if (value) setSection(value as Section); }} options={[{ value: 'overview', label: 'Overview' }, { value: 'roadmap', label: 'Roadmap' }, { value: 'tasks', label: 'Tasks' }, { value: 'behaviour', label: 'Behaviour' }, { value: 'plan', label: 'Plan & review' }]} />
@@ -162,6 +191,7 @@ export function GoalWorkspace({ data,act,goal,startAction,openTasks,focusGoal,on
     <p className="footnote">Private, local planning. The methods draw on behavior research; your records and suggestions do not diagnose you or establish why a result occurred.</p>
     {editing && <GoalEditor data={data} act={act} goal={goal} onClose={() => setEditing(false)} onSaved={() => setEditing(false)} />}
     {actionEditor && <ActionEditor data={data} act={act} {...actionEditor} onClose={() => setActionEditor(null)} />}
+    {deleting && <DeleteGoal data={data} act={act} goal={goal} onClose={() => setDeleting(false)} onDeleted={onBack} />}
     <Modal open={achieving} title="Confirm the outcome" busy={busy} onClose={() => setAchieving(false)}><p className="modal-intro">Have you accomplished <strong>{goal.outcome || goal.title}</strong>?</p><p className="hint">{roadmap.filter(m => m.kind === 'todo' && !m.completed).length} milestones remain unchecked. You decide whether the overall outcome has been achieved.</p><div className="modal-actions"><Button disabled={busy} onClick={() => setAchieving(false)}>Keep working</Button><Button variant="primary" disabled={busy} onClick={() => void mutation('goal.update',{ id: goal.id,status: 'achieved',confirmed: true },() => setAchieving(false))}>Confirm achieved</Button></div></Modal>
   </div>;
 }

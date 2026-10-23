@@ -453,7 +453,8 @@ button:active:not(:disabled) { filter: brightness(.94); }
   background: var(--panel); transition: width var(--motion-page) ease, padding var(--motion-page) ease;
   border-right-color: var(--line);
 }
-.app-shell .brand-mark { border-radius: 12px; background: var(--soft); height: 35px; }
+.app-shell .brand-mark { border-radius: 8px; background: transparent; height: 35px; overflow: hidden; }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; }
 .app-shell .nav-item { position: relative; border-radius: 12px; }
 .app-shell .nav-item.active { box-shadow: inset 3px 0 0 var(--accent); }
 .app-shell .nav-item:hover { background: var(--soft); }

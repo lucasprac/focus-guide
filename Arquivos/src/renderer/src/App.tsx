@@ -18,6 +18,7 @@ import WorldPage from './WorldPage';
 import SettingsPage from './SettingsPage';
 import { BehaviourReview, ReturnFeedback } from './Behaviour';
 import ProbePrompt, { ProbeAnnouncer, ReflectionQuestions } from './ProbePrompt';
+import BehaviourTutorial from './BehaviourTutorial';
 
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
 export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
@@ -29,7 +30,7 @@ const navigation: Array<{ page: Page; icon: IconName }> = [
 export default function App() {
   const mini = new URLSearchParams(window.location.search).has('mini');
   const [data, setData] = useState<AppState | null>(null), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const [settingsVisited, setSettingsVisited] = useState(false);
+  const [settingsVisited, setSettingsVisited] = useState(false), [tutorialOpen, setTutorialOpen] = useState(false);
   const [taskGoalId,setTaskGoalId] = useState<string | null>(null), [activeGoalId,setActiveGoalId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('Goals'), [review, setReview] = useState<FocusSession | null>(null), [focus, setFocus] = useState<number | null>(null), [note, setNote] = useState('');
   const [detractor, setDetractor] = useState<Detractor | null>(null), [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -128,7 +129,7 @@ export default function App() {
   };
   const openGoalTasks = (goal: Goal) => { setTaskGoalId(goal.id); if (data.timer.mode === 'idle') setPreparation({ fieldId: goal.fieldId,checklistIds: [],primaryTaskId: null }); setPage('Tasks'); };
   return <div className="app-shell" ref={root} data-page={page}>
-    <aside className={`sidebar ${data.settings.sidebarCollapsed ? 'collapsed' : ''}`} id="side-panel"><div className="brand"><span className="brand-mark"><Icon name="world" size={24} /></span><div>Focus Guide</div><Hint label={data.settings.sidebarCollapsed ? 'Expand side panel' : 'Collapse side panel'}><button className="sidebar-toggle" aria-label={data.settings.sidebarCollapsed ? 'Expand side panel' : 'Collapse side panel'} title={data.settings.sidebarCollapsed ? 'Expand side panel' : 'Collapse side panel'} aria-expanded={!data.settings.sidebarCollapsed} aria-controls="side-panel" onClick={() => void act('settings.update', { ...data.settings, sidebarCollapsed: !data.settings.sidebarCollapsed })}><Icon name="chevron" size={16} /></button></Hint></div>
+    <aside className={`sidebar ${data.settings.sidebarCollapsed ? 'collapsed' : ''}`} id="side-panel"><div className="brand"><span className="brand-mark"><img src={`${import.meta.env.BASE_URL}icon.png`} alt="" draggable={false} /></span><div>Focus Guide</div><Hint label={data.settings.sidebarCollapsed ? 'Expand side panel' : 'Collapse side panel'}><button className="sidebar-toggle" aria-label={data.settings.sidebarCollapsed ? 'Expand side panel' : 'Collapse side panel'} title={data.settings.sidebarCollapsed ? 'Expand side panel' : 'Collapse side panel'} aria-expanded={!data.settings.sidebarCollapsed} aria-controls="side-panel" onClick={() => void act('settings.update', { ...data.settings, sidebarCollapsed: !data.settings.sidebarCollapsed })}><Icon name="chevron" size={16} /></button></Hint></div>
       <nav aria-label="Main navigation">{navigation.map(item => <Hint key={item.page} label={item.page} enabled={data.settings.sidebarCollapsed}><button className={cn('nav-item rounded-control text-label transition-colors duration-150 ease-standard', page === item.page ? 'active border-transparent bg-accent-soft font-medium text-accent' : 'text-ink hover:bg-accent-soft')} onClick={() => setPage(item.page)} aria-label={item.page} title={item.page} aria-current={page === item.page ? 'page' : undefined}><Icon name={item.icon} /><span>{item.page}</span></button></Hint>)}</nav>
       <div className="sidebar-world"><div className="tiny-label text-caption">Recorded focus</div><div className="sidebar-world-value text-display font-light tabular-nums">{minutesLabel(totalMinutes(data))}</div></div>
       <div className="sidebar-footer text-caption"><Icon name="shield" size={14} /> Local & personal</div>
@@ -149,11 +150,12 @@ export default function App() {
         {page === 'Goals' && <GoalsPage data={data} act={act} startAction={startAction} openTasks={openGoalTasks} focusGoal={focusGoal} activeGoalId={activeGoalId} openGoal={setActiveGoalId} />}
         {page === 'Tasks' && <TasksPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} initialGoalId={taskGoalId} openFocus={() => setPage('Focus')} />}
         {page === 'Calendar' && <CalendarPage data={data} act={act} />}
-        {page === 'Patterns' && <PatternsPage data={data} act={act} />}
+        {page === 'Patterns' && <PatternsPage data={data} act={act} openTutorial={() => setTutorialOpen(true)} />}
         {page === 'Neural World' && <WorldPage data={data} act={act} openGoal={id => { setActiveGoalId(id); setPage('Goals'); }} focusGoal={focusGoal} />}
-        {settingsVisited && <div hidden={page !== 'Settings'}><SettingsPage data={data} act={act} visible={page === 'Settings'} /></div>}
+        {settingsVisited && <div hidden={page !== 'Settings'}><SettingsPage data={data} act={act} visible={page === 'Settings'} openTutorial={() => setTutorialOpen(true)} /></div>}
       </div>
     </main>
+    <BehaviourTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} goTo={setPage} />
     <Modal open={!!(review && reviewed)} title="A moment to notice." onClose={() => setReview(null)}>{review && reviewed && <><div className="completion-symbol"><Icon name="spark" size={28} /></div><p className="modal-intro">You made room for <strong>{minutesLabel(review.activeMs / 60000)}</strong> of {data.goals?.find(g => g.id === reviewed.goalId)?.title ?? data.fields.find(f => f.id === review.fieldId)?.name.toLowerCase() ?? 'focus'}. What was it like?</p><div className="session-inclusion"><label><CheckControl aria-label="Exclude this session from insights" checked={reviewed.excluded} onChange={e => void act('session.exclude', { id: review.id, excluded: e.target.checked })} />Exclude this session from insights</label><p className="hint">{reviewed.excluded ? reviewed.activeMs < MIN_INCLUDED_SESSION_MS ? 'Sessions below 2 minutes of active time are excluded automatically. Uncheck to include this one.' : 'Excluded from insights. Uncheck to include it again.' : 'Included in your focus insights.'} Recorded time stays in history and exports.</p></div><Rating value={focus} onChange={setFocus} label="How focused did you feel?" low="Scattered" high="Very focused" /><ReflectionQuestions detractor={detractor} challenge={challenge} onDetractor={setDetractor} onChallenge={setChallenge} /><label className="form-label">A note to your future self<span className="optional">optional</span><textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="What helped? What got in the way?" rows={3} /></label>
       <BehaviourReview session={reviewed} data={data} act={act} />
       {reviewedOccurrence && <DisclosureForGoal row={reviewedOccurrence} data={data} act={act} />}
