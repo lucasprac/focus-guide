@@ -32,3 +32,28 @@
   --shadow-panel: 0 6px 24px rgba(0, 0, 0, .12);
   --shadow-overlay: 0 24px 80px rgba(0, 0, 0, .45);
 }
+
+/* Isometric figures (iso/iso.css) and plates: neutral four-tone solids from panel and text.
+   The one lit part uses the accent; iso.css derives it per figure from --figure-lit (e.g. blue for breaks). */
+:root:not(.floating-window) {
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --shadow-lift: inset 0 1px 0 0 #FFFFFF, 0 0 0 1px rgba(36, 36, 61, .07), 0 1px 1px -.5px rgba(36, 36, 61, .05), 0 3px 3px -1.5px rgba(36, 36, 61, .05), 0 6px 6px -3px rgba(36, 36, 61, .05), 0 12px 12px -6px rgba(36, 36, 61, .05);
+  --anatomy-paper: var(--panel); --anatomy-face: var(--panel); --anatomy-top: var(--panel);
+  --anatomy-shade-0: color-mix(in srgb, var(--text) 15%, var(--panel)); --anatomy-shade-1: color-mix(in srgb, var(--text) 10%, var(--panel));
+  --anatomy-shade-2: color-mix(in srgb, var(--text) 6%, var(--panel)); --anatomy-shade-3: color-mix(in srgb, var(--text) 3%, var(--panel));
+  --anatomy-hi: var(--text); --anatomy-mid: color-mix(in srgb, var(--text) 54%, var(--panel));
+  --anatomy-lo: color-mix(in srgb, var(--text) 32%, var(--panel)); --anatomy-faint: color-mix(in srgb, var(--text) 17%, var(--panel));
+  --anatomy-lit-top-share: 7%; --anatomy-lit-shade-share: 16%;
+  --anatomy-halo: color-mix(in srgb, var(--text) 60%, var(--panel)); --anatomy-halo-opacity: .32;
+  --anatomy-dot: var(--text); --anatomy-red: var(--danger); --anatomy-weight: .6px;
+}
+:root[data-theme="dark"]:not(.floating-window) {
+  --shadow-lift: inset 0 1px 0 0 rgba(255, 255, 255, .04), inset 0 0 0 1px rgba(255, 255, 255, .025), 0 0 0 1px rgba(0, 0, 0, .15), 0 1px 1px -.5px rgba(0, 0, 0, .08), 0 3px 3px -1.5px rgba(0, 0, 0, .08), 0 6px 6px -3px rgba(0, 0, 0, .08), 0 12px 12px -6px rgba(0, 0, 0, .08);
+  --anatomy-face: color-mix(in srgb, var(--text) 4%, var(--panel)); --anatomy-top: color-mix(in srgb, var(--text) 5%, var(--panel));
+  --anatomy-shade-0: color-mix(in srgb, #000 30%, var(--panel)); --anatomy-shade-1: color-mix(in srgb, #000 18%, var(--panel));
+  --anatomy-shade-2: color-mix(in srgb, #000 7%, var(--panel)); --anatomy-shade-3: color-mix(in srgb, var(--text) 2%, var(--panel));
+  --anatomy-hi: color-mix(in srgb, var(--text) 86%, var(--panel)); --anatomy-mid: color-mix(in srgb, var(--text) 46%, var(--panel));
+  --anatomy-lo: color-mix(in srgb, var(--text) 25%, var(--panel)); --anatomy-faint: color-mix(in srgb, var(--text) 13%, var(--panel));
+  --anatomy-lit-top-share: 12%; --anatomy-lit-shade-share: 7%;
+  --anatomy-halo: #000; --anatomy-halo-opacity: .7;
+}

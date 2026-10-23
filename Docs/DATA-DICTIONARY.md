@@ -147,6 +147,7 @@ The JSON properties `id`, `sessionId`, `kind`, `startedAt`, `endedAt`, `duration
 | `settings.timezone` | Default timezone for new sessions and for the current day in the interface. Initial value `America/Fortaleza`. |
 | `settings.defaultMinutes` | Default requested session duration, 1–1440. Initial value 90. |
 | `settings.animation` | Enables optional animated drawing and pulses. The system reduced-motion setting has priority. |
+| `settings.focusVisual` | `brain` or `instrument`. Selects the 3D brain or the session gauge on the Focus page. Optional; the default is `brain`. It changes only the appearance. |
 | `settings.sound` | When `true`, the app requests the Windows completion notification sound. Windows can suppress it. |
 | `settings.palette` | `cyan`, `violet`, `amber` or `rose`. Each extra palette needs 5, 20 or 50 finished, included hours, in that order. |
 | `settings.weeklyGoalMinutes` | Optional weekly time intention, 0–10,080. Zero disables it. |

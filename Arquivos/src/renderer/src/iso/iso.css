@@ -1,0 +1,44 @@
+/* Isometric figure styles from the Anatomy kit (kit/iso.css, MIT).
+   Colours come from the --anatomy-* tokens in tokens.css, so figures follow the app theme. */
+.iso-svg {
+  display: block; width: 100%; height: auto; overflow: visible;
+  /* Computed here, not on :root, so a wrapper that sets --figure-lit recolours its own figure. */
+  --anatomy-lit: var(--figure-lit, var(--accent));
+  --anatomy-lit-top: color-mix(in srgb, var(--anatomy-lit) var(--anatomy-lit-top-share), var(--panel));
+  --anatomy-lit-shade: color-mix(in srgb, var(--anatomy-lit) var(--anatomy-lit-shade-share), var(--panel));
+}
+.iso-svg path, .iso-svg circle { vector-effect: non-scaling-stroke; }
+.iso-fill { fill: var(--anatomy-paper); stroke: none; }
+.iso-solid[data-lit] > .iso-fill { fill: var(--anatomy-face); }
+.iso-shade, .iso-top { stroke: none; }
+.iso-shade[data-shade="0"] { fill: var(--anatomy-shade-0); }
+.iso-shade[data-shade="1"] { fill: var(--anatomy-shade-1); }
+.iso-shade[data-shade="2"] { fill: var(--anatomy-shade-2); }
+.iso-shade[data-shade="3"] { fill: var(--anatomy-shade-3); }
+.iso-top { fill: var(--anatomy-top); }
+.iso-solid[data-lit] > .iso-top { fill: var(--anatomy-lit-top); }
+.iso-solid[data-lit] > .iso-shade { fill: var(--anatomy-lit-shade); }
+.iso-solid[data-seamless] > .iso-shade, .iso-solid[data-seamless] > .iso-top { stroke-width: .4; stroke-linejoin: round; }
+.iso-solid[data-seamless] > .iso-shade[data-shade="0"] { stroke: var(--anatomy-shade-0); }
+.iso-solid[data-seamless] > .iso-shade[data-shade="1"] { stroke: var(--anatomy-shade-1); }
+.iso-solid[data-seamless] > .iso-shade[data-shade="2"] { stroke: var(--anatomy-shade-2); }
+.iso-solid[data-seamless] > .iso-shade[data-shade="3"] { stroke: var(--anatomy-shade-3); }
+.iso-solid[data-seamless] > .iso-top { stroke: var(--anatomy-top); }
+.iso-solid[data-lit] > .iso-edge { stroke: var(--anatomy-lit); }
+.iso-halo { fill: var(--anatomy-halo); stroke: none; filter: blur(9px); opacity: var(--anatomy-halo-opacity); transform: translateY(3px); }
+.iso-line { fill: none; stroke: var(--anatomy-lo); stroke-width: var(--anatomy-weight); stroke-linecap: round; stroke-linejoin: round; }
+.iso-line[data-tone="hi"] { stroke: var(--anatomy-hi); }
+.iso-line[data-tone="mid"] { stroke: var(--anatomy-mid); }
+.iso-line[data-tone="lo"] { stroke: var(--anatomy-lo); }
+.iso-line[data-tone="faint"] { stroke: var(--anatomy-faint); }
+.iso-line[data-tone="lit"] { stroke: var(--anatomy-lit); }
+.iso-line[data-tone="red"] { stroke: var(--anatomy-red); }
+.iso-dots circle { fill: var(--anatomy-dot); stroke: none; opacity: .32; }
+.iso-dots[data-tone="hi"] circle { opacity: .85; }
+.iso-dots[data-tone="mid"] circle { opacity: .45; }
+.iso-dots[data-tone="lo"] circle { opacity: .22; }
+.iso-dots[data-tone="faint"] circle { opacity: .12; }
+.iso-face-text { fill: var(--anatomy-mid); font-family: var(--font-mono); letter-spacing: .04em; }
+.iso-face-text[data-tone="hi"] { fill: var(--anatomy-hi); }
+.iso-face-text[data-tone="lo"] { fill: var(--anatomy-lo); }
+.iso-face-text[data-tone="faint"] { fill: var(--anatomy-faint); }

@@ -5,6 +5,8 @@ export const MIN_INCLUDED_SESSION_MS = 2 * 60000;
 export type EventKind = 'active' | 'pause' | 'interruption' | 'thought' | 'recovery' | 'edit' | 'attention-return';
 export const ACTIVITY_MODES = ['Unspecified', 'Reading', 'Writing/coding', 'Visual work', 'Video/lecture', 'Offline', 'Mixed'] as const;
 export type ActivityMode = typeof ACTIVITY_MODES[number];
+/* What the Focus stage draws: the 3D brain or the isometric session gauge. Appearance only; timing is unchanged. */
+export type FocusVisual = 'brain' | 'instrument';
 export interface ActivitySample {
   id: string; sessionId: string; startMs: number; endMs: number; observedMs: number;
   keys: number; clicks: number; scrolls: number; movementMs: number;
@@ -38,6 +40,7 @@ export interface Settings {
   autoOvertime: boolean;
   collectActivity?: boolean; returnShortcut?: string; activityModes?: Record<string, ActivityMode>;
   agentAccess?: AgentAccess;
+  focusVisual?: FocusVisual;
 }
 export interface WeeklyReview { week: string; adjustment: string; updatedAt: string }
 export interface Dataset extends Partial<GoalData> {

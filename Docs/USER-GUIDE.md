@@ -166,6 +166,18 @@ The moon and sun button in the top bar changes between dark mode and light mode 
 - The app saves the theme and panel preferences locally. Full JSON backups include them.
 - Older backups use light mode and an expanded panel by default.
 
+### Session gauge
+
+The Focus page can show a session gauge instead of the brain. In Settings, set **Focus visual** to **Session gauge** and click **Save preferences**.
+
+- The gauge is a dial indicator on a stand. The large needle turns once for each 10 minutes of session time.
+- The small dial counts the turns up to 12, that is, 2 hours. Its short marker shows the planned length of the session. Before you start, the marker follows the duration that you select.
+- The screw jack under the plunger lifts a little at each turn, so the plunger and the needle always agree.
+- During a break, the needle and the plunger are blue.
+- The gauge shows the timer of the app. It does not measure attention, and it does not change recorded time.
+- The bottom-right corner of the Focus card shows the turn and the minutes, for example "turn 3 of 12 · 34 of 50 min".
+- The gauge does not use WebGL, so it also works in software rendering.
+
 ## Floating timer and tray
 
 ### Floating timer

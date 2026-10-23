@@ -604,6 +604,11 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .brain-orbit > .return-feedback > div { width: 100%; height: 100%; display: grid; place-items: center; }
 .brain-orbit .brain { display: block; height: 100%; }
 .app-shell .quiet-session .brain-orbit > .return-feedback { width: min(100%, 400px); }
+/* The session gauge is a solid figure on the card itself: no glow ring, and room for its wider stand. */
+.app-shell .focus-stage .brain-orbit.gauge-orbit::before { display: none; }
+/* Its height follows the SVG's viewBox at full width, so the dial stays readable at every breakpoint. */
+.app-shell .focus-stage .brain-orbit.gauge-orbit { height: auto; width: min(100%, 420px); margin-inline: auto; }
+.app-shell .focus-stage .brain-orbit.gauge-orbit > .return-feedback { width: 100%; }
 .shortcut-control { margin: 18px 0; }
 .shortcut-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
 .shortcut-value { display: flex; align-items: center; min-height: 38px; color: var(--text); }
