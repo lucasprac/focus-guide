@@ -27,6 +27,46 @@ Version 1.5.0 upgrades older databases to schema 5. Before the upgrade, it saves
 
 The milestone block editor upgrades the database to schema 6 in the same way. It saves a `before-schema-v6` snapshot first, and every existing milestone becomes a to-do.
 
+The goal workspace upgrades the database to schemas 7, 8 and 9. Each step saves a `before-schema-vN` snapshot first. After the upgrade, agent access is **Off**.
+
+## Learn with goals
+
+The app opens on **Goals**. A goal is the place where you learn something, for example "Learn linear algebra".
+
+1. Select **New goal**. Choose its area (for example Mathematics), a title and an outcome.
+2. Open the goal. In **Roadmap**, write stages as headings and steps as to-dos. Open **Details** on a step to add an estimate, a target date, notes and links.
+3. Select **Focus on this goal** or **Focus on this step**. Focus opens with the goal, its area and the step. Select **Begin focus**.
+4. In **Tasks**, add one-off steps. In **Plan & review**, add weekly actions and write your weekly review.
+5. In **Behaviour**, see how you study this goal: activity modes, times of day, roadmap steps, returns, interruptions and self-ratings.
+
+Areas are the former focus fields. They group goals. You manage them in **Settings > Your areas**. You can still start a session without a goal: select **Free focus** on the Focus page.
+
+For the full rules, see [Goal planning](GOAL-PLANNING.md).
+
+## Connect an AI agent (MCP)
+
+Focus Guide can serve a local AI agent, such as Claude Code or Claude Desktop, through the Model Context Protocol (MCP). The agent can read your goals and focus records, and it can propose changes that you review.
+
+1. Open **Settings > AI agent (MCP)**.
+2. Choose the access level:
+   - **Off** (default): no agent can connect.
+   - **Read only**: the agent can read areas, goals, roadmaps, tasks, sessions, weekly reviews and behaviour summaries.
+   - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions and review notes. Nothing changes until you apply a proposal.
+   - **Read and edit**: the agent can also change goals, roadmaps, step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page, where you can undo it.
+3. Select **Copy configuration**.
+4. Add the configuration to your client:
+   - Claude Desktop: add the `focus-guide` entry to `mcpServers` in `claude_desktop_config.json`, then restart Claude Desktop.
+   - Claude Code: save the text as `.mcp.json` in a project folder, or add the entry with `claude mcp add-json`.
+5. Keep Focus Guide open while the agent works.
+
+The configuration starts `FocusGuide.exe` as a small MCP server. You do not need Node.js. The server connects only to the running app on this computer, through a Windows named pipe with a new random key each time the app starts.
+
+**Privacy.** The agent sends what it reads to its AI provider. With access on, your goals, sessions, notes and activity summaries can leave this computer. Use **Read only** or **Off** if you do not want that. A restore always sets access to **Off**.
+
+**Proposals change nothing until you apply them.** Review them on the goal list and on each goal's Overview. Select **Apply**, **Edit then apply** or **Reject**. If you move or replace the `Aplicativo` folder, copy the configuration again, because it contains the path of the executable.
+
+The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analyse_goal_behaviour` give the agent a ready plan for these tasks.
+
 ## Begin a focus session
 
 ### Prepare the session
@@ -125,6 +165,18 @@ The moon and sun button in the top bar changes between dark mode and light mode 
 - The transparent floating timer keeps its black brain and its readable hover controls.
 - The app saves the theme and panel preferences locally. Full JSON backups include them.
 - Older backups use light mode and an expanded panel by default.
+
+### Session gauge
+
+The Focus page can show a session gauge instead of the brain. In Settings, set **Focus visual** to **Session gauge** and click **Save preferences**.
+
+- The gauge is a dial indicator on a stand. The large needle turns once for each 10 minutes of session time.
+- The small dial counts the turns up to 12, that is, 2 hours. Its short marker shows the planned length of the session. Before you start, the marker follows the duration that you select.
+- The screw jack under the plunger lifts a little at each turn, so the plunger and the needle always agree.
+- During a break, the needle and the plunger are blue.
+- The gauge shows the timer of the app. It does not measure attention, and it does not change recorded time.
+- The bottom-right corner of the Focus card shows the turn and the minutes, for example "turn 3 of 12 · 34 of 50 min".
+- The gauge does not use WebGL, so it also works in software rendering.
 
 ## Floating timer and tray
 

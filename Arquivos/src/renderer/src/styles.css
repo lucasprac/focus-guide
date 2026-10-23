@@ -604,6 +604,11 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .brain-orbit > .return-feedback > div { width: 100%; height: 100%; display: grid; place-items: center; }
 .brain-orbit .brain { display: block; height: 100%; }
 .app-shell .quiet-session .brain-orbit > .return-feedback { width: min(100%, 400px); }
+/* The session gauge is a solid figure on the card itself: no glow ring, and room for its wider stand. */
+.app-shell .focus-stage .brain-orbit.gauge-orbit::before { display: none; }
+/* Its height follows the SVG's viewBox at full width, so the dial stays readable at every breakpoint. */
+.app-shell .focus-stage .brain-orbit.gauge-orbit { height: auto; width: min(100%, 420px); margin-inline: auto; }
+.app-shell .focus-stage .brain-orbit.gauge-orbit > .return-feedback { width: 100%; }
 .shortcut-control { margin: 18px 0; }
 .shortcut-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
 .shortcut-value { display: flex; align-items: center; min-height: 38px; color: var(--text); }
@@ -952,3 +957,53 @@ button:active:not(:disabled) { filter: brightness(.94); }
   .app-shell .quiet-session .brain-orbit { height: 170px; }
   .app-shell .quiet-session .clock { font-size: 64px; }
 }
+/* Goal workspace: a goal is the place where focus, tasks, roadmap and behaviour come together. */
+.goal-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 20px; min-width: 0; }
+.goal-workspace > .page-heading { margin-bottom: 0; }
+.goal-workspace .goal-back { justify-self: start; }
+.goal-workspace-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.goal-workspace-meta .field-dot { display: inline-block; margin-right: 6px; vertical-align: middle; }
+.goal-workspace-meta .goal-why-tags { margin-top: 0; }
+.goal-workspace-nav { justify-self: start; flex-wrap: wrap; max-width: 100%; }
+.goal-workspace .stats-grid, .goal-workspace .charts-grid { margin: 0; }
+.goal-behaviour { display: grid; grid-template-columns: minmax(0,1fr); gap: 20px; min-width: 0; }
+.goal-behaviour-table { display: grid; font-size: 13px; overflow-x: auto; }
+.goal-behaviour-row { display: grid; grid-template-columns: minmax(120px,1.4fr) repeat(5,minmax(72px,1fr)); gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.goal-behaviour-row.head { color: var(--muted); font-size: 12px; }
+.goal-focus-banner { display: flex; align-items: center; gap: 10px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; overflow-wrap: anywhere; }
+.goal-focus-banner > svg { flex-shrink: 0; color: var(--accent); }
+.goal-focus-banner > span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.goal-focus-banner strong { font-size: 15px; font-weight: 500; }
+.goal-focus-banner small { color: var(--muted); }
+@media (max-width: 700px) {
+  .goal-behaviour-row { grid-template-columns: minmax(110px,1.4fr) repeat(5,minmax(64px,1fr)); }
+  .goal-workspace .page-heading > div:last-child { flex-wrap: wrap; }
+}
+.roadmap-stage { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+.roadmap-stage:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.roadmap-stage-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.roadmap-stage-head h3 { font-size: 15px; font-weight: 500; }
+.roadmap-step { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.roadmap-step:last-child { border-bottom: 0; }
+.roadmap-step-main { display: grid; gap: 6px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.roadmap-step-main strong { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.roadmap-step.done .roadmap-step-main strong { color: var(--muted); }
+.roadmap-step .horizon-progress { max-width: 320px; }
+.step-resources { display: grid; gap: 4px; font-size: 12px; margin: 0; padding-left: 16px; }
+.step-resources code { color: var(--muted); overflow-wrap: anywhere; }
+.step-resource { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.6fr) auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+@media (max-width: 700px) { .roadmap-step { flex-direction: column; } .step-resource { grid-template-columns: minmax(0,1fr) auto; } .step-resource input:nth-child(2) { grid-column: 1; } }
+/* Agent proposals and settings. */
+.agent-proposals .proposal-card { border-top: 1px solid var(--line); padding: 16px 0; display: grid; gap: 10px; min-width: 0; }
+.agent-proposals .proposal-card:first-of-type { border-top: 0; padding-top: 0; }
+.proposal-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.proposal-head strong { font-weight: 500; }
+.proposal-rows { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; overflow-wrap: anywhere; }
+.proposal-rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.proposal-rows .proposal-row-heading { font-weight: 600; margin-top: 6px; }
+.proposal-rows .proposal-row-todo, .proposal-rows .proposal-row-bullet, .proposal-rows .proposal-row-numbered { padding-left: 12px; }
+.proposal-diff { display: grid; gap: 8px; }
+.agent-config { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.agent-change.undone strong { color: var(--muted); }
+.agent-change strong { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 500; }
+.roadmap-conflict { display: grid; gap: 8px; margin-bottom: 12px; }

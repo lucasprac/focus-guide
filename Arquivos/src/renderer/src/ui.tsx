@@ -141,6 +141,26 @@ export function Card({ title, icon, actions, headingLevel = 2, className, childr
   </section>;
 }
 
+/* A card framed like a technical figure plate: "Fig n" and the title on top, a hint and a live readout below.
+   It keeps the legacy panel base, so page rules such as .focus-stage still apply. Write the readout through
+   a [data-readout] query when it changes every frame; it is not a live region, so it never interrupts a reader. */
+type PlateProps = Omit<HTMLAttributes<HTMLElement>, 'title'> & { fig: number; title?: ReactNode; hint?: ReactNode; readout?: ReactNode; actions?: ReactNode; headingLevel?: 2 | 3 };
+export function Plate({ fig, title, hint, readout, actions, headingLevel = 2, className, children, ...props }: PlateProps) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  return <section {...props} className={cn('plate panel rounded-card shadow-elevation-lift', className)}>
+    <div className="plate-head mb-4 flex min-w-0 items-center gap-3 font-mono text-caption text-ink-muted">
+      <span className="plate-fig shrink-0 text-ink">Fig {fig}</span>
+      {title && <Heading className="plate-title ml-auto flex min-w-0 items-center gap-2 truncate text-right font-mono text-caption font-normal tracking-wide text-ink-muted">{title}</Heading>}
+      {actions && <div className={cn('flex shrink-0 items-center gap-2', !title && 'ml-auto')}>{actions}</div>}
+    </div>
+    {children}
+    {(hint || readout !== undefined) && <div className="plate-foot mt-4 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 font-mono text-caption text-ink-muted">
+      <span className="plate-hint tracking-wide">{hint}</span>
+      {readout !== undefined && <span className="plate-readout ml-auto text-right text-ink tabular-nums" data-readout="">{readout}</span>}
+    </div>}
+  </section>;
+}
+
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return <header className="page-heading mb-5 flex flex-wrap items-start justify-between gap-4">
     <div className="min-w-0">

@@ -1,5 +1,26 @@
 # Release notes
 
+## Unreleased — session gauge and figure plates
+
+- **Session gauge.** Settings > **Focus visual** can replace the Focus brain with an isometric dial indicator. Its needle turns once for each 10 minutes of session time, its small dial counts up to 12 turns (2 hours), and a marker shows the planned length. Breaks show it in blue. It is SVG only, so software rendering also shows it. The brain stays the default.
+- **Figure plates.** The Focus card and the three main Patterns charts use a plate frame: "Fig n" and the title at the top, a hint and a live value at the bottom, in a monospace font with a thin layered shadow.
+- The isometric drawing kit comes from the Anatomy skill (MIT licence). Its colours come from the app's tokens: four neutral tones and one accent part.
+- Settings add the optional `focusVisual` key. The schema version does not change, and backups without the key restore with the brain. A backup that contains the key cannot be restored by 2.0.0 or earlier, because those versions reject unknown settings keys.
+
+## Unreleased — goals as learning workspaces and a local AI agent
+
+Focus Guide now puts goals at the centre. A goal is the place where you learn: it has a roadmap, focus sessions, tasks and a behaviour profile.
+
+- **Goal workspace.** Goals is the first page. Open a goal to see Overview, Roadmap, Tasks, Behaviour, and Plan & review. **Focus on this goal** prepares a session with the goal, its area and the activity mode of its latest session. After the session, the next one stays in the same goal until you select **Free focus**.
+- **Areas.** The interface calls focus fields "areas", for example Mathematics or Languages. An area groups goals. Commands, the database and backups keep the name `field`.
+- **Roadmap steps.** Headings are stages and to-dos are steps. Each step can have an estimate, a target date, notes and links. A session can record the step that it served, and the roadmap shows recorded time against the estimate for each step and stage.
+- **Behaviour profile.** Each goal shows time by activity mode, time of day, weekday and roadmap step, keyboard and mouse rates with their coverage, returns, interruptions, self-ratings and action check-ins. The profile describes records. It does not score attention.
+- **Calendar and Patterns.** Calendar can filter by goal. Patterns shows time by activity mode. A duration suggestion uses the goal's own sessions first.
+- **Local AI agent (MCP).** Settings > AI agent turns on a local Model Context Protocol server for clients such as Claude Code and Claude Desktop. Access is **Off** by default. **Read only** lets the agent read goals, sessions and behaviour summaries. **Read and propose** also lets it propose goals, roadmaps, tasks, weekly actions and review notes. A proposal changes nothing until you apply it on the goal page. You can edit or reject it, and applied and rejected proposals stay as a history.
+- **Direct edits by the agent.** The new **Read and edit** level lets the agent create and change goals, roadmaps, roadmap step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page and on the goal's Overview, with the agent's reason. **Undo** puts back the earlier state, and a record that the agent created is archived. The agent can make at most 60 direct changes per hour.
+- **Safe roadmap edits.** A roadmap change names the revision that it is based on. If the agent changes a roadmap while you edit it, the app does not save over it: you choose **Show the agent's version** or **Keep my version**. An agent's roadmap change keeps a row only when the title is the same; to rename a step, the agent changes that step.
+- SQLite and JSON schema 7 add roadmap step details to milestones and `milestoneId` to sessions. Schema 8 adds the `agentProposals` collection and the `agentAccess` setting. Schema 9 adds the `agentChanges` log. Each migration saves a `before-schema-vN` snapshot first. JSON backups of versions 1–8 still restore. A restore and the schema 8 and 9 migrations set agent access to **Off**.
+
 ## Unreleased — block milestones, same-day defaults and a new brain
 
 - Milestones are now a light block editor. Each row can be a to-do, heading, bullet, numbered item or text line. Type `# `, `- `, `1. ` or `[] ` at the start of a row, or use the **Row type** buttons. Enter, Backspace, Ctrl+Enter and Alt+Up/Down work as in other block editors. Only to-dos can be ticked, count as progress and take task links. A to-do with linked tasks keeps its kind until you unlink them.

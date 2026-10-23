@@ -1,4 +1,4 @@
-import type { Settings } from './types';
+import type { AgentAccess, FocusVisual, Settings } from './types';
 import { ACTIVITY_MODES, type ActivityMode } from './types';
 
 export function activityMode(value: unknown): ActivityMode {
@@ -67,8 +67,18 @@ export function settings(value: unknown): Settings {
     animation: bool(v.animation, 'Animation'), sound: bool(v.sound, 'Sound'),
     palette: v.palette as Settings['palette'], weeklyGoalMinutes: number(v.weeklyGoalMinutes, 'Weekly goal', 0, 10080),
     autoOvertime: v.autoOvertime === undefined ? true : bool(v.autoOvertime, 'Automatic overtime'),
-    theme, sidebarCollapsed: v.sidebarCollapsed === undefined ? false : bool(v.sidebarCollapsed, 'Collapsed side panel')
+    theme, sidebarCollapsed: v.sidebarCollapsed === undefined ? false : bool(v.sidebarCollapsed, 'Collapsed side panel'),
+    agentAccess: agentAccess(v.agentAccess ?? 'off'),
+    focusVisual: focusVisual(v.focusVisual ?? 'brain')
   };
+}
+function focusVisual(value: unknown): FocusVisual {
+  if (value !== 'brain' && value !== 'instrument') throw new Error('Choose the brain or the session gauge for Focus.');
+  return value;
+}
+export function agentAccess(value: unknown): AgentAccess {
+  if (value !== 'off' && value !== 'read' && value !== 'propose' && value !== 'edit') throw new Error('Choose Off, Read only, Read and propose, or Read and edit for the AI agent.');
+  return value;
 }
 function vBoolean(value: unknown): boolean { return value === undefined ? false : bool(value, 'Activity collection'); }
 export function timestamp(value: unknown): string {

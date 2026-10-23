@@ -8,6 +8,7 @@
 
 @import './tokens.css' layer(tokens);
 @import './styles.css' layer(legacy);
+@import './iso/iso.css' layer(components);
 
 /* Keeps the existing data-theme switch as Tailwind's dark variant. */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
@@ -20,6 +21,7 @@
   --text-*: initial;
 
   --font-sans: 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
   --radius-control: 10px;
   --radius-card: 18px;
@@ -70,4 +72,5 @@
 
   --shadow-elevation-1: var(--shadow-panel, none);
   --shadow-elevation-2: var(--shadow-overlay, none);
+  --shadow-elevation-lift: var(--shadow-lift, none);
 }
