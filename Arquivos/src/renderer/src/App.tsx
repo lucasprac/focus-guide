@@ -1,7 +1,7 @@
 import { Button, CheckControl, Hint, IconButton, cn } from './ui';
 import { useEffect, useRef, useState } from 'react';
 import { animate, createScope } from 'animejs';
-import type { AppState, Command, CommandResult, FocusSession, Goal, GoalOccurrence, ActivityMode } from '../../shared/types';
+import type { AppState, Challenge, Command, CommandResult, Detractor, FocusSession, Goal, GoalOccurrence, ActivityMode } from '../../shared/types';
 import GoalsPage from './GoalsPage';
 import type { GoalFocusOptions } from './GoalWorkspace';
 import { ActionCheckIn } from './GoalForms';
@@ -17,7 +17,7 @@ import PatternsPage from './PatternsPage';
 import WorldPage from './WorldPage';
 import SettingsPage from './SettingsPage';
 import { BehaviourReview, ReturnFeedback } from './Behaviour';
-import ProbePrompt, { ProbeAnnouncer } from './ProbePrompt';
+import ProbePrompt, { ProbeAnnouncer, ReflectionQuestions } from './ProbePrompt';
 
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
 export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
@@ -32,6 +32,7 @@ export default function App() {
   const [settingsVisited, setSettingsVisited] = useState(false);
   const [taskGoalId,setTaskGoalId] = useState<string | null>(null), [activeGoalId,setActiveGoalId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('Goals'), [review, setReview] = useState<FocusSession | null>(null), [focus, setFocus] = useState<number | null>(null), [note, setNote] = useState('');
+  const [detractor, setDetractor] = useState<Detractor | null>(null), [challenge, setChallenge] = useState<Challenge | null>(null);
   const [preparation, setPreparation] = useState<SessionPreparation>({ fieldId: '', checklistIds: [], primaryTaskId: null });
   useEffect(() => {
     if (!data || data.timer.sessionId) return;
@@ -67,7 +68,7 @@ export default function App() {
     if (!data || mini) return;
     if (previous.current && !data.timer.sessionId) {
       const completed = data.sessions.find(s => s.id === previous.current && s.status === 'completed');
-      if (completed) { setPreparation(p => ({ fieldId: p.fieldId,checklistIds: [],primaryTaskId: null,...(completed.goalId ? { goalId: completed.goalId } : {}) })); setReview(completed); setFocus(completed.focus); setNote(completed.note); }
+      if (completed) { setPreparation(p => ({ fieldId: p.fieldId,checklistIds: [],primaryTaskId: null,...(completed.goalId ? { goalId: completed.goalId } : {}) })); setReview(completed); setFocus(completed.focus); setNote(completed.note); setDetractor(completed.detractor ?? null); setChallenge(completed.challenge ?? null); }
     }
     previous.current = data.timer.sessionId;
   }, [data, mini]);
@@ -139,11 +140,10 @@ export default function App() {
         </div>}
         <IconButton className="theme-toggle" icon={data.settings.theme === 'dark' ? 'sun' : 'moon'} label={data.settings.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => void act('settings.update', { ...data.settings, theme: data.settings.theme === 'dark' ? 'light' : 'dark' })} />
         <Button variant="ghost" size="sm" icon="float" onClick={() => void act('window.float')}>Floating timer</Button>
-      </div></div>
+      </div>{data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} />}</div>
       {error && <div className="alert error" role="alert"><Icon name="shield" size={18} /><span>{error}</span><button className="icon-button" aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close" size={17} /></button></div>}
       {notice && <div className="alert notice" role="status"><Icon name="check" size={18} /><span>{notice}</span></div>}
       {data.timer.mode === 'focus' && <ProbeAnnouncer probe={data.probe} />}
-      {data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} />}
       <div className="page-content">
         <div hidden={page !== 'Focus'}><FocusPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} visible={page === 'Focus'} /></div>
         {page === 'Goals' && <GoalsPage data={data} act={act} startAction={startAction} openTasks={openGoalTasks} focusGoal={focusGoal} activeGoalId={activeGoalId} openGoal={setActiveGoalId} />}
@@ -154,11 +154,11 @@ export default function App() {
         {settingsVisited && <div hidden={page !== 'Settings'}><SettingsPage data={data} act={act} visible={page === 'Settings'} /></div>}
       </div>
     </main>
-    <Modal open={!!(review && reviewed)} title="A moment to notice." onClose={() => setReview(null)}>{review && reviewed && <><div className="completion-symbol"><Icon name="spark" size={28} /></div><p className="modal-intro">You made room for <strong>{minutesLabel(review.activeMs / 60000)}</strong> of {data.goals?.find(g => g.id === reviewed.goalId)?.title ?? data.fields.find(f => f.id === review.fieldId)?.name.toLowerCase() ?? 'focus'}. What was it like?</p><div className="session-inclusion"><label><CheckControl aria-label="Exclude this session from insights" checked={reviewed.excluded} onChange={e => void act('session.exclude', { id: review.id, excluded: e.target.checked })} />Exclude this session from insights</label><p className="hint">{reviewed.excluded ? reviewed.activeMs < MIN_INCLUDED_SESSION_MS ? 'Sessions below 2 minutes of active time are excluded automatically. Uncheck to include this one.' : 'Excluded from insights. Uncheck to include it again.' : 'Included in your focus insights.'} Recorded time stays in history and exports.</p></div><Rating value={focus} onChange={setFocus} label="How focused did you feel?" low="Scattered" high="Very focused" /><label className="form-label">A note to your future self<span className="optional">optional</span><textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="What helped? What got in the way?" rows={3} /></label>
+    <Modal open={!!(review && reviewed)} title="A moment to notice." onClose={() => setReview(null)}>{review && reviewed && <><div className="completion-symbol"><Icon name="spark" size={28} /></div><p className="modal-intro">You made room for <strong>{minutesLabel(review.activeMs / 60000)}</strong> of {data.goals?.find(g => g.id === reviewed.goalId)?.title ?? data.fields.find(f => f.id === review.fieldId)?.name.toLowerCase() ?? 'focus'}. What was it like?</p><div className="session-inclusion"><label><CheckControl aria-label="Exclude this session from insights" checked={reviewed.excluded} onChange={e => void act('session.exclude', { id: review.id, excluded: e.target.checked })} />Exclude this session from insights</label><p className="hint">{reviewed.excluded ? reviewed.activeMs < MIN_INCLUDED_SESSION_MS ? 'Sessions below 2 minutes of active time are excluded automatically. Uncheck to include this one.' : 'Excluded from insights. Uncheck to include it again.' : 'Included in your focus insights.'} Recorded time stays in history and exports.</p></div><Rating value={focus} onChange={setFocus} label="How focused did you feel?" low="Scattered" high="Very focused" /><ReflectionQuestions detractor={detractor} challenge={challenge} onDetractor={setDetractor} onChallenge={setChallenge} /><label className="form-label">A note to your future self<span className="optional">optional</span><textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="What helped? What got in the way?" rows={3} /></label>
       <BehaviourReview session={reviewed} data={data} act={act} />
       {reviewedOccurrence && <DisclosureForGoal row={reviewedOccurrence} data={data} act={act} />}
       {data.events.some(e => e.sessionId === review.id && e.kind === 'thought') && <div className="parked-review"><span className="tiny-label">THOUGHTS YOU PARKED</span>{data.events.filter(e => e.sessionId === review.id && e.kind === 'thought').map(e => <p key={e.id}>{e.text}</p>)}</div>}
-      <div className="modal-actions"><button className="text-button" onClick={() => setReview(null)}>Skip check-in</button><button className="primary" onClick={async () => { const result = await act('session.review', { id: review.id, focus, note }); if (result.ok) setReview(null); }}>Save reflection <Icon name="check" size={17} /></button></div><button className="break-link" onClick={async () => { const saved = await act('session.review', { id: review.id, focus, note }); if (saved.ok) { setReview(null); const result = await act('break.start'); if (result.ok) setPage('Focus'); } }}><Icon name="sun" size={18} />Save & take a 10-minute break</button>
+      <div className="modal-actions"><button className="text-button" onClick={() => setReview(null)}>Skip check-in</button><button className="primary" onClick={async () => { const result = await act('session.review', { id: review.id, focus, note, detractor, challenge }); if (result.ok) setReview(null); }}>Save reflection <Icon name="check" size={17} /></button></div><button className="break-link" onClick={async () => { const saved = await act('session.review', { id: review.id, focus, note, detractor, challenge }); if (saved.ok) { setReview(null); const result = await act('break.start'); if (result.ok) setPage('Focus'); } }}><Icon name="sun" size={18} />Save & take a 10-minute break</button>
     </>}</Modal>
   </div>;
 }

@@ -5,7 +5,8 @@ import { BehaviourReview } from './Behaviour';
 import { Choice } from './ui';
 import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import type { ViewProps } from './App';
-import type { FocusSession, SessionEvent } from '../../shared/types';
+import type { Challenge, Detractor, FocusSession, SessionEvent } from '../../shared/types';
+import { ReflectionQuestions } from './ProbePrompt';
 import { addDays, localDay, mean, calendarSessionIndex, summarizeDays } from '../../shared/analytics';
 import { Disclosure, Icon, Modal, Rating, displayDay, minutesLabel } from './components';
 
@@ -16,6 +17,7 @@ export default function CalendarPage({ data, act }: ViewProps) {
   const [editor, setEditor] = useState<FocusSession | null>(null), [deleting, setDeleting] = useState<FocusSession | null>(null);
   const [heatmapFocus, setHeatmapFocus] = useState(today);
   const [editField, setEditField] = useState(''), [intention, setIntention] = useState(''), [energy, setEnergy] = useState<number | null>(null), [focus, setFocus] = useState<number | null>(null), [note, setNote] = useState('');
+  const [detractor, setDetractor] = useState<Detractor | null>(null), [challenge, setChallenge] = useState<Challenge | null>(null);
   useEffect(() => {
     if (field && !data.fields.some(f => f.id === field)) setField('');
     if (goalId && !data.goals?.some(g => g.id === goalId)) setGoalId('');
@@ -49,7 +51,7 @@ export default function CalendarPage({ data, act }: ViewProps) {
   const selectedSummary = summaries.get(selected);
   const shiftMonth = (offset: number) => { const date = new Date(`${month}-01T12:00:00Z`); date.setUTCMonth(date.getUTCMonth() + offset); setMonth(date.toISOString().slice(0, 7)); };
   const sessionTime = (s: FocusSession) => new Date(s.startedAt).toLocaleTimeString('en-US', { timeZone: s.timezone, hour: '2-digit', minute: '2-digit', hour12: false });
-  const edit = (s: FocusSession) => { setEditor(s); setEditField(s.fieldId); setIntention(s.intention); setEnergy(s.energy); setFocus(s.focus); setNote(s.note); };
+  const edit = (s: FocusSession) => { setEditor(s); setEditField(s.fieldId); setIntention(s.intention); setEnergy(s.energy); setFocus(s.focus); setNote(s.note); setDetractor(s.detractor ?? null); setChallenge(s.challenge ?? null); };
   const heatmapKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const target = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-day]');
     if (!target) return;
@@ -74,7 +76,7 @@ export default function CalendarPage({ data, act }: ViewProps) {
     <div className="comparison-cards"><section className="panel"><div className="tiny-label text-caption tracking-normal">Highest recorded time · this filter</div><h3>{highestTime ? displayDay(highestTime.day, true) : 'Still a blank page'}</h3><p>{highestTime ? `${minutesLabel(highestTime.minutes)} recorded, ${highestTime.count} sessions started` : 'Start a session to begin your record.'}</p></section><section className="panel"><div className="tiny-label text-caption tracking-normal">Highest self-rated focus · this filter</div><h3>{highestRating ? displayDay(highestRating.day, true) : 'No ratings yet'}</h3><p>{highestRating ? `${mean(highestRating.ratings)!.toFixed(1)}/5 from ${highestRating.ratings.length} ${highestRating.ratings.length === 1 ? 'rating' : 'ratings'}` : 'Optional reflections add this perspective.'}</p></section></div>
     </Disclosure>
     <p className="footnote">Time follows each session’s recording timezone and is split at midnight. Counts and ratings belong to the starting date. Excluded sessions remain in history.</p>
-    <Modal open={!!(editor)} title="Refine your session record" onClose={() => setEditor(null)}>{editor && <><p className="modal-intro">Original timing remains intact. Changing the area clears the linked tasks and goal.</p><label className="form-label">Area<Choice aria-label="Edit session area" value={editField} onChange={e => setEditField(e.target.value)}>{data.fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</Choice></label><label className="form-label">Intention<textarea aria-label="Edit intention" value={intention} onChange={e => setIntention(e.target.value)} maxLength={500} rows={2} /></label><div className="ratings-pair"><Rating value={energy} onChange={setEnergy} label="Starting energy" /><Rating value={focus} onChange={setFocus} label="Perceived focus" /></div><label className="form-label">Reflection<textarea aria-label="Edit reflection" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} rows={3} /></label><div className="modal-actions"><Button onClick={() => setEditor(null)}>Cancel</Button><Button variant="primary" onClick={async () => { const result = await act('session.edit', { id: editor.id, fieldId: editField, intention, energy, focus, note }); if (result.ok) setEditor(null); }}>Save changes</Button></div></>}</Modal>
+    <Modal open={!!(editor)} title="Refine your session record" onClose={() => setEditor(null)}>{editor && <><p className="modal-intro">Original timing remains intact. Changing the area clears the linked tasks and goal.</p><label className="form-label">Area<Choice aria-label="Edit session area" value={editField} onChange={e => setEditField(e.target.value)}>{data.fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</Choice></label><label className="form-label">Intention<textarea aria-label="Edit intention" value={intention} onChange={e => setIntention(e.target.value)} maxLength={500} rows={2} /></label><div className="ratings-pair"><Rating value={energy} onChange={setEnergy} label="Starting energy" /><Rating value={focus} onChange={setFocus} label="Perceived focus" /></div><ReflectionQuestions detractor={detractor} challenge={challenge} onDetractor={setDetractor} onChallenge={setChallenge} /><label className="form-label">Reflection<textarea aria-label="Edit reflection" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} rows={3} /></label><div className="modal-actions"><Button onClick={() => setEditor(null)}>Cancel</Button><Button variant="primary" onClick={async () => { const result = await act('session.edit', { id: editor.id, fieldId: editField, intention, energy, focus, note, detractor, challenge }); if (result.ok) setEditor(null); }}>Save changes</Button></div></>}</Modal>
     <Modal destructive description="Permanently removes this session and its events. Exclusion keeps the record instead." open={!!(deleting)} title="Delete this session?" onClose={() => setDeleting(null)}>{deleting && <><p className="modal-intro">This removes the session and its events from your dataset. Excluding it keeps the record while removing it from analysis.</p><div className="modal-actions"><Button onClick={() => setDeleting(null)}>Keep session</Button><Button variant="danger" onClick={async () => { const result = await act('session.delete', { id: deleting.id }); if (result.ok) setDeleting(null); }}>Delete session</Button></div></>}</Modal>
   </>;
 }

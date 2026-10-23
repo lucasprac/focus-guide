@@ -1,5 +1,5 @@
 import { Children, cloneElement, isValidElement, useId, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
-import { Dialog, AlertDialog, Select, Switch, Checkbox, Collapsible, ToggleGroup, Tooltip } from 'radix-ui';
+import { Dialog, AlertDialog, Select, Switch, Checkbox, Collapsible, ToggleGroup, Tooltip, Tabs as RadixTabs } from 'radix-ui';
 import { Icon, type IconName } from './icons';
 
 type Change<T> = { target: T };
@@ -45,6 +45,17 @@ export function Segments({ value, onChange, label, options, className = '' }: {
   return <ToggleGroup.Root type="single" value={value} onValueChange={onChange} aria-label={label} className={className}>
     {options.map(option => <ToggleGroup.Item key={option.value} value={option.value} aria-label={option.ariaLabel ?? option.label} className={value === option.value ? 'selected' : ''}>{option.label}</ToggleGroup.Item>)}
   </ToggleGroup.Root>;
+}
+/* Page-level tabs. Only the selected panel is mounted, so a panel can load its data when it opens. */
+export function Tabs({ value, onChange, label, tabs, className }: {
+  value: string; onChange: (value: string) => void; label: string; tabs: Array<{ value: string; label: string; content: ReactNode }>; className?: string;
+}) {
+  return <RadixTabs.Root value={value} onValueChange={onChange} className={cn('page-tabs', className)}>
+    <RadixTabs.List aria-label={label} className="page-tabs-list mb-5 flex gap-1 border-b border-line">
+      {tabs.map(tab => <RadixTabs.Trigger key={tab.value} value={tab.value} className="page-tab -mb-px border-0 border-b-2 border-transparent bg-transparent px-3 py-2 text-label font-medium text-ink-muted transition-colors duration-150 ease-standard hover:text-ink data-[state=active]:border-accent data-[state=active]:text-accent">{tab.label}</RadixTabs.Trigger>)}
+    </RadixTabs.List>
+    {tabs.map(tab => <RadixTabs.Content key={tab.value} value={tab.value} className="page-tab-panel focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">{tab.content}</RadixTabs.Content>)}
+  </RadixTabs.Root>;
 }
 /* Card disclosures stand alone; inline ones use display: contents so the trigger can sit in a
    parent toolbar grid while the content spans the next row (content keeps col-span-full). */

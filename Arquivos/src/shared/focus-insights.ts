@@ -10,7 +10,7 @@ export const INSIGHTS_LIMITS_NOTE = 'Patterns in your own records, with interval
 export const DETRACTOR_LABELS: Record<Detractor, string> = { none: 'Nothing notable', notifications: 'Phone or notifications', people: 'People or noise', thoughts: 'Wandering thoughts', tiredness: 'Tiredness or hunger', task: 'Unclear or too hard task', other: 'Something else' };
 export const CHALLENGE_LABELS: Record<Challenge, string> = { 'too-easy': 'Too easy', right: 'About right', 'too-hard': 'Too hard' };
 export const PROBE_ANSWER_LABELS: Record<ProbeAnswer, string> = { 'on-task': 'On the task', drifting: 'Drifting', elsewhere: 'Somewhere else' };
-/* Processing rules, eligibility and suggestion thresholds of the design (sections 6, 7 and 12). */
+/* Processing rules, eligibility and suggestion thresholds of the design (sections 6, 7 and 12). focusGap: the smallest mean-focus difference a window, detractor or challenge suggestion reports. */
 export const INSIGHT_THRESHOLDS = {
   longSessionMs: 8 * 3600000, minObservedMs: 30000, returnVersion: 3, inputVersion: 4,
   rhythm: { ratedSessions: 10, bandwidthHours: 1.5, hourWeight: 3, cellSessions: 3 },
@@ -20,7 +20,7 @@ export const INSIGHT_THRESHOLDS = {
   detractors: { sessions: 10, meanSessions: 3 },
   correlation: { pairs: 20, spanDays: 7 },
   model: { ratedSessions: 30, spanDays: 14, testPoints: 10, maxTestPoints: 40, minTrainSessions: 20, usefulGain: 0.05, bootstrap: 200, modeSessions: 5, gapCapHours: 24, lambdaPerRow: [0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10] },
-  suggestions: { max: 5, windowSessions: 5, windowGain: 0.3, lengthStep: 5, lengthMinimum: 15, breakEarlyMinutes: 20, breakRatio: 1.5, breakDrifts: 8, switchingRho: -0.3, comparisonSessions: 3, ratedShare: 0.6, activityCoverage: 0.5, markerShare: 0.2 }
+  suggestions: { max: 5, windowSessions: 5, focusGap: 0.3, lengthStep: 5, lengthMinimum: 15, breakEarlyMinutes: 20, breakRatio: 1.5, breakDrifts: 8, switchingRho: -0.3, comparisonSessions: 3, ratedShare: 0.6, activityCoverage: 0.5, markerShare: 0.2 }
 } as const;
 
 export interface Eligibility { eligible: boolean; n: number; reason: string }
@@ -404,7 +404,7 @@ function recommendationsOf(facts: Facts[], quality: DataQuality, rhythm: RhythmS
   const S = T.suggestions, out: Recommendation[] = [], overall = mean(ratingsOf(facts)), lower = (values: number[], reference: number[]) => differenceInterval(values, reference).high < 0 ? 'moderate' as const : 'tentative' as const;
   if (rhythm.eligible && overall !== null) {
     const best = TIME_BANDS.map((band, b) => ({ band, values: ratingsOf(facts.filter(f => f.band === b)) })).filter(x => x.values.length >= S.windowSessions).map(x => ({ ...x, interval: meanInterval(x.values) }))
-      .filter(x => x.interval.estimate >= overall + S.windowGain).sort((a, b) => b.interval.estimate - a.interval.estimate)[0];
+      .filter(x => x.interval.estimate >= overall + S.focusGap - 1e-9).sort((a, b) => b.interval.estimate - a.interval.estimate)[0];
     if (best) {
       const [name, range] = best.band.label.split(' · ');
       out.push({ id: `window-${name.toLowerCase()}`, kind: 'window', title: `Your best-rated sessions start ${name === 'Night' ? 'at night' : `in the ${name.toLowerCase()}`} (${range})`, detail: 'When you can, place demanding work in this window. You choose when you focus, so this is an association, not a cause.',
@@ -439,7 +439,7 @@ function recommendationsOf(facts: Facts[], quality: DataQuality, rhythm: RhythmS
   const top = detractors.eligible ? detractors.reported.find(r => r.detractor !== 'none')?.detractor : undefined, calm = ratingsOf(facts.filter(f => f.s.detractor === 'none'));
   if (top && top !== 'none' && calm.length >= S.comparisonSessions) {
     const values = ratingsOf(facts.filter(f => f.s.detractor === top));
-    if (values.length >= S.comparisonSessions && mean(values)! < mean(calm)!) out.push({ id: `detractor-${top}`, kind: 'detractor', title: `${DETRACTOR_LABELS[top]} got in the way most often`, detail: DETRACTOR_ACTIONS[top],
+    if (values.length >= S.comparisonSessions && mean(values)! <= mean(calm)! - S.focusGap + 1e-9) out.push({ id: `detractor-${top}`, kind: 'detractor', title: `${DETRACTOR_LABELS[top]} got in the way most often`, detail: DETRACTOR_ACTIONS[top],
       evidence: `${DETRACTOR_LABELS[top]}: mean focus ${one(mean(values)!)} in ${plural(values.length, 'rated session')} vs ${one(mean(calm)!)} in ${plural(calm.length, 'rated session')} with nothing notable.`, strength: lower(values, calm) });
   }
   const rho = detractors.switching.focusRho, pairs = detractors.switching.pairs;
@@ -450,7 +450,7 @@ function recommendationsOf(facts: Facts[], quality: DataQuality, rhythm: RhythmS
   }
   const right = ratingsOf(facts.filter(f => f.s.challenge === 'right'));
   if (detractors.eligible && right.length >= S.comparisonSessions) {
-    const worst = (['too-hard', 'too-easy'] as const).map(challenge => ({ challenge, values: ratingsOf(facts.filter(f => f.s.challenge === challenge)) })).filter(x => x.values.length >= S.comparisonSessions && mean(x.values)! < mean(right)!).sort((a, b) => mean(a.values)! - mean(b.values)!)[0];
+    const worst = (['too-hard', 'too-easy'] as const).map(challenge => ({ challenge, values: ratingsOf(facts.filter(f => f.s.challenge === challenge)) })).filter(x => x.values.length >= S.comparisonSessions && mean(x.values)! <= mean(right)! - S.focusGap + 1e-9).sort((a, b) => mean(a.values)! - mean(b.values)!)[0];
     if (worst) {
       const hard = worst.challenge === 'too-hard';
       out.push({ id: `challenge-${worst.challenge}`, kind: 'challenge', title: hard ? 'Sessions that felt too hard rate lower' : 'Sessions that felt too easy rate lower', detail: hard ? 'Try starting with a smaller first step.' : 'Try adding a small challenge, such as a time box or a harder problem.',
