@@ -107,8 +107,9 @@ function createMain(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
   mainWindow.setMenuBarVisibility(false);
   observeVisibility(mainWindow);
-  mainWindow.on('blur', () => { shortcutCaptureUntil = 0; });
-  mainWindow.on('hide', () => { shortcutCaptureUntil = 0; });
+  mainWindow.on('blur', () => { shortcutCaptureUntil = 0; presentPendingProbe(); });
+  mainWindow.on('hide', () => { shortcutCaptureUntil = 0; presentPendingProbe(); });
+  mainWindow.on('minimize', presentPendingProbe);
   mainWindow.webContents.on('did-start-loading', () => { shortcutCaptureUntil = 0; });
   showWhenLoaded(mainWindow);
   mainWindow.on('close', e => { saveBounds(mainWindow!, 'mainBounds'); if (!quitting) { e.preventDefault(); mainWindow!.hide(); } });
@@ -129,10 +130,12 @@ function showFloating(inactive = false): void {
 }
 // A check-in never steals focus: without a focused main window it appears in the floating timer, shown inactive.
 function presentProbe(): void {
-  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isFocused()) return;
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) return;
   showFloating(true);
   if (!floatingWindow!.isVisible()) { hideProbeFloat = true; floatingWindow!.showInactive(); }
 }
+// The main window lost focus, hid or minimized while a check-in waits: move it to the floating timer before it expires unseen.
+function presentPendingProbe(): void { if (!quitting && probes?.pending) presentProbe(); }
 function dismissProbe(): void {
   if (hideProbeFloat && floatingWindow && !floatingWindow.isDestroyed()) floatingWindow.hide();
   hideProbeFloat = false;

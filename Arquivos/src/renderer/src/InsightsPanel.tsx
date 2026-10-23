@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import type { Dataset, FocusSession } from '../../shared/types';
+import type { Dataset, FocusSession, SessionEvent } from '../../shared/types';
 import { CHALLENGE_LABELS, DETRACTOR_LABELS, INSIGHT_THRESHOLDS, focusInsights, type FocusInsights, type HourPoint, type Interval, type ModelFeature, type Recommendation, type SessionShapeSection, type StatesSection, type SurvivalCurve } from '../../shared/focus-insights';
 import { Badge, Button, Card, Plate, Segments, cn } from './ui';
 import { Icon, minutesLabel } from './components';
@@ -11,12 +11,20 @@ const one = (v: number) => v.toFixed(1), whole = (v: number) => String(Math.roun
 const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /* A cheap signature of what insights depend on in finished sessions: it changes when a session finishes or is deleted,
-   or when its rating, energy, reflection answers, exclusion, area or goal change. Used to decide when to read insights again. */
-export function insightsSignature(sessions: FocusSession[]): string {
+   when its rating, energy, reflection answers, exclusion, area or goal change, or when a marker of one is added or removed.
+   Activity rows are not in AppState, so deleting them does not change it. Used to decide when to read insights again. */
+const SIGNATURE_MARKERS = new Set<SessionEvent['kind']>(['attention-return', 'interruption', 'probe']);
+export function insightsSignature(sessions: FocusSession[], events: SessionEvent[]): string {
   let count = 0, hash = 2166136261;
   const mix = (value: string | number | boolean | null | undefined) => { const text = String(value ?? ''); for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619) >>> 0; hash = Math.imul(hash ^ 124, 16777619) >>> 0; };
-  for (const s of sessions) if (s.status === 'completed') { count++; mix(s.id); mix(s.focus); mix(s.energy); mix(s.excluded); mix(s.detractor); mix(s.challenge); mix(s.fieldId); mix(s.goalId); }
-  return `${count}:${hash}`;
+  const completed = new Set<string>();
+  for (const s of sessions) if (s.status === 'completed') { count++; completed.add(s.id); mix(s.id); mix(s.focus); mix(s.energy); mix(s.excluded); mix(s.detractor); mix(s.challenge); mix(s.fieldId); mix(s.goalId); }
+  let markers = 0;
+  for (const e of events) if (SIGNATURE_MARKERS.has(e.kind) && completed.has(e.sessionId)) markers++;
+  return `${count}:${markers}:${hash}`;
+}
+export function StrengthBadge({ strength }: { strength: Recommendation['strength'] }) {
+  return <Badge tone={strength === 'moderate' ? 'info' : 'neutral'}>{strength === 'moderate' ? 'Moderate evidence' : 'Tentative'}</Badge>;
 }
 const intervalText = (i: Interval, digits = 1) => `${i.estimate.toFixed(digits)} (90% interval ${i.low.toFixed(digits)} to ${i.high.toFixed(digits)})`;
 function medianText(c: SurvivalCurve): string {
@@ -268,7 +276,7 @@ function SuggestionsCard({ items, example, onTry }: { items: Recommendation[]; e
   return <Card className="insight-suggestions" title="Suggestions to try" icon="spark">
     {!items.length ? <Reason>No suggestion meets its evidence rule in this range yet. Keep rating sessions and pressing I'm back when you notice a drift.</Reason>
       : <ol className="suggestion-list">{items.map(r => <li key={r.id}>
-        <div className="suggestion-head"><strong>{r.title}</strong><Badge tone={r.strength === 'moderate' ? 'info' : 'neutral'}>{r.strength === 'moderate' ? 'Moderate evidence' : 'Tentative'}</Badge></div>
+        <div className="suggestion-head"><strong>{r.title}</strong><StrengthBadge strength={r.strength} /></div>
         <p>{r.detail}</p><p className="hint">{r.evidence}</p>
         <Button size="sm" variant="secondary" icon="calendar" disabled={example} title={example ? 'Return to your dataset to plan your week.' : undefined} onClick={() => onTry(`${r.title}. ${r.detail}`)}>Try next week</Button>
       </li>)}</ol>}
@@ -277,7 +285,7 @@ function SuggestionsCard({ items, example, onTry }: { items: Recommendation[]; e
 }
 
 export default function InsightsPanel({ data, example, from, to, fieldId, goalId, onTry }: Props) {
-  const signature = useMemo(() => insightsSignature(data.sessions), [data.sessions]);
+  const signature = useMemo(() => insightsSignature(data.sessions, data.events), [data.sessions, data.events]);
   const local = useMemo(() => example ? focusInsights(data, data.activity ?? [], { from, to, fieldId: fieldId || undefined, goalId: goalId || undefined }) : null, [example, data, from, to, fieldId, goalId]);
   const [remote, setRemote] = useState<FocusInsights | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
   useEffect(() => {

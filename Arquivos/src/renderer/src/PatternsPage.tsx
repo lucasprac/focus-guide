@@ -30,7 +30,8 @@ export default function PatternsPage({ data, act }: ViewProps) {
   const tryNextWeek = (text: string) => { setAdjustment(current => (current.trim() ? `${current.trim()}
 ${text}` : text).slice(0, 2000)); setSaved(false); setTab('overview'); setTried(n => n + 1); };
   useEffect(() => { if (!tried) return; const frame = requestAnimationFrame(() => document.getElementById('weekly-adjustment')?.focus()); return () => cancelAnimationFrame(frame); }, [tried]);
-  const sample = useMemo(() => exampleDataset(data.settings), [data.settings]);
+  // Keyed on values, not the settings object, which every state publish replaces; insights never read the other settings.
+  const sample = useMemo(() => exampleDataset(data.settings), [data.settings.timezone, today]);
   const records = example ? sample : data;
   useEffect(() => { if (goalId && !records.goals?.some(g => g.id === goalId)) setGoalId(''); if (field && !records.fields.some(f => f.id === field)) setField(''); }, [records.fields,records.goals,field,goalId]);
   const sessions = useMemo(() => selectedSessions(records, from, to, field,goalId), [records.sessions, from, to, field,goalId]);

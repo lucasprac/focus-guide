@@ -60,7 +60,7 @@ The timer saves a probe, an interruption or a thought marker in one transaction 
 | Gap to the next check-in | A random time between 15 and 35 active minutes |
 | Maximum for each session | 6 |
 | Expiry | 45 seconds after display. The app saves the check-in as `missed`. |
-| Countdown end guard | None in the last 5 minutes. A check-in appears only if at least 5 minutes 45 seconds remain, so it can expire before the guard. If not, the next try waits until the planned time plus 15 minutes. |
+| Countdown end guard | None in the last 5 minutes. A check-in appears only if at least 5 minutes 46 seconds remain: the 45 seconds of expiry plus a margin of 1 second (`PROBE_EXPIRY_MARGIN_MS`), so the 250 ms poll records it as `missed` before the guard. If not, the next try waits until the planned time plus 15 minutes. |
 | Stopwatch and overtime | No end guard |
 | Activity mode | None in Offline |
 | Turned on during a session | The first check-in waits 8 to 20 active minutes from that moment |
@@ -74,7 +74,7 @@ The scheduler cancels a check-in and saves no record in these cases:
 - A failed transition that waits for recovery.
 - The closing or hiding of the floating window.
 
-- The main process calls the scheduler every 250 ms. Both windows draw the pending check-in. If the main window is not visible or has no focus, the main process also shows the floating window without taking focus (`showInactive`). A floating window that was hidden hides again afterwards.
+- The main process calls the scheduler every 250 ms. Both windows draw the pending check-in. If the main window is not visible, is minimized or has no focus, the main process also shows the floating window without taking focus (`showInactive`). The same happens when the main window loses focus, hides or minimizes while a check-in is pending. A floating window that was hidden hides again afterwards.
 - `AppState.probe` is runtime only. It never reaches settings, datasets or backups.
 - `probe.answer` accepts only the identifier of the pending check-in while the session runs. A late or repeated answer fails with "This check-in has expired." The main process sets the source (`floating` or `main`) from the sender window. The renderer value is not trusted.
 - A probe answer is not a drift. See the engine rules below.

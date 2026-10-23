@@ -547,7 +547,7 @@ A check-in asks where your attention is right now. It is off until you turn it o
 During a focus session, the question "Where is your attention right now?" appears with three answers: **On the task**, **Drifting** and **Somewhere else**. One click answers it.
 
 - The first check-in comes after 8 to 20 active minutes. The next ones come 15 to 35 active minutes after the one before. A session has 6 check-ins at most.
-- A check-in appears below the top bar, on every page. If Focus Guide is not the window with focus, the floating timer shows small buttons instead. The check-in never takes keyboard focus.
+- A check-in appears below the top bar, on every page. If Focus Guide is not the window with focus, the floating timer shows small buttons instead. This also happens when you switch away from Focus Guide, hide it or minimize it while a check-in shows. The check-in never takes keyboard focus.
 - If you do not answer in 45 seconds, the check-in disappears. The app saves it as missed.
 - There are no check-ins in Offline mode, while the timer is paused, during a break, or in the last 5 minutes of a countdown.
 - Some events cancel a check-in on screen. They are a pause, a finished session, a break, a lock or sleep, a change of the setting and closing the floating timer. The app saves nothing for it.

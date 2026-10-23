@@ -5,6 +5,8 @@ export interface ProbeOptions { firstMinMs: number; firstMaxMs: number; gapMinMs
 export const DEFAULT_PROBE_OPTIONS: ProbeOptions = { firstMinMs: 8 * 60000, firstMaxMs: 20 * 60000, gapMinMs: 15 * 60000, gapMaxMs: 35 * 60000, timeoutMs: 45000, endGuardMs: 5 * 60000, maxPerSession: 6 };
 export const FAST_PROBE_OPTIONS: ProbeOptions = { firstMinMs: 20000, firstMaxMs: 30000, gapMinMs: 60000, gapMaxMs: 90000, timeoutMs: 45000, endGuardMs: 0, maxPerSession: 6 };
 export type ProbeTick = { type: 'show'; probe: PendingProbe } | { type: 'expire'; probe: PendingProbe; offsetMs: number } | { type: 'cancel' } | null;
+/** Room between the expiry and the end guard, so the 250 ms poll sees the expiry before the guard cancels the check-in. */
+export const PROBE_EXPIRY_MARGIN_MS = 1000;
 const realClock = { monotonic: () => performance.now(), utc: () => Date.now() };
 
 /** Runtime-only scheduling, shared by main and the preview. Active time schedules check-ins; monotonic time expires them. */
@@ -39,7 +41,7 @@ export class ProbeScheduler {
     }
     if (!eligible || this.shown >= this.options.maxPerSession) return null;
     // A check-in that appears must be able to expire before the end guard.
-    if (snapshot.phase === 'countdown' && snapshot.remainingMs < this.options.endGuardMs + this.options.timeoutMs) { this.nextAt = Math.max(this.nextAt, (snapshot.plannedMs ?? 0) + this.options.gapMinMs); return null; }
+    if (snapshot.phase === 'countdown' && snapshot.remainingMs < this.options.endGuardMs + this.options.timeoutMs + PROBE_EXPIRY_MARGIN_MS) { this.nextAt = Math.max(this.nextAt, (snapshot.plannedMs ?? 0) + this.options.gapMinMs); return null; }
     if (snapshot.elapsedMs < this.nextAt) return null;
     const utc = this.clock.utc();
     this.current = { id: randomUUID(), sessionId: snapshot.sessionId!, shownAt: new Date(utc).toISOString(), expiresAt: new Date(utc + this.options.timeoutMs).toISOString() };

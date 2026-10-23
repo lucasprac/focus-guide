@@ -157,6 +157,8 @@ export function validateBackup(value: unknown): BackupFile {
   }
   for (const event of events) if (event.kind === 'attention-return' && (event.activeOffsetMs === null || event.activeOffsetMs === undefined || !event.source || !sessionMap.has(event.sessionId) || event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1)) throw new Error('Return marker exceeds saved time.');
   for (const event of events) if (event.kind === 'probe' && (event.activeOffsetMs === null || event.activeOffsetMs === undefined || !sessionMap.has(event.sessionId) || event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1)) throw new Error('Check-in marker exceeds saved time.');
+  // Older interruption and thought markers have no offset; a saved one stays within its session time.
+  for (const event of events) if ((event.kind === 'interruption' || event.kind === 'thought') && event.activeOffsetMs !== null && event.activeOffsetMs !== undefined && sessionMap.has(event.sessionId) && event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1) throw new Error('Interruption or thought marker exceeds saved time.');
   const totals = new Map<string, number>();
   for (const e of events) { if (!sessionMap.has(e.sessionId)) throw new Error('An event refers to an unknown session.'); if (e.kind === 'active') totals.set(e.sessionId, (totals.get(e.sessionId) ?? 0) + e.durationMs); }
   for (const s of sessions) if (Math.abs((totals.get(s.id) ?? 0) - s.activeMs) > 1) throw new Error('Recorded time does not match the active intervals.');
