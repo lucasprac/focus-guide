@@ -29,6 +29,8 @@ The milestone block editor upgrades the database to schema 6 in the same way. It
 
 The goal workspace upgrades the database to schemas 7, 8 and 9. Each step saves a `before-schema-vN` snapshot first. After the upgrade, agent access is **Off**.
 
+Behaviour insights upgrade the database to schema 10. The app saves a `before-schema-v10` snapshot first. After the upgrade, attention check-ins are **off**. Version 2.0.0 and earlier cannot open a schema 10 database, and they cannot restore a version 10 backup. Before you update, save a full JSON backup with your current version. To go back, you need the snapshot and the older app.
+
 ## Learn with goals
 
 The app opens on **Goals**. A goal is the place where you learn something, for example "Learn linear algebra".
@@ -50,7 +52,7 @@ Focus Guide can serve a local AI agent, such as Claude Code or Claude Desktop, t
 1. Open **Settings > AI agent (MCP)**.
 2. Choose the access level:
    - **Off** (default): no agent can connect.
-   - **Read only**: the agent can read areas, goals, roadmaps, tasks, sessions, weekly reviews and behaviour summaries.
+   - **Read only**: the agent can read areas, goals, roadmaps, tasks, sessions, weekly reviews, behaviour summaries and focus insights.
    - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions and review notes. Nothing changes until you apply a proposal.
    - **Read and edit**: the agent can also change goals, roadmaps, step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page, where you can undo it.
 3. Select **Copy configuration**.
@@ -64,6 +66,8 @@ The configuration starts `FocusGuide.exe` as a small MCP server. You do not need
 **Privacy.** The agent sends what it reads to its AI provider. With access on, your goals, sessions, notes and activity summaries can leave this computer. Use **Read only** or **Off** if you do not want that. A restore always sets access to **Off**.
 
 **Proposals change nothing until you apply them.** Review them on the goal list and on each goal's Overview. Select **Apply**, **Edit then apply** or **Reject**. If you move or replace the `Aplicativo` folder, copy the configuration again, because it contains the path of the executable.
+
+The tool `get_focus_insights` gives the agent the same values as the Insights tab of Patterns. They describe your records and are not scores of attention. The default range is the last 90 days. Each curve has at most 60 points.
 
 The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analyse_goal_behaviour` give the agent a ready plan for these tasks.
 
@@ -81,6 +85,8 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
    - If you collapse this section, the app keeps your draft.
 
 The field, timing and intention stay visible together. Preparation from Goals or Tasks shows as a compact linked summary.
+
+Below the duration, Focus can show up to two hints from the last 90 days. They come from the prepared goal, or from the area if you chose no goal. A hint can suggest a session length. Select the button on the hint, for example **Use 25 min**, to set the timer. A hint can also suggest a time of day. Hints use the same rules as the Insights tab, so they appear only when you have enough records. If the app cannot read them, it shows none.
 
 ### Use tasks
 
@@ -139,6 +145,13 @@ During focus, open **Session tools**. It has these commands:
 
 After completion, you can rate your focus from 1 to 5 and write a note. You can also skip both.
 
+The reflection also has two questions that you can leave empty:
+
+- **What got in the way most?** The answers are Nothing notable, Phone or notifications, People or noise, Wandering thoughts, Tiredness or hunger, Unclear or too hard task, and Something else.
+- **How demanding was it?** The answers are Too easy, About right and Too hard.
+
+To remove an answer, select it again or select **Clear**. You can change both answers later with **Edit** in Calendar. The Insights tab uses them.
+
 **Save & take a 10-minute break** starts a separate break. A break never adds focus minutes. A break does not continue after an app restart.
 
 ### Automatic exclusion
@@ -192,6 +205,8 @@ Click **Floating timer** in the top bar.
 - A light edge helps the brain, the time and the icons stay visible on dark backgrounds.
 - In software rendering mode, the floating timer shows the earlier brain image.
 
+Sometimes an [attention check-in](#attention-check-ins) is due while the main window has no focus. The floating timer then shows three small icon buttons: **On the task**, **Drifting** and **Somewhere else**. They do not take keyboard focus. If you hid the floating timer, it appears without taking focus and hides again after the check-in. If you close or hide the window while a check-in shows, the app cancels the check-in and saves nothing. The buttons cover only the lower part of the window. You can still drag the brain, press **I'm back** and use the timer controls.
+
 To show the time and the controls, move the pointer onto the window. When the pointer moves away, they hide again. This also occurs after you click a control. Tab or keyboard focus also shows them.
 
 The time display depends on the mode:
@@ -241,7 +256,7 @@ The monthly calendar shows before the planned actions of the selected day. The c
 
 Session commands:
 
-- **Edit** changes the field, intention, energy, focus rating and reflection. It does not change the raw duration. When you change the field, the app clears the task links to the previous field.
+- **Edit** changes the field, intention, energy, focus rating and reflection. It also changes the two optional answers about what got in the way and how demanding the session was. It does not change the raw duration. When you change the field, the app clears the task links to the previous field.
 - **Exclude** keeps a wrong record but removes it from analysis and neural progress.
 - **Delete** asks you to confirm. Then it removes the session and its events.
 
@@ -274,9 +289,46 @@ Two scatterplots show starting energy versus your focus rating, and recorded dur
 
 The weekly review shows totals, the rating distribution and the most frequent interruption categories. You can save one adjustment for the next week. In Settings, you can set an optional weekly time intention. It does not change cosmetic unlocks and gives no penalties.
 
+### Insights tab
+
+Patterns has two tabs: **Overview** and **Insights**. Overview is the page that the sections above describe. The date range, area and goal filters apply to both tabs. Insights reads your finished, included sessions on this computer. It sends nothing to any service.
+
+At the top, **The data behind these insights** shows five values:
+
+- How many sessions the analysis uses.
+- How many of them you rated.
+- How much active time the keyboard and mouse collection covered.
+- How many sessions have drift markers.
+- How many check-ins you answered.
+
+Notes tell you which records the analysis left out and why.
+
+| Figure | What it shows | What it needs |
+|---|---|---|
+| **When you focus best** | Your focus rating by start hour, with a band for the uncertainty. Drifts per active hour. A grid of weekday and time of day. | 10 rated sessions |
+| **How long until the first drift** | The share of sessions that are still without a drift as active minutes pass, and the median time. You can group the curve by time of day or by activity mode. | 15 sessions with **I'm back** available and 8 first drifts |
+| **The shape of a session** | Blocks of 5 active minutes, up to 120 minutes: time with input, window switches, drifts and off-task check-ins. | 10 sessions with activity collection on |
+| **Interaction states** | Groups of minutes by how you used the keyboard and mouse, for example Typing, Scrolling or Quiet, and how often the state changes. | 300 minutes with input time from 5 sessions |
+| **What got in the way** | Your answers with the mean focus, the interruptions that you marked, window switching and the challenge answers. | 10 sessions |
+| **What tends to go with higher focus** | Which facts about a session go with a higher or lower rating, for example time of day or starting energy. | 30 rated sessions over 14 days |
+| **Suggestions to try** | Up to five suggestions with their numbers. | The rules in the [data dictionary](DATA-DICTIONARY.md#suggestions) |
+
+If a figure does not have enough data, it says what is missing. The count of sessions or minutes shows how far you are.
+
+How to read the figures:
+
+- Every interval is a 90% interval. A wide interval means that the result is uncertain.
+- Your ratings and markers are what you reported. They are not a measure of attention.
+- You choose when you focus. A pattern is an association. It does not show a cause.
+- A missing value stays a gap. It never counts as zero.
+- The open end of a median shows as "or longer". It means that the curve did not reach a clear end.
+- The model card shows effects only when the model predicts your next rating at least 5% better than your average rating. If not, it shows the two errors.
+- Under the three chart figures, **Show values** opens a table with the same numbers. A screen reader can read it. The other figures already show their numbers as text.
+- Each suggestion has a label, **Tentative** or **Moderate evidence**, and shows the numbers behind it. **Try next week** adds the suggestion to your weekly adjustment on the Overview tab. Then you can edit and save it.
+
 ### Example data
 
-**Explore an example** shows 36 invented observations for a short time. A label identifies them clearly. They add nothing to your personal dataset. To save a weekly adjustment, go back to your dataset. Exports always contain your personal records, also while you look at the example.
+**Explore an example** shows 60 invented sessions from the last 30 days, with activity, markers, check-ins and reflection answers. They fill the Insights tab too. In the example, **Try next week** is off. A label identifies them clearly. They add nothing to your personal dataset. To save a weekly adjustment, go back to your dataset. Exports always contain your personal records, also while you look at the example.
 
 ## Neural World
 
@@ -440,7 +492,26 @@ Collection is local, and it is off until you turn it on.
   - Observed intervals that contain mouse movement.
 - Movement time shows the intervals with activity. It is not an exact measure of how long the mouse moved.
 - The app never sends typed text, key identities, mouse coordinates or application names to Electron. It never stores them.
-- After the first installation, a migration or a backup restore, collection is disabled.
+- After the first installation, a migration or a backup restore, collection is disabled. Attention check-ins are off too.
+
+### Window switches
+
+With keyboard and mouse collection on, the helper also counts how many times the window in front changes. It also marks each second in which any key press, click, scroll or pointer movement occurred. This is the input time. The Insights tab uses both.
+
+The app records one number for each minute. It does not record:
+
+- A window name or a window title.
+- A program name.
+- What the window shows.
+
+Rules:
+
+- The app ignores its own windows. If you press **I'm back** in the floating timer, the app does not count a switch.
+- The first window after a start is not a switch.
+- A return to the same window after a visit to Focus Guide is not a switch.
+- A change of tab inside a browser is not a switch, because the window does not change. A change between two browser windows is a switch.
+- The helper looks at the window once for each second. A change that lasts less than about one second can be missed.
+- Older records have no switch count and no input time. The analysis leaves them out.
 
 ### I'm back marker
 
@@ -465,6 +536,25 @@ Feedback for a marker:
 - The floating brain stays grayscale for the first ten active minutes.
 - Hidden windows do not open or replay feedback.
 - A marker needs a running focus session. A shared guard of one second prevents duplicate presses.
+
+### Attention check-ins
+
+A check-in asks where your attention is right now. It is off until you turn it on.
+
+1. In Settings, enable **Attention check-ins**.
+2. Click **Save preferences**.
+
+During a focus session, the question "Where is your attention right now?" appears with three answers: **On the task**, **Drifting** and **Somewhere else**. One click answers it.
+
+- The first check-in comes after 8 to 20 active minutes. The next ones come 15 to 35 active minutes after the one before. A session has 6 check-ins at most.
+- A check-in appears below the top bar, on every page. If Focus Guide is not the window with focus, the floating timer shows small buttons instead. The check-in never takes keyboard focus.
+- If you do not answer in 45 seconds, the check-in disappears. The app saves it as missed.
+- There are no check-ins in Offline mode, while the timer is paused, during a break, or in the last 5 minutes of a countdown.
+- Some events cancel a check-in on screen. They are a pause, a finished session, a break, a lock or sleep, a change of the setting and closing the floating timer. The app saves nothing for it.
+- If you turn check-ins on during a session, the first one comes 8 to 20 active minutes later.
+- A check-in is a small interruption. The Insights tab tells you how many sessions had check-ins.
+- A check-in answer is not a drift marker. The Insights tab counts the answers separately.
+- Screen readers announce a check-in when it appears.
 
 ### Review behaviour
 

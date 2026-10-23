@@ -25,12 +25,13 @@ Three processes with a strict boundary, plus an optional MCP server process:
    - `store.ts`: prepared SQLite statements, schema version (`user_version`) and migrations. Every migration takes a `VACUUM INTO` snapshot first and runs in one transaction.
    - `backup.ts`: versioned JSON backup/restore validation, atomic file publication, CSV export, daily SQLite + JSON backups.
    - `behaviour.ts`: optional keyboard/mouse aggregates from the native helper, tied to authoritative active time.
+   - `probes.ts`: runtime scheduler for the optional attention check-ins (`ProbeScheduler`), driven by authoritative active time.
    - `agent-service.ts` and `agent-bridge.ts`: local AI agent support. The bridge listens on a Windows named pipe only while `settings.agentAccess` is not `off`, checks a per-start token and accepts only the tools in `src/shared/agent-tools.ts`. At `read` and `propose` the agent only reads or saves proposals (the user applies them with `agent.proposal.apply`). At `edit`, `agent-edits.ts` (`AgentEditor`) applies changes through the normal commands and writes an `agentChanges` audit record in the same transaction; `agent.change.undo` reverts one.
 2. **Preload** (`src/preload/index.ts`): exposes only `window.focusGuide` with `getState`, `command(name, input)`, `onEvent`. Over IPC that is `focus-guide:state`, `focus-guide:command`, `focus-guide:event`.
 3. **Renderer** (`src/renderer/src/`): sandboxed React UI. `App.tsx` routes the pages (Goals, Focus, Tasks, Calendar, Patterns, World, Settings) and the floating timer. Goals opens `GoalWorkspace.tsx` for one goal (overview, roadmap, tasks, behaviour, plan & review); fields are shown as "areas". Shared Radix-based controls are in `ui.tsx`, shared visuals/formatting in `components.tsx`, Three.js scenes in `ThreeScene.tsx`/`NeuralVisual.tsx` with an SVG fallback. `preview.ts` is the dev-only browser adapter and is tree-shaken from production.
 4. **MCP server** (`src/mcp/server.ts`): stdio server bundled by `scripts/build-mcp.cjs` and run as `FocusGuide.exe` with `ELECTRON_RUN_AS_NODE=1`. It never opens the database; it relays tool calls to the bridge.
 
-`src/shared/` is imported by all three: `types.ts` (dataset, `AppState`, command names, events), `validation.ts` / `goal-validation.ts` (input validation used by main), `analytics.ts` (local-date splits, Spearman correlation), `goal-planning.ts` (occurrence projection), `demo.ts` (synthetic data).
+`src/shared/` is imported by all three: `types.ts` (dataset, `AppState`, command names, events), `validation.ts` / `goal-validation.ts` (input validation used by main), `analytics.ts` (local-date splits, Spearman correlation), `goal-planning.ts` (occurrence projection), `focus-insights.ts` (personal insight engine and its thresholds), `insight-stats.ts` (statistics for that engine), `demo.ts` (synthetic data).
 
 ### Adding or changing a feature
 

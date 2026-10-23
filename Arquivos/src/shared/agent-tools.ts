@@ -3,7 +3,7 @@ import type { AgentAccess } from './goal-types';
 /* The only operations that the local agent bridge accepts, with the access level that each one needs.
    Read tools return copies of records. Propose tools save a proposal that the user applies or rejects in the app. */
 export const AGENT_TOOLS = {
-  get_overview: 'read', get_goal: 'read', get_goal_behaviour: 'read', list_sessions: 'read', get_weekly_review: 'read', list_proposals: 'read', list_changes: 'read',
+  get_overview: 'read', get_goal: 'read', get_goal_behaviour: 'read', get_focus_insights: 'read', list_sessions: 'read', get_weekly_review: 'read', list_proposals: 'read', list_changes: 'read',
   propose_goal: 'propose', propose_roadmap: 'propose', propose_tasks: 'propose', propose_action: 'propose', propose_review_note: 'propose',
   create_goal: 'edit', update_goal: 'edit', update_roadmap: 'edit', update_step: 'edit', create_tasks: 'edit', update_task: 'edit', create_action: 'edit', update_action: 'edit', add_review_note: 'edit'
 } as const satisfies Record<string, Exclude<AgentAccess, 'off'>>;

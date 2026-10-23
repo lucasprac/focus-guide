@@ -9,8 +9,10 @@ import { addDays, localDay, monday } from '../shared/analytics';
 import { actionPlan, barrierSuggestions, goalSummary, roadmapEffort, roadmapRevision, todaysOccurrences } from '../shared/goal-planning';
 import { AGENT_TOOLS, accessError, allowsTool, isAgentTool } from '../shared/agent-tools';
 import { AgentEditor } from './agent-edits';
+import type { FocusInsights, SurvivalCurve } from '../shared/focus-insights';
 
 type Run = (command: Command, input: Record<string, unknown>) => unknown;
+const POINT_LIMIT = 60;
 const round = (minutes: number) => Math.round(minutes * 10) / 10;
 
 /* Serves the local AI agent. Read tools return copies of records. Propose tools save proposals only: the user applies
@@ -41,6 +43,7 @@ export class AgentService {
         const today = this.today(now), goal = this.goal(input.goalId, false);
         return this.command('goal.behaviour', { goalId: goal.id, from: input.from ?? addDays(today, -29), to: input.to ?? today });
       }
+      case 'get_focus_insights': return this.focusInsights(input, now);
       case 'list_sessions': return this.sessions(input, now);
       case 'get_weekly_review': return this.weeklyReview(input, now);
       case 'list_proposals': {
@@ -90,6 +93,18 @@ export class AgentService {
       openProposals: domain.agentProposals.filter(p => p.goalId === goal.id && (p.status === 'pending' || p.status === 'stale')).map(p => ({ id: p.id, kind: p.kind, summary: p.summary, status: p.status, createdAt: p.createdAt })),
       recentAgentChanges: domain.agentChanges.filter(c => c.goalId === goal.id).sort((x, y) => y.at.localeCompare(x.at)).slice(0, 10).map(c => ({ at: c.at, summary: c.summary, undoneByUser: c.undoneAt !== null }))
     };
+  }
+
+  /* The same object as the Insights tab. Each survival curve keeps at most 60 points: the first, the last and evenly spaced ones. */
+  private focusInsights(input: Record<string, unknown>, now: string) {
+    const today = this.today(now), to = input.to === undefined ? today : goalDate(input.to), from = input.from === undefined ? addDays(to, -89) : goalDate(input.from);
+    const goalId = input.goalId === undefined ? undefined : this.goal(input.goalId, false).id;
+    const fieldId = input.fieldId === undefined ? undefined : v.id(input.fieldId);
+    if (fieldId !== undefined && !this.store.field(fieldId)) throw new Error('This area does not exist. Use get_overview to find area identifiers.');
+    const insights = this.command('insights.read', { from, to, ...(fieldId ? { fieldId } : {}), ...(goalId ? { goalId } : {}) }) as FocusInsights;
+    const trim = (curve: SurvivalCurve): SurvivalCurve => curve.points.length <= POINT_LIMIT ? curve : { ...curve, points: Array.from({ length: POINT_LIMIT }, (_, i) => curve.points[Math.round(i * (curve.points.length - 1) / (POINT_LIMIT - 1))]) };
+    const span = insights.attentionSpan;
+    return { ...insights, attentionSpan: { ...span, overall: span.overall && trim(span.overall), byBand: span.byBand.map(trim), byMode: span.byMode.map(trim) } };
   }
 
   private sessions(input: Record<string, unknown>, now: string) {

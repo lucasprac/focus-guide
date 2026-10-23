@@ -1,5 +1,135 @@
 # Architecture — Focus Guide 2.0
 
+## Behaviour insights (schema 10, unreleased)
+
+Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. All data stays on this computer. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
+
+```mermaid
+flowchart LR
+    Helper[activity-helper.exe<br/>input counts, window switches]
+    Collector[behaviour.ts<br/>minute blocks with inputMs and switches]
+    Probes[probes.ts<br/>ProbeScheduler]
+    Timer[TimerEngine<br/>probe, interruption and thought markers]
+    Store[(SQLite schema 10)]
+    Service[FocusService<br/>insights.read and cache]
+    Engine[focus-insights.ts<br/>pure engine]
+    UI[Patterns Insights tab<br/>Focus hints]
+    Agent[AgentService<br/>get_focus_insights]
+    Helper --> Collector --> Store
+    Probes --> Timer --> Store
+    Store --> Service --> Engine
+    Service --> UI
+    Service --> Agent
+```
+
+### Records and migration
+
+- A session has `detractor` and `challenge`. New sessions get `behaviourVersion` 4.
+- An activity block has `inputMs` and `switches`. A null value means unknown. It never means zero.
+- The event kind `probe` stores one check-in. Interruption and thought markers now save `activeOffsetMs` too.
+- The setting `attentionProbes` is `false` by default.
+- The migration saves a `before-schema-v10-<timestamp>.sqlite` snapshot with `VACUUM INTO`, except for an empty new database. Then one transaction adds four columns, sets `attentionProbes` to `false` and sets `user_version` to 10.
+- `putSession` and `putActivity` name their columns. A column order that differs from the expected order cannot write a value into the wrong column.
+- When two activity blocks of the same minute merge, `inputMs` and `switches` add up. If one side is null, the result is null.
+- The previous app rejects a schema 10 database. A rollback needs the matching snapshot. Version 2.0.0 and earlier also cannot restore a version 10 backup.
+
+### Window switches
+
+`activity-helper.cpp` counts changes of the foreground window. It reads the foreground window once for each second, and only while it collects.
+
+1. It takes the root owner window with `GetAncestor(…, GA_ROOTOWNER)`. A dialog counts as the window that opened it.
+2. It ignores windows of the Focus Guide process. The helper compares the process identifier of the window with the identifier that it got on its command line. A click on **I'm back** in the floating window is not a switch.
+3. It counts a switch when the root window differs from the last counted window. The first window after a start is not a switch. A return to the same window after a visit to Focus Guide is not a switch.
+4. It keeps only the handle of the last window, in memory. It never reads a process name or a window title.
+5. A change of tab inside a browser is not a switch, because the window does not change. A change between two browser windows is a switch.
+6. A window change that lasts less than about one second can be missed.
+
+Each sample carries `switches`. If a helper does not send it, the collector saves null and keeps working. If the value is malformed (not a whole number from 0 to 1000), the collector calls `fail()`. That stops the collection and also turns off the global **I'm back** shortcut. The collector sets `inputMs` for each one-second sample that has a key, a click, a scroll or a movement. It counts the whole observed time of that sample.
+
+### Markers
+
+The timer saves a probe, an interruption or a thought marker in one transaction with the session total and the closed active interval. The marker offset never goes beyond the saved total, so a recovery cannot leave a marker after durable time. The collector flushes after `attention.return`, `interruption.record`, `thought.record` and `probe.answer`.
+
+### Attention check-ins
+
+`ProbeScheduler` (`src/main/probes.ts`) is runtime only. The desktop app and the browser preview share it. It reads authoritative active time from the timer snapshot and a monotonic clock for expiry.
+
+| Rule | Value |
+|---|---|
+| First check-in | A random point between 8 and 20 active minutes |
+| Gap to the next check-in | A random time between 15 and 35 active minutes |
+| Maximum for each session | 6 |
+| Expiry | 45 seconds after display. The app saves the check-in as `missed`. |
+| Countdown end guard | None in the last 5 minutes. A check-in appears only if at least 5 minutes 45 seconds remain, so it can expire before the guard. If not, the next try waits until the planned time plus 15 minutes. |
+| Stopwatch and overtime | No end guard |
+| Activity mode | None in Offline |
+| Turned on during a session | The first check-in waits 8 to 20 active minutes from that moment |
+
+The scheduler cancels a check-in and saves no record in these cases:
+
+- Pause, finish or a break.
+- Check-ins turned off, or Offline mode.
+- The end guard of a countdown.
+- A system lock or sleep.
+- A failed transition that waits for recovery.
+- The closing or hiding of the floating window.
+
+- The main process calls the scheduler every 250 ms. Both windows draw the pending check-in. If the main window is not visible or has no focus, the main process also shows the floating window without taking focus (`showInactive`). A floating window that was hidden hides again afterwards.
+- `AppState.probe` is runtime only. It never reaches settings, datasets or backups.
+- `probe.answer` accepts only the identifier of the pending check-in while the session runs. A late or repeated answer fails with "This check-in has expired." The main process sets the source (`floating` or `main`) from the sender window. The renderer value is not trusted.
+- A probe answer is not a drift. See the engine rules below.
+
+### Insight engine
+
+`src/shared/focus-insights.ts` and `src/shared/insight-stats.ts` form a pure engine without dependencies. The same input gives the same output. A seeded generator (`mulberry32(42)`) drives the minute sample, the k-means starts and the bootstrap. The main process runs it for `insights.read`. The renderer runs it for the example dataset.
+
+- **Input.** Finished, included sessions that start in the range, with the optional area and goal filters. A session with more than 8 active hours leaves the analysis.
+- **Drift.** A drift is an **I'm back** marker or an interruption. A probe answer and a parked thought are not drifts. Check-ins follow a schedule, so counting them would raise the drift rate after minute 8 for no real reason. A probe answer has its own measure: the share of answered check-ins that are off the task.
+- **Sections.** Day rhythm, attention span (Kaplan–Meier), session shape, interaction states (k-means++), detractors, a ridge model of perceived focus, and suggestions. Each section has an eligibility rule and gives a reason when it is not eligible. [Data dictionary](DATA-DICTIONARY.md#calculation-rules-for-insights) has all thresholds. They are in `INSIGHT_THRESHOLDS`.
+- **Intervals.** Every interval is a 90% interval.
+
+Builder decisions that the design left open:
+
+- `SurvivalCurve.medianOpen` is true when the upper band never falls to one half. The upper limit of the median is then open, and `median.high` holds only the last observed time. The interface writes "or longer".
+- The ridge penalty λ comes from a grid of eight values (0.003 to 10) that the engine multiplies by the number of training rows. The engine picks the λ with the lowest PRESS, that is, the mean squared leave-one-out error in closed form. A tie keeps the stronger penalty.
+- The **break** suggestion tests only change points that have a window guard: at least 5 sessions must still run 20 minutes after the point. Among the points that qualify, it keeps the point with the highest two-rate Poisson likelihood. It gets `moderate` strength only if a Bonferroni-corrected one-sided 95% bound of the rate ratio stays above 1. The correction counts the points that were tried.
+- `focusGap` is 0.3 focus points. The **window**, **detractor** and **challenge** suggestions need at least this difference in mean focus.
+- The model chooses its activity-mode columns again for each training window, from the training rows only. A mode needs 5 sessions in those rows. Rarer modes join the reference mode, and the label says so. A later session cannot add a column to an earlier test.
+- The bootstrap intervals of the model are plain percentile intervals (5th to 95th percentile of 200 resamples). With shrinkage, an estimate can lie outside its interval. The interface shows both.
+
+### `insights.read`
+
+The command takes `from`, `to`, and the optional `fieldId` and `goalId`. Any valid range with `from` not after `to` is accepted, also All time. `goal.behaviour` accepts the same ranges. The cost depends on the number of sessions, not on the number of days.
+
+`FocusService` keeps a cache of the last 4 results.
+
+- The key is the validated input plus `Store.revision()`. The revision is the SQLite `total_changes()` value of the connection.
+- Any `INSERT`, `UPDATE` or `DELETE` changes the revision, so any write clears the cache. If the revision is not available, nothing is cached.
+- The cache lives in memory only. A restart empties it. Callers get a copy of the result.
+
+### Agent tool
+
+`get_focus_insights` (level `read`) returns the object that the Insights tab shows. The input is `{ from?, to?, goalId?, fieldId? }`. The default range is the last 90 days in the timezone of the settings. With no input, `from` is today minus 89 days and `to` is today. With only `to`, `from` is `to` minus 89 days. With only `from`, `to` is today. Each survival curve has at most 60 points: the first, the last and evenly spaced points between them. The tool uses `insights.read`, so it uses the same cache. The description tells the agent that the values describe records and are not scores.
+
+### Invariants
+
+- Only the main process measures time. The scheduler uses active time from the timer. The renderer only submits an answer.
+- A probe is saved with the durable session total.
+- Missing values stay missing. The engine never turns an unknown value into zero.
+- `AppState.probe` and the insight cache never reach settings, datasets or backups.
+- The preview never reads the personal database. Its check-ins use the same scheduler. With `&probes=fast` in the preview URL, they use short times.
+- A restore turns `attentionProbes` off, like `collectActivity` and `agentAccess`.
+- At the `read` level, an agent can read insights. It cannot change records.
+
+### Budget
+
+The design target for `insights.read` is less than 300 ms for 1 000 sessions and 60 000 activity minutes. The engine limits its work:
+
+- K-means trains on at most 5 000 minutes. The silhouette uses at most 1 500 points.
+- The model tests at most 40 later sessions. The bootstrap uses 200 resamples.
+
+A call without cache takes about 380 ms at 1 000 sessions. This is above the target. The team accepted it. The cache removes repeated calls. The timer uses a monotonic clock, so a long call does not change recorded time. The interface can freeze for a moment during that call.
+
 ## Learning workspace and local agent bridge (unreleased)
 
 ### Goal workspace
@@ -130,12 +260,14 @@ flowchart LR
 | `src/main/index.ts` | Native windows, tray and power events, local protocol, sender checks, command queue, backup and export dialogs |
 | `src/main/coordination.ts` | Serialized mutations, dialog preparation outside the queue, ownership of collector transitions |
 | `src/main/timer.ts` | Clock, checkpoints, pause, resume and finish, recovery, break clock |
-| `src/main/store.ts` | Prepared SQL statements, schema version 8, migration, persistence and restore transactions |
+| `src/main/store.ts` | Prepared SQL statements, schema version 10, migration, persistence, the `revision()` value for the insight cache, and restore transactions |
 | `src/main/service.ts` | Validated application commands and business rules |
 | `src/main/backup.ts` | Versioned JSON validation, atomic exports, safe CSV cells |
+| `src/main/probes.ts` | Runtime scheduler for attention check-ins. It uses authoritative active time and a monotonic clock for expiry |
 | `src/main/agent-bridge.ts`, `agent-service.ts`, `agent-edits.ts` | Local named-pipe endpoint for the MCP server, agent read tools, proposals with apply/reject, direct edits with their audit log and undo |
 | `src/mcp/server.ts` | Stdio MCP server, bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
 | `src/shared/behaviour-analytics.ts`, `agent-tools.ts` | Goal behaviour profile; agent tool list and bridge file contract |
+| `src/shared/focus-insights.ts`, `insight-stats.ts` | Pure insight engine with its thresholds (`INSIGHT_THRESHOLDS`), and its numerical methods |
 | `src/preload/index.ts` | Narrow `focusGuide` bridge |
 | `src/shared/types.ts` | Dataset, state, command names and event interfaces |
 | `src/shared/analytics.ts` | Local-date splits, filters, averages, Spearman calculation with tied ranks |

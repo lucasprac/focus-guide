@@ -1,6 +1,6 @@
 # Behaviour Data Science no Focus Guide — design da fase 1
 
-Estado: design da fase 1, 22 de outubro de 2026. Contratos, persistência e motor de análise já estão na branch `Behaviour-data`; a task 2 (execução) está implementada no código-fonte. Interface completa, MCP e integração final continuam nas tarefas seguintes. Nenhuma operação foi feita sobre dados pessoais e a instalação em `Aplicativo/` não foi substituída.
+Estado: design da fase 1, 22 de outubro de 2026. As tasks 0 a 3 estão implementadas na branch `Behaviour-data`. Falta a task 4: a integração e a verificação manual das janelas no Electron (`npm run dev`). Nenhuma operação foi feita sobre dados pessoais e a instalação em `Aplicativo/` não foi substituída.
 
 ## 1. Objetivo
 
@@ -410,6 +410,36 @@ O coordenador escreve o contrato (seção 9) e depois distribui as tarefas. Cada
 - Verificação em pastas de rascunho externas ao repositório: typecheck, `build:helper`, agendador com relógio falso, execução com `Store` temporário (marcadores, sondas, backup, reflexão, intervalos All time, coletor sem `switches`, tempo de `insights.read`) helper real e preview com `&probes=fast` (sonda mostrada, respondida e expirada como `missed`, console sem erros). As janelas do Electron (`showInactive`, volta da visibilidade, origem da resposta por IPC) ainda não foram verificadas.
 
 O interruptor de Settings, os campos de reflexão na interface, a aba Insights, sugestões no Focus e a ferramenta MCP permanecem no escopo das tasks 3a/3b. Uma revisão independente aprovou a task 2 em 22/10/2026. O comportamento das janelas do Electron ainda precisa de uma verificação manual em `npm run dev`.
+
+### Entrega das tasks 3a e 3b — 22/10/2026
+
+**Task 3a (interface).**
+
+- Patterns tem as abas **Overview** e **Insights**. A aba Insights mostra a faixa de qualidade dos dados, as cinco figuras, o cartão do modelo e as sugestões. Cada gráfico tem rótulo acessível. Os três gráficos de ritmo, duração da atenção e forma da sessão têm a tabela **Show values**. Um valor ausente fica como lacuna. Um limite aberto da mediana aparece como "or longer". O botão **Try next week** leva o texto da sugestão para o ajuste semanal.
+- O modal do fim da sessão e o editor do Calendar fazem as duas perguntas de reflexão. As duas são opcionais e podem ser limpas.
+- Settings tem o interruptor **Attention check-ins**.
+- O Focus mostra até duas dicas dos últimos 90 dias: `length`, com o botão **Use N min**, e `window`.
+- A sonda aparece em uma faixa abaixo da barra superior, em qualquer página, e como três botões pequenos na janela flutuante. A faixa não recebe o foco do teclado. Uma região ao vivo anuncia a sonda.
+
+**Task 3b (agente e documentação).**
+
+- A ferramenta MCP `get_focus_insights` (nível `read`) aceita `from`, `to`, `goalId` e `fieldId`. O padrão são os últimos 90 dias. Cada curva de sobrevivência tem no máximo 60 pontos: o primeiro, o último e pontos espaçados de modo uniforme.
+- `ARCHITECTURE.md`, `DATA-DICTIONARY.md`, `USER-GUIDE.md`, `VISUAL-DESIGN.md`, `RELEASE-NOTES.md` e `CLAUDE.md` descrevem o recurso. Os limites e as regras do motor estão no `DATA-DICTIONARY.md`, com os valores reais de `INSIGHT_THRESHOLDS`.
+- `insights.read` guarda os 4 últimos resultados em memória. A chave é a entrada validada mais `Store.revision()`, que lê `total_changes()` do SQLite. Qualquer escrita limpa o cache. A primeira chamada com 1 000 sessões leva cerca de 380 ms. Isso passa da meta de 300 ms da seção 12. O cache evita as chamadas repetidas, e a equipe aceitou o tempo.
+
+**Onde o código difere do desenho (vale o código).**
+
+- O λ do ridge vem do menor erro quadrático médio de *leave-one-out* (PRESS), em uma grade de 8 valores multiplicada pelo número de linhas de treino. A seção 7 fala em erro de *leave-one-out* sem dizer qual erro. Um empate fica com a penalidade mais forte.
+- A sugestão `break` testa só pontos que têm sessões suficientes depois deles: pelo menos 5 sessões ainda em andamento 20 minutos depois do ponto. Ela também exige 8 desvios depois do ponto, escolhe o ponto de maior verossimilhança de Poisson e usa a força `moderate` só quando o limite de Bonferroni fica acima de 1.
+- As sugestões `window`, `detractor` e `challenge` exigem uma diferença mínima de 0,3 ponto de foco (`focusGap`). A seção 7.2 pede apenas "foco menor" para `detractor` e `challenge`.
+- Uma hora do ritmo do dia aparece quando a soma dos pesos do kernel chega a 3. A seção 7 fala em "peso efetivo".
+- `SurvivalCurve.medianOpen` marca a mediana cujo limite superior nunca chega a 0,5. O limite superior é então aberto.
+- As colunas de modo do modelo são escolhidas de novo em cada janela de treino. Um modo precisa de 5 sessões nessa janela. Modos mais raros entram na referência.
+- Os intervalos do bootstrap são intervalos de percentil simples (5 % e 95 %). A estimativa pode ficar fora do intervalo.
+- O cache das dicas do Focus muda quando uma sessão termina ou é apagada. Ele também muda quando mudam a nota de foco, a energia, as respostas de reflexão, a exclusão, a área ou a meta da sessão.
+- O backup 10 aceita `inputMs` até `observedMs` mais 1 ms de tolerância, como as outras checagens de tempo.
+
+A verificação manual das janelas do Electron (`showInactive`, a volta da janela flutuante ao estado escondido, a origem da resposta por IPC e a faixa da sonda) ainda precisa de `npm run dev`. Ela faz parte da task 4.
 
 ## 16. Decisões deixadas ao construtor
 

@@ -1,5 +1,25 @@
 # Release notes
 
+## Unreleased — behaviour insights
+
+Focus Guide now looks for patterns in your own records. It shows them with their uncertainty. It does not score your attention.
+
+- **Insights tab.** Patterns has two tabs: **Overview** and **Insights**. Insights shows the data behind the results. It has five figures: when you focus best, how long you work before the first drift, the shape of a session, interaction states, and what got in the way. It also shows what goes with higher focus. Last, it gives suggestions with their evidence. A figure says what it needs when data is missing. Every interval is a 90% interval. **Try next week** copies a suggestion into your weekly adjustment.
+- **Reflection questions.** After a session, you can answer two optional questions: **What got in the way most?** and **How demanding was it?** You can change the answers in Calendar, and you can clear them.
+- **Attention check-ins.** Settings > **Attention check-ins** is off by default. When it is on, a one-click question about your attention appears 8 to 20 active minutes into a session. It appears again every 15 to 35 active minutes, up to 6 times. It shows below the top bar, or as three small buttons in the floating timer. It never takes keyboard focus. It disappears after 45 seconds. There are no check-ins in Offline mode or in the last 5 minutes of a countdown.
+- **Window switches and input time.** With keyboard and mouse collection on, the helper also counts changes of the foreground window and marks the seconds with input. It stores no window name, title or program name. Focus Guide windows and tab changes in a browser do not count.
+- **Focus hints.** Focus can suggest a session length and a time of day from your last 90 days. **Use 25 min** sets the timer.
+- **AI agent.** The read tool `get_focus_insights` gives the agent the same values as the Insights tab. The default range is 90 days, and each curve has at most 60 points.
+- **Example data.** **Explore an example** now has 60 invented sessions over 30 days, with activity, markers, check-ins and reflection answers.
+- **All time.** The Behaviour section of a goal and the Insights tab now accept the **All time** range.
+- Interruptions and parked thoughts now save their position in active time. New sessions use `behaviourVersion` 4.
+- **Speed.** The app keeps the last four insight results in memory and clears them at any write. A first call takes about 380 ms with 1 000 sessions. That is above the 300 ms target, and the team accepted it.
+- SQLite and JSON schema 10 add `detractor` and `challenge` to sessions, `inputMs` and `switches` to activity blocks, the event kind `probe` and the setting `attentionProbes`. The migration saves a `before-schema-v10` snapshot first. The Session CSV adds `detractor` and `challenge`. The Activity CSV adds `input_ms` and `window_switches`.
+- JSON backups of versions 1–10 restore. A restore turns attention check-ins off, as it does for activity collection and agent access.
+- **A schema 10 backup cannot be restored by 2.0.0 or earlier.** Those versions also cannot open a schema 10 database. To go back, you need the matching snapshot and the older app. Save a full JSON backup with 2.0.0 before you update.
+- A backup whose settings have no `focusVisual` key, for example one from a version before the session gauge, restores again.
+- The analysis rules and thresholds are in the [data dictionary](DATA-DICTIONARY.md#calculation-rules-for-insights).
+
 ## Unreleased — Neural World as a goal network
 
 - **Goal network.** Neural World now shows goals instead of area clusters. Each goal is a neuron: focus time grows its soma, roadmap steps form its axon (finished steps lit, the next step pulsing), done and smaller actions of the last 28 days add sparks, and a measured goal shows a progress arc. Drafts are translucent, paused goals are muted, and achieved goals move to an outer ring.

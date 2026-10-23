@@ -1,6 +1,16 @@
 # Focus Guide — data dictionary
 
-This dictionary describes schema version 3. Later sections describe the additions of schemas 4 to 8: [goal planning](#goal-planning-records-schema-4), [goal reasons and milestone order](#goal-reasons-and-milestone-order-schema-5), [milestone block kinds](#milestone-block-kinds-schema-6), [roadmap steps](#roadmap-steps-schema-7) and [agent proposals](#agent-proposals-schema-8) and the [agent change log](#agent-change-log-schema-9). The interface calls a field an "area".
+This dictionary describes schema version 3. Later sections describe the additions of schemas 4 to 10.
+
+- [Goal planning](#goal-planning-records-schema-4)
+- [Goal reasons and milestone order](#goal-reasons-and-milestone-order-schema-5)
+- [Milestone block kinds](#milestone-block-kinds-schema-6)
+- [Roadmap steps](#roadmap-steps-schema-7)
+- [Agent proposals](#agent-proposals-schema-8)
+- [Agent change log](#agent-change-log-schema-9)
+- [Behaviour insights](#behaviour-insights-schema-10)
+
+The interface calls a field an "area".
 
 General conventions:
 
@@ -47,7 +57,7 @@ The file has one row for each interval or marker. The app updates an active inte
 |---|---|
 | `id` | Event identifier. |
 | `session_id` | Identifier of the session that owns the event. |
-| `kind` | `active`, `pause`, `interruption`, `thought`, `recovery` or `edit`. |
+| `kind` | `active`, `pause`, `interruption`, `thought`, `recovery`, `edit`, `attention-return` or `probe`. |
 | `started_at_utc` | Start of the interval, or time of the marker. |
 | `ended_at_utc` | Last durable active boundary, closed pause boundary or marker boundary. It can be blank for open intervals and for recovery markers. |
 | `duration_ms` | For an active interval: its recorded milliseconds. For a pause: its elapsed milliseconds. For other markers: zero. Only active durations count as focus. |
@@ -238,7 +248,7 @@ The app rejects these problems before it replaces the data:
 
 ### Sessions and events
 
-- Sessions add `activityMode` and `behaviourVersion`. `behaviourVersion` is 3 for new sessions. 0 means history from before this collection existed.
+- Sessions add `activityMode` and `behaviourVersion`. `behaviourVersion` was 3 for new sessions until schema 10. It is 4 for new sessions now. 0 means history from before this collection existed.
 - The event kind `attention-return` has zero duration. It has `activeOffsetMs`, in recorded active time, and `source` (`shortcut`, `floating` or `main`).
 - For other events, the offset and the source can be null.
 - The active total of a session stays the sum of its active intervals.
@@ -385,3 +395,216 @@ One record for each change that an agent made directly, at the `edit` access lev
 - The log keeps the newest 20,000 records. Deleting a goal or its area deletes its records. A restore replaces them.
 - `goal.milestones.sync` accepts an optional `revision`. If the active roadmap no longer matches it, the command fails and changes nothing.
 - The JSON backup adds the `agentChanges` collection. Version 9 is the export format. The app rejects JSON versions above 9.
+
+## Behaviour insights (schema 10)
+
+Schema 10 adds two reflection answers to each session, two measures to each activity block, the event kind `probe` and the setting `attentionProbes`. Old rows keep null values. Null means unknown. It never means zero.
+
+### Session properties
+
+| Property | Meaning |
+|---|---|
+| `detractor` | What got in the way most. One of `none`, `notifications`, `people`, `thoughts`, `tiredness`, `task` or `other`. `null` when you gave no answer. |
+| `challenge` | How demanding the session felt. One of `too-easy`, `right` or `too-hard`. `null` when you gave no answer. |
+| `behaviourVersion` | Values 0 to 4. Sessions that start with schema 10 have 4. Version 3 added **I'm back**. Version 4 added input time, window switches and check-ins. |
+
+- Both answers are optional. `session.review` and `session.edit` save them. A value of `null` clears an answer. A key that is not in the command keeps the saved answer.
+- The edit audit text records the previous `detractor` and `challenge` with the other previous values.
+
+### Activity properties
+
+| Property | Meaning |
+|---|---|
+| `inputMs` | Observed milliseconds in which a key, a click, a scroll or a pointer movement occurred. The collector counts it in samples of about one second. A sample with any input counts for its whole length. Range: 0 to `observedMs`. |
+| `switches` | Number of changes of the foreground window in the block. A whole number from 0 to 1000. |
+
+- A row that is not `recorded` has `null` for both values. The same is true for rows from before schema 10.
+- `switches` is also `null` when the native helper does not send a count.
+- When two blocks of the same minute merge, the values add up. If one side is `null`, the result is `null`.
+- The collector stores no window name, no window title and no process name.
+
+### Check-in events
+
+A check-in is an event with `kind` `probe`. It has these properties.
+
+| Property | Meaning |
+|---|---|
+| `category` | `on-task`, `drifting` or `elsewhere` for an answer. `missed` when the check-in appeared and nobody answered within 45 seconds. |
+| `activeOffsetMs` | Active time of the session when the check-in appeared. Required. It cannot be more than the saved active time. |
+| `source` | `floating` or `main` for an answer. `null` for `missed`. It is never `shortcut`. |
+| `text` | JSON `{"latencyMs": n}` with the milliseconds from display to answer. `{"latencyMs":null}` for `missed`. |
+| `durationMs` | Always 0. |
+| `startedAt`, `endedAt` | Both hold the time when the app saved the record: the time of the answer, or the time of expiry. |
+
+- A `probe` event is not a drift. See [the calculation rules](#calculation-rules-for-insights).
+- Interruption and thought events now save `activeOffsetMs`. Older events have `null`. For them, the engine counts the active time before the marker from the active intervals of the session.
+- A check-in that the app cancels leaves no event.
+
+### Setting
+
+| Property | Meaning |
+|---|---|
+| `settings.attentionProbes` | `true` shows attention check-ins during focus. The default is `false`. The schema 10 migration and every restore set it to `false`. |
+
+### CSV columns
+
+- Session CSV: `detractor` and `challenge` at the end, after `milestone_id`. Blank when `null`.
+- Event CSV: the columns are `id`, `session_id`, `kind`, `started_at_utc`, `ended_at_utc`, `duration_ms`, `text`, `category`, `active_offset_ms` and `activation_source`. `kind` can now be `attention-return` or `probe`. For a check-in, `category` holds the answer.
+- Activity CSV: `input_ms` and `window_switches` at the end, after `collection_status`. Blank when `null`.
+
+### Backup version 10
+
+- Export writes `schemaVersion` 10. Import accepts versions 1 to 10 and rejects other versions.
+- A version 9 backup becomes version 10 with `null` for `detractor`, `challenge`, `inputMs` and `switches`.
+- `behaviourVersion` can be 0 to 4.
+- `inputMs` is `null` or a number from 0 to `observedMs` (1 ms tolerance). `switches` is `null` or a whole number from 0 to 1000. A row that is not `recorded` cannot hold a measure.
+- A `probe` event needs a valid category. `missed` must have `source` `null`. An answer must have `source` `floating` or `main`. The event needs an `activeOffsetMs` that is not more than the active time of its session (1 ms tolerance). A marker that is not an interval has zero duration.
+- Restore replaces the data and turns `attentionProbes` off. It also turns off `collectActivity` and `agentAccess`.
+- A backup whose settings have no `focusVisual` key restores again, for example a backup from a version before the session gauge. The missing key gets `brain`. A missing `attentionProbes` gets `false`.
+- Focus Guide 2.0.0 and earlier cannot restore a version 10 backup. They reject the version number and the new settings key `attentionProbes`.
+
+## Calculation rules for insights
+
+The Insights tab and the agent tool `get_focus_insights` use the engine in `src/shared/focus-insights.ts`. The constants are in `INSIGHT_THRESHOLDS` in the same file. Every interval is a 90% interval. The engine is deterministic. A fixed seed (42) drives the random choices.
+
+The values describe your records. They are not a measure of attention, and they do not show causes. You choose when you focus, so a pattern in time of day is an association.
+
+### Processing rules
+
+- **Sessions that count.** Finished sessions with `excluded` false, which start in the range and match the area and goal filters. Sessions with more than 8 active hours (`longSessionMs`) leave the analysis. The data quality note shows how many.
+- **Drift.** A drift is an **I'm back** marker (`attention-return`) or an interruption. A check-in answer and a parked thought are not drifts. Check-ins follow a schedule that starts at minute 8, so counting them would raise the drift rate by design.
+- **Off-task share.** (`drifting` + `elsewhere`) divided by the answered check-ins. `missed` check-ins are not in this share. The data quality section counts them.
+- **Recovered sessions** (`recovered` true) leave the attention span and the session shape. Their time can be cut.
+- **Old sessions.** A session with `behaviourVersion` below 3 leaves the drift rates, the attention span and the session shape. Its interruptions still count by category.
+- **Markers.** The position of a marker is its `activeOffsetMs`. If it is `null`, the engine computes it from the active intervals. A marker after the end of its session leaves the analysis, and the data quality note counts it.
+- **Activity minutes.** Only `recorded` rows count. A row with less than 30 seconds observed (`minObservedMs`) does not count for interaction states. Interaction states need `behaviourVersion` 4 and a known `inputMs`. Rates use observed time. A missing value never becomes zero.
+- **Local time.** The start hour and the weekday come from the recording timezone of the session. The hour is circular, so 23:00 is near 00:00. The four time bands are Night 00–06, Morning 06–12, Afternoon 12–18 and Evening 18–24.
+- **Rates.** Drifts per hour = drift markers divided by active hours of the sessions with `behaviourVersion` 3 or more. Window switches per hour = switches divided by observed hours of the rows with a known switch count. A rate for a group needs the minimum number of sessions in the table below. If not, it stays blank.
+
+### Thresholds
+
+| Section | Rule | Value |
+|---|---|---|
+| Day rhythm | Rated sessions needed | 10 |
+| Day rhythm | Smoothing width (Gaussian, circular) | 1.5 hours |
+| Day rhythm | Nearby session weight needed for one start hour | 3 |
+| Day rhythm | Sessions needed for one weekday and time-band cell | 3 |
+| Attention span | Sessions and first drifts needed | 15 and 8 |
+| Attention span | Sessions and first drifts needed for a group curve | 8 and 4 |
+| Session shape | Sessions with activity needed | 10 |
+| Session shape | Block length and last minute | 5 minutes, 120 minutes |
+| Session shape | Sessions still running for a block to show | 5 |
+| Interaction states | Activity minutes and sessions needed | 300 and 5 |
+| Interaction states | Number of states (k) | 2 to 5, chosen by silhouette |
+| Interaction states | k-means starts for each k | 4 |
+| Interaction states | Most minutes in training, most points in the silhouette | 5 000 and 1 500 |
+| Interaction states | Input share below which a state is Quiet | 0.15 |
+| Interaction states | Adjacent minute pairs needed for a state-change rate | 10 for each session |
+| Detractors | Sessions needed | 10 |
+| Detractors | Rated sessions needed for a mean focus. Sessions with the needed data for a time-band rate | 3 |
+| Association (Spearman) | Rated pairs and calendar days needed | 20 and 7 |
+| Focus model | Rated sessions and calendar days needed | 30 and 14 |
+| Focus model | Test sessions | The last 10 to 40 rated sessions, with at least 20 sessions before the first test |
+| Focus model | Gain over the average rating for the model to count as useful | Error at least 5% lower |
+| Focus model | Bootstrap resamples | 200 |
+| Focus model | Sessions needed for an activity-mode column | 5 |
+| Focus model | Largest gap since the previous session | 24 hours |
+| Focus model | Ridge penalty grid (multiplied by the number of training rows) | 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10 |
+| Suggestions | Most suggestions shown | 5 |
+| Suggestions | Smallest difference in mean focus (`focusGap`) | 0.3 points |
+| Suggestions | Rated sessions for a time band, or for a detractor or challenge group | 5 for a band, 3 for a group |
+| Suggestions | Length: rounding step and smallest length | 5 minutes, 15 minutes |
+| Suggestions | Break: early window, rate ratio, drifts after the point | 20 minutes, 1.5, 8 |
+| Suggestions | Switching: Spearman limit | −0.3 or lower |
+| Suggestions | Data: rated share, activity coverage, marker share | Below 60%, below 50%, below 20% |
+
+### Day rhythm
+
+The engine smooths perceived focus over the start hour with a circular Gaussian kernel of 1.5 hours. The interval uses a t-based standard error with an effective sample size. The focus value of an hour shows only if the nearby rated sessions weigh at least 3. Each rate has its own weight, from its own eligible sessions: sessions with `behaviourVersion` 3 or more for the drift rate, sessions with a switch count for the switch rate, and sessions with answered check-ins for the off-task share. A rate shows only if its own weight is at least 3. The grid shows the mean focus for each weekday and time band that has 3 rated sessions.
+
+### Attention span
+
+The curve is a Kaplan–Meier estimate of the active time until the first drift. A session without a drift is censored when it ends. The band uses Greenwood variance with a log-log transform. The median is the first time at which the curve falls to one half or lower. Its limits are the times at which the lower and upper bands cross one half.
+
+- If the upper band never falls to one half, `medianOpen` is true. `median.high` is then only the last observed time, and the interface writes "or longer".
+- If the curve never falls to one half, the median is `null`.
+- The curve has one point for each minute. Groups by time band and by activity mode need 8 sessions and 4 drifts.
+
+### Session shape
+
+For each block of 5 active minutes, the engine shows four values:
+
+- The share of observed time with input.
+- Window switches per minute.
+- Drifts per active hour. This is the drifts divided by the session minutes that reached the block.
+- The off-task share.
+
+A measure with no data in a block stays blank.
+
+### Interaction states
+
+Each activity minute becomes five numbers:
+
+- The input share.
+- The logarithm of 1 plus key presses per minute.
+- The same for clicks.
+- The same for scrolls.
+- The movement share.
+
+The engine standardizes them. It runs k-means++ for k from 2 to 5 and keeps the k with the best mean silhouette. A tie keeps the smaller k. Then every minute gets the state of the nearest centre.
+
+- A state is **Quiet** when its input share is below 0.15. Other states take the name of their largest standardized count: **Typing**, **Pointing and clicking**, **Scrolling** or **Moving the pointer**. Two states with the same name get the suffixes light and heavy. Three get light, medium and heavy. Four or more get light, medium 1, medium 2 and so on, then heavy.
+- Window switches describe each state. They are not an input to the grouping.
+- The fragmentation rate is the share of adjacent minute pairs (at most 1 second apart) in which the state changes, scaled to one hour. It needs 10 pairs for each session. The engine reports the median and its Spearman correlation with focus.
+
+### Detractors and challenge
+
+The engine counts the reported detractors and shows the mean focus when 3 rated sessions share an answer. It shows interruptions by category with a rate per active hour. It shows the drift rate by time band. It reports the Spearman correlation between window switches per observed hour and focus, with the common rule of 20 pairs and 7 days. It shows the mean focus for each challenge answer.
+
+### Focus model
+
+The model predicts perceived focus with ridge regression from information that exists before a session starts.
+
+| Feature | Meaning of the effect |
+|---|---|
+| `hourSin`, `hourCos` | Start near 06:00 compared with 18:00, and near midnight compared with midday. The effect is twice the coefficient of one term. |
+| `weekend` | Weekend compared with weekday. |
+| `plannedMinutes` | One standard deviation more planned length. A stopwatch session has no value, which takes the training mean. |
+| `stopwatch` | Stopwatch compared with a planned countdown. |
+| `energy`, `energyMissing` | One standard deviation more starting energy. A flag for energy that was not recorded. |
+| `earlierSessions`, `earlierMinutes` | One standard deviation more sessions or focus minutes earlier on the same day. The count includes every finished, included session of that day, also those outside the filters. |
+| `hoursSincePrevious` | Longer gap since the previous session, on a log scale and capped at 24 hours. |
+| `goal` | Linked to a goal compared with not linked. |
+| `mode:<name>` | An activity mode compared with the most frequent mode. Rarer modes join that reference. |
+
+- The engine picks the penalty with the lowest PRESS (mean squared leave-one-out error in closed form). A tie keeps the stronger penalty.
+- The test is a rolling origin. A model that saw only earlier sessions predicts each test session. The baseline is the mean rating before the session. Predictions stay between 1 and 5.
+- The model is useful only if its mean absolute error is at least 5% below the baseline error. If not, the interface shows the two errors and no effects.
+- Each effect has a plain percentile interval from 200 bootstrap resamples (5th and 95th percentile). With shrinkage, the estimate can lie outside its interval.
+
+### Suggestions
+
+The engine shows at most 5 suggestions. It sorts them by strength (`moderate` first), then by kind: window, length, break, detractor, switching, challenge and data. Every suggestion has a title, a detail, its evidence and a strength.
+
+| Kind | It appears when | `moderate` when |
+|---|---|---|
+| `window` | The day rhythm is eligible. A time band with 5 rated sessions has a mean focus at least `focusGap` (0.3) above the overall mean. The band with the highest mean wins. | The lower limit of the t interval of that mean is above the overall mean. |
+| `length` | The attention span is eligible and has a median. The length is the median rounded to 5 minutes, and not less than 15 minutes. | The upper limit is not open, and the interval is not wider than the median. |
+| `break` | The attention span is eligible. A change point exists from minute 20 onward. After it, at least 8 drifts occurred and the drift rate is at least 1.5 times the rate of the first 20 minutes. At least 5 sessions must still run 20 minutes after the point. Among the points that qualify, the one with the highest two-rate Poisson likelihood wins. | A Bonferroni-corrected one-sided 95% lower bound of the rate ratio is above 1. The correction counts the points that the engine tried. |
+| `detractor` | The detractors section is eligible. The most reported detractor (not `none`) and `none` each have 3 rated sessions. The mean focus with that detractor is at least `focusGap` below the mean with `none`. | The upper limit of a Welch interval for the difference is below 0. |
+| `switching` | The detractors section is eligible. The Spearman correlation between switches and focus is eligible and −0.3 or lower. | The upper limit of a Fisher interval is below 0. |
+| `challenge` | The detractors section is eligible. `right` has 3 rated sessions. `too-hard` or `too-easy` has 3 and a mean at least `focusGap` below `right`. The lower mean wins. | The upper limit of a Welch interval for the difference is below 0. |
+| `data` | Fewer than 60% of the sessions are rated. If not, activity covers less than 50% of active time. If not, fewer than 20% of the sessions have a drift marker. Only the first true case shows. | Never. It is always `tentative`. |
+
+### Data quality
+
+| Value | Meaning |
+|---|---|
+| `sessions`, `activeMinutes`, `spanDays` | Sessions that count, their active minutes, and the calendar days from the first to the last start. |
+| `ratedShare` | Sessions with a focus rating divided by all sessions. |
+| `reflectionShare` | Sessions with a detractor or a challenge answer, divided by all sessions. |
+| `activityCoverage` | Observed time divided by active time, for sessions with `behaviourVersion` 3 or more. At most 1. |
+| `markerSessions` | Sessions with at least one drift marker. |
+| `probeSessions`, `probeAnswered`, `probeMissed` | Sessions that had a check-in, answered check-ins, and `missed` check-ins. |
+| `droppedLong`, `droppedRecovered` | Sessions that the engine left out for length or for recovery. |
+| `notes` | One sentence for each rule that removed data, with the count. |

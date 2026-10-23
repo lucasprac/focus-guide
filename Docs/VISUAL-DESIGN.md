@@ -169,6 +169,8 @@ The top bar shows these items, in this order:
 
 The top-bar labels are different from the **Pause** and **Resume** buttons on the Focus page. Thus queries for an exact name find only one control.
 
+During an attention check-in only, a banner shows below the bar. See [Attention check-ins](#attention-check-ins).
+
 ### Navigation
 
 - Navigation items use token colors, `text-label` and `rounded-control`.
@@ -221,6 +223,49 @@ Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one
 - The three main charts (areas, weekdays, activity modes) use `Plate` as Fig 1–3. Each readout shows the total or the largest row. The other charts, correlations, the weekly review and the weekly intention use `Card`. Rho is in the correlation header. Interruption tags are neutral `Badge` components.
 - While the example shows, **Explore an example** changes to a primary **Return to my dataset** button.
 - `Card` headers align to the start. Thus the legacy rule `.charts-grid .section-title` (space-between) no longer moves an icon away from its title.
+
+## Insights tab
+
+Patterns has two tabs below the filter toolbar: **Overview** and **Insights**. The `Tabs` control in `ui.tsx` (Radix Tabs) draws them. The active tab has an accent underline. Only the selected panel is mounted, so Insights reads its data when you open it. The filters apply to both tabs.
+
+### Layout
+
+- The first card, **The data behind these insights**, is a strip of five values and a list of notes.
+- The figures follow in a grid of two columns. The first figure uses both columns. The grid has one column when the workspace container is 860px wide or less.
+- The five figures use `Plate` as Fig 1–5. The model and the suggestions use `Card`.
+- A figure that is not eligible shows one dashed box with the reason and the count of what is missing. It shows no empty chart.
+- While the app reads again, the panel is at 60% opacity with `aria-busy`. A status line says "Updating insights…". If a read fails, the earlier result stays, with an alert and **Try again**.
+
+### Figure rules
+
+- The charts are inline SVG. They are drawn at the measured width of their container (at least 240px). Thus 12px axis text stays 12px.
+- Data marks use `--blue`. An interval is a band (14% opacity, 20% in dark mode) or a whisker. A reference curve is gray.
+- A missing value is a gap. A line stops at the gap. A missing value never draws as zero.
+- Columns have a 4px rounded data end and a square baseline. Grid lines are hairlines in `--line`. Each chart has one y scale.
+- Each hour, block or step has a transparent hit area with a tooltip title. The tooltip repeats the numbers.
+- Heat tables (weekday by time of day, states by activity mode) mix `--blue` into the cell up to 40%. An empty cell shows a dash.
+- The survival curve is a step line with a step band. A median has a vertical marker. An open upper limit of the median reads "or longer".
+- The model effects are a forest plot. Each row has a label, a small SVG with a zero line, a whisker and a dot, and the value with its interval. On narrow containers (560px or less), the label takes its own line. The dot and the whisker are placed separately, because a percentile interval can leave out its estimate.
+- A suggestion shows a `Badge`: neutral for **Tentative** and info for **Moderate evidence**.
+
+### Accessibility
+
+- Every chart is an `svg` with `role="img"`. Its `aria-label` states the main result, for example the highest hour with its interval.
+- The three chart figures (day rhythm, attention span, session shape) have a **Show values** disclosure with a table of the same numbers. The table uses `th` with `scope`. Gaps show as a dash. The other figures show their numbers as text, lists or labelled tables.
+- The heat tables have an `aria-label`. Lists of rows use `role="list"`.
+- No meaning depends on color alone. Values are in text, titles and tables.
+- The tabs, the group control for the survival curve and the disclosures use Radix controls with keyboard operation and visible focus.
+
+## Attention check-ins
+
+The check-in is a prompt, not a dialog. It never takes keyboard focus, and it never moves the content under the pointer.
+
+- **Main window.** `ProbePrompt` is inside the sticky top bar. It is placed `top: calc(100% + 8px)` with `left: 0` and `right: 0`, so it floats over the page below the bar, also when the bar wraps. It shows the question "Where is your attention right now?" and three small secondary `Button` controls: **On the task**, **Drifting**, **Somewhere else**. It has a soft background, a border that mixes 30% accent, and a 14px radius. It shows on every page.
+- **Floating window.** `probe-mini` sits at 40px from the top, 6px from each side, and covers only the lower part of the brain. Thus the brain stays draggable, and **I'm back** and the timer controls stay usable. It has three icon buttons of 26px height (focus, thought and world icons). Each button has an `aria-label` and a `title` with its answer. The small question text is `aria-hidden`. The buttons use `no-drag`.
+- **Live region.** `ProbeAnnouncer` stays mounted for the whole focus session in both windows. It is a `role="status"` region with `aria-live="polite"`. It gets its text when a check-in appears, so a screen reader announces it. Focus does not move.
+- **While saving**, the buttons are disabled. A second click cannot send a second answer.
+- **Reflection questions.** The two questions after a session use single-choice toggle groups with pill-shaped options. The word "optional" and **Clear** are on the line of the question. Thus a new **Clear** does not move the options.
+- **Focus hints.** Hints for length and time of day are rows on a `--blue-soft` background below the duration. They are read-only text, with one button for the length.
 
 ## Page migration: Calendar
 
