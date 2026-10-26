@@ -511,6 +511,10 @@ The values describe your records. They are not a measure of attention, and they 
 | Day rhythm | Sessions needed for one weekday and time-band cell | 3 |
 | Attention span | Sessions and first drifts needed | 15 and 8 |
 | Attention span | Sessions and first drifts needed for a group curve | 8 and 4 |
+| Attention span | Warm-up ends, fatigue begins | Minute 10, minute 25 |
+| Attention span | Returns needed for the recovery curve. Tail that counts as censored | 8 and 1 minute |
+| Attention span | Sessions for a phase rate. Warm-up friction: drifts and rate ratio | 5. At least 5 drifts and 1.5 times the sustain rate |
+| Session shape | Drifts needed for the minutes before drifts. Window | 8 drifts. 2 minutes |
 | Session shape | Sessions with activity needed | 10 |
 | Session shape | Block length and last minute | 5 minutes, 120 minutes |
 | Session shape | Sessions still running for a block to show | 5 |
@@ -520,6 +524,7 @@ The values describe your records. They are not a measure of attention, and they 
 | Interaction states | Most minutes in training, most points in the silhouette | 5 000 and 1 500 |
 | Interaction states | Input share below which a state is Quiet | 0.15 |
 | Interaction states | Adjacent minute pairs needed for a state-change rate | 10 for each session |
+| Interaction states | Share of minutes with a switch count for the sixth input. Observed time for a drift rate | 80%. 30 minutes |
 | Detractors | Sessions needed | 10 |
 | Detractors | Rated sessions needed for a mean focus. Sessions with the needed data for a time-band rate | 3 |
 | Association (Spearman) | Rated pairs and calendar days needed | 20 and 7 |
@@ -530,11 +535,17 @@ The values describe your records. They are not a measure of attention, and they 
 | Focus model | Sessions needed for an activity-mode column | 5 |
 | Focus model | Largest gap since the previous session | 24 hours |
 | Focus model | Ridge penalty grid (multiplied by the number of training rows) | 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10 |
+| Focus model | Lasso and elastic net: folds, penalty values, elastic net mix | 5, 12, 0.5 |
+| Focus model | Collinear features. Unstable selection | Variance inflation above 5 or correlation 0.70 or more. Mean overlap below 0.6 |
+| Focus model | Known values needed for a session factor | 10 |
+| Cycle comparison | Window, baseline and sessions needed | 7 days, 28 days before it, 3 and 5 sessions |
+| Duration | Window for the attention rule. Recorded rule | 90 days. 10 sessions over 14 days within 28 days |
 | Suggestions | Most suggestions shown | 5 |
 | Suggestions | Smallest difference in mean focus (`focusGap`) | 0.3 points |
 | Suggestions | Rated sessions for a time band, or for a detractor or challenge group | 5 for a band, 3 for a group |
-| Suggestions | Length: rounding step and smallest length | 5 minutes, 15 minutes |
-| Suggestions | Break: early window, rate ratio, drifts after the point | 20 minutes, 1.5, 8 |
+| Suggestions | Length: rounding step and smallest length | 5 minutes, 15 minutes (25 with warm-up friction) |
+| Suggestions | Break: first point, early window, rate ratio, drifts after the point | Minute 25, 20 minutes, 1.5, 8 |
+| Suggestions | Break: sessions still running 15 minutes after the point | 5 |
 | Suggestions | Switching: Spearman limit | −0.3 or lower |
 | Suggestions | Data: rated share, activity coverage, marker share | Below 60%, below 50%, below 20% |
 
@@ -549,6 +560,9 @@ The curve is a Kaplan–Meier estimate of the active time until the first drift.
 - If the upper band never falls to one half, `medianOpen` is true. `median.high` is then only the last observed time, and the interface writes "or longer".
 - If the curve never falls to one half, the median is `null`.
 - The curve has one point for each minute. Groups by time band and by activity mode need 8 sessions and 4 drifts.
+- **Recovery curve.** A second curve shows the active time from a return to the next drift. A session without a later drift counts until it ends, if at least 1 minute remains. It needs 8 returns that were followed by a drift.
+- **Phases.** The engine counts drifts per active hour and the off-task share in the warm-up (0–10 minutes), the sustain phase (10–25) and the fatigue phase (25 and later). A phase rate needs 5 sessions that reached the phase.
+- **Warm-up friction.** It is true when the warm-up has 5 drifts or more and its rate is at least 1.5 times the sustain rate. The engine then also builds the curve of the first drift after minute 10, among sessions that lasted past it.
 
 ### Session shape
 
@@ -560,6 +574,10 @@ For each block of 5 active minutes, the engine shows four values:
 - The off-task share.
 
 A measure with no data in a block stays blank.
+
+The figure marks minute 10 and minute 25.
+
+**Minutes before a drift.** For each drift that has at least 30 seconds of observed activity in the 2 minutes before it, the engine compares those minutes with the other observed minutes of the same sessions. It compares window switches per minute and the input share. An activity minute counts in proportion to its overlap with the window. It needs 8 drifts. The marker is the moment you pressed **I'm back**, so the window includes the time you were away.
 
 ### Interaction states
 
@@ -573,8 +591,9 @@ Each activity minute becomes five numbers:
 
 The engine standardizes them. It runs k-means++ for k from 2 to 5 and keeps the k with the best mean silhouette. A tie keeps the smaller k. Then every minute gets the state of the nearest centre.
 
-- A state is **Quiet** when its input share is below 0.15. Other states take the name of their largest standardized count: **Typing**, **Pointing and clicking**, **Scrolling** or **Moving the pointer**. Two states with the same name get the suffixes light and heavy. Three get light, medium and heavy. Four or more get light, medium 1, medium 2 and so on, then heavy.
-- Window switches describe each state. They are not an input to the grouping.
+- A state is **Quiet** when its input share is below 0.15. A state with more input, but with every standardized count at or below the mean, is **Light interaction**. Other states take the name of their largest standardized count above the mean: **Typing**, **Pointing and clicking**, **Scrolling**, **Moving the pointer** or **Window switching**. Two states with the same name get the suffixes light and heavy. Three get light, medium and heavy. Four or more get light, medium 1, medium 2 and so on, then heavy.
+- If at least 80% of the minutes have a switch count, the logarithm of 1 plus window switches per minute is a sixth input. A minute without a count takes the mean.
+- Each state shows its drifts per observed hour. A drift counts in the minute that contains its position. A state needs 30 observed minutes for this rate.
 - The fragmentation rate is the share of adjacent minute pairs (at most 1 second apart) in which the state changes, scaled to one hour. It needs 10 pairs for each session. The engine reports the median and its Spearman correlation with focus.
 
 ### Detractors and challenge
@@ -583,11 +602,11 @@ The engine counts the reported detractors and shows the mean focus when 3 rated 
 
 ### Focus model
 
-The model predicts perceived focus with ridge regression from information that exists before a session starts.
+The model predicts perceived focus from information that exists before a session starts. Ridge, lasso and elastic net compete in the same test. The app uses the estimator described in [the architecture notes](ARCHITECTURE.md#insight-engine) and shows its name and the reason.
 
 | Feature | Meaning of the effect |
 |---|---|
-| `hourSin`, `hourCos` | Start near 06:00 compared with 18:00, and near midnight compared with midday. The effect is twice the coefficient of one term. |
+| `hourSin`, `hourCos` | One effect, `peakHour`: the gap in focus between the best start hour and the opposite hour. The hour comes from the angle of the two coefficients. The size is the square root of the sum of the squared effects of the two terms. |
 | `weekend` | Weekend compared with weekday. |
 | `plannedMinutes` | One standard deviation more planned length. A stopwatch session has no value, which takes the training mean. |
 | `stopwatch` | Stopwatch compared with a planned countdown. |
@@ -601,20 +620,41 @@ The model predicts perceived focus with ridge regression from information that e
 - The test is a rolling origin. A model that saw only earlier sessions predicts each test session. The baseline is the mean rating before the session. Predictions stay between 1 and 5.
 - The model is useful only if its mean absolute error is at least 5% below the baseline error. If not, the interface shows the two errors and no effects.
 - Each effect has a plain percentile interval from 200 bootstrap resamples (5th and 95th percentile). With shrinkage, the estimate can lie outside its interval.
+- **Diagnostics.** The engine reports the correlation of feature pairs (0.70 or more) and the variance inflation factor of each feature (the diagonal of the inverse correlation matrix).
+- **Lasso selection.** For each feature, the app shows if the lasso keeps it, the share of test windows that keep it (`selectionShare`) and the share of bootstrap resamples that keep it (`bootstrapShare`). The interface draws only the features that the lasso keeps and lists the others as "No clear association found (zeroed by Lasso)".
+- **Session factors.** A second view explains the rating with facts that exist only after the session: drifts per hour, window switches per hour, input share, state changes per hour, challenge and detractor. A missing value takes the training mean. The view does not predict. It shows its effects whenever it is eligible.
 
 ### Suggestions
 
-The engine shows at most 5 suggestions. It sorts them by strength (`moderate` first), then by kind: window, length, break, detractor, switching, challenge and data. Every suggestion has a title, a detail, its evidence and a strength.
+The engine shows at most 5 suggestions. It sorts them by strength (`moderate` first), then by kind: window, length, warmup, break, detractor, switching, challenge and data. Every suggestion has a title, a detail, its evidence and a strength.
 
 | Kind | It appears when | `moderate` when |
 |---|---|---|
 | `window` | The day rhythm is eligible. A time band with 5 rated sessions has a mean focus at least `focusGap` (0.3) above the overall mean. The band with the highest mean wins. | The lower limit of the t interval of that mean is above the overall mean. |
-| `length` | The attention span is eligible and has a median. The length is the median rounded to 5 minutes, and not less than 15 minutes. | The upper limit is not open, and the interval is not wider than the median. |
-| `break` | The attention span is eligible. A change point exists from minute 20 onward. After it, at least 8 drifts occurred and the drift rate is at least 1.5 times the rate of the first 20 minutes. At least 5 sessions must still run 20 minutes after the point. Among the points that qualify, the one with the highest two-rate Poisson likelihood wins. | A Bonferroni-corrected one-sided 95% lower bound of the rate ratio is above 1. The correction counts the points that the engine tried. |
+| `length` | The attention span is eligible and has a median. The length is the median rounded to 5 minutes, and not less than 15 minutes. With warm-up friction and a median under 25 minutes, the length is not less than 25 minutes, and follows the median after minute 10 when that is known. | The upper limit is not open, and the interval is not wider than the median. |
+| `warmup` | The attention span is eligible and has warm-up friction. | The one-sided 95% lower bound of the rate ratio (warm-up to sustain) is above 1. |
+| `break` | The attention span is eligible. A change point exists from minute 25 onward. Both rates come from the sessions that reached that minute. After it, at least 8 drifts occurred and the drift rate is at least 1.5 times the rate of the first 20 minutes. At least 5 of these sessions must still run 15 minutes after the point. Among the points that qualify, the one with the largest likelihood-ratio statistic wins. | A Bonferroni-corrected one-sided 95% lower bound of the rate ratio is above 1. The correction counts the points that the engine tried. |
 | `detractor` | The detractors section is eligible. The most reported detractor (not `none`) and `none` each have 3 rated sessions. The mean focus with that detractor is at least `focusGap` below the mean with `none`. | The upper limit of a Welch interval for the difference is below 0. |
 | `switching` | The detractors section is eligible. The Spearman correlation between switches and focus is eligible and −0.3 or lower. | The upper limit of a Fisher interval is below 0. |
 | `challenge` | The detractors section is eligible. `right` has 3 rated sessions. `too-hard` or `too-easy` has 3 and a mean at least `focusGap` below `right`. The lower mean wins. | The upper limit of a Welch interval for the difference is below 0. |
 | `data` | Fewer than 60% of the sessions are rated. If not, activity covers less than 50% of active time. If not, fewer than 20% of the sessions have a drift marker. Only the first true case shows. | Never. It is always `tentative`. |
+
+### Cycle comparison
+
+The comparison puts the last 7 days up to the end of the range against the 28 days before them. It uses the same area or goal filter and ignores the start of the range. It needs 3 sessions in the recent window and 5 in the baseline.
+
+| Measure | Rule |
+|---|---|
+| Perceived focus | Mean rating. It needs 3 and 5 rated sessions. A change below 0.05 counts as no change. |
+| Drifts per active hour | The common drift rate. A change below 0.05 counts as no change. |
+| Median time to the first drift | Kaplan–Meier median. It needs 3 first drifts in each window. A change below 0.5 minutes counts as no change. |
+| Window switches per observed hour | The common switch rate. A change below 0.5 counts as no change. |
+
+A measure that one window cannot give stays blank. The result also holds the saved weekly adjustment of the week of the end date and of the week before. For a goal, it reads the goal review. If not, it reads the general review. The comparison shows a change. It does not show that an adjustment caused it.
+
+### Duration suggestion
+
+The action editor uses `suggestedDuration()`. It looks at finished, included sessions with the same activity mode in the last 90 days. It tries the goal first, then the area. If the attention span of those sessions is eligible, the suggestion is the **length** plan (median time to the first drift, with the warm-up rule). If not, it uses the median recorded duration of 10 sessions over 14 days within 28 days. The result says which rule it used.
 
 ### Data quality
 

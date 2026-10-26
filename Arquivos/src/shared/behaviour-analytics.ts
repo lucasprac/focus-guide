@@ -38,9 +38,12 @@ export function goalBehaviourProfile(data: Dataset, activity: ActivitySample[], 
   const byMode = ACTIVITY_MODES.map(mode => {
     const rows = sessions.filter(s => (s.activityMode ?? 'Unspecified') === mode), recorded = samples.filter(a => modeOf.get(a.sessionId) === mode);
     const activeMs = rows.reduce((sum, s) => sum + s.activeMs, 0), observedMs = recorded.reduce((sum, a) => sum + a.observedMs, 0);
+    const inputObserved = recorded.filter(a => typeof a.inputMs === 'number').reduce((sum, a) => sum + a.observedMs, 0), switchObserved = recorded.filter(a => typeof a.switches === 'number').reduce((sum, a) => sum + a.observedMs, 0);
     return { mode, sessions: rows.length, minutes: activeMs / 60000, observedMinutes: observedMs / 60000, coverage: activeMs > 0 ? Math.min(1, observedMs / activeMs) : null,
       keysPerMinute: perMinute(recorded.reduce((sum, a) => sum + a.keys, 0), observedMs), clicksPerMinute: perMinute(recorded.reduce((sum, a) => sum + a.clicks, 0), observedMs),
-      scrollsPerMinute: perMinute(recorded.reduce((sum, a) => sum + a.scrolls, 0), observedMs), movementShare: observedMs > 0 ? Math.min(1, recorded.reduce((sum, a) => sum + a.movementMs, 0) / observedMs) : null };
+      scrollsPerMinute: perMinute(recorded.reduce((sum, a) => sum + a.scrolls, 0), observedMs), movementShare: observedMs > 0 ? Math.min(1, recorded.reduce((sum, a) => sum + a.movementMs, 0) / observedMs) : null,
+      inputShare: inputObserved > 0 ? Math.min(1, recorded.reduce((sum, a) => sum + (typeof a.inputMs === 'number' ? a.inputMs : 0), 0) / inputObserved) : null,
+      switchesPerMinute: perMinute(recorded.reduce((sum, a) => sum + (typeof a.switches === 'number' ? a.switches : 0), 0), switchObserved) };
   }).filter(row => row.sessions > 0);
   const milestones = goalData(data).milestones, steps = new Map<string | null, { minutes: number; sessions: number }>();
   for (const s of sessions) { const key = s.milestoneId ?? null, row = steps.get(key) ?? { minutes: 0, sessions: 0 }; row.minutes += s.activeMs / 60000; row.sessions++; steps.set(key, row); }

@@ -195,3 +195,84 @@ export function silhouettes(points: number[][], labelings: number[][]): number[]
   });
 }
 export function silhouette(points: number[][], labels: number[]): number { return silhouettes(points, [labels])[0]; }
+
+/* Lasso and elastic net by cyclic coordinate descent on the covariance form, for standardized columns.
+   Minimizes 1/(2n) Σ (y - b0 - x·β)² + λ (α Σ|β| + (1 - α)/2 Σ β²): alpha 1 is the lasso, 0 < alpha < 1 the elastic net. */
+interface Moments { m: number; p: number; sums: Float64Array; sumY: number; cross: Float64Array; crossY: Float64Array }
+function momentsOf(x: number[][], y: number[], rows: ArrayLike<number>): Moments {
+  const p = x[0]?.length ?? 0, sums = new Float64Array(p), cross = new Float64Array(p * p), crossY = new Float64Array(p); let sumY = 0;
+  for (let r = 0; r < rows.length; r++) {
+    const row = x[rows[r]], target = y[rows[r]]; sumY += target;
+    for (let j = 0; j < p; j++) { const v = row[j]; sums[j] += v; crossY[j] += v * target; if (v) for (let k = 0; k <= j; k++) cross[j * p + k] += v * row[k]; }
+  }
+  return { m: rows.length, p, sums, sumY, cross, crossY };
+}
+const withoutMoments = (all: Moments, part: Moments): Moments => ({ m: all.m - part.m, p: all.p, sums: all.sums.map((v, i) => v - part.sums[i]), sumY: all.sumY - part.sumY, cross: all.cross.map((v, i) => v - part.cross[i]), crossY: all.crossY.map((v, i) => v - part.crossY[i]) });
+interface Centred { gram: Float64Array; c: Float64Array; meanX: Float64Array; meanY: number }
+function centredOf(s: Moments): Centred {
+  const { p, m } = s, gram = new Float64Array(p * p), c = new Float64Array(p), meanX = s.sums.map(v => v / m), meanY = s.sumY / m;
+  for (let j = 0; j < p; j++) {
+    c[j] = s.crossY[j] / m - meanX[j] * meanY;
+    for (let k = 0; k <= j; k++) gram[j * p + k] = gram[k * p + j] = s.cross[j * p + k] / m - meanX[j] * meanX[k];
+  }
+  return { gram, c, meanX, meanY };
+}
+/* Coordinate descent from `beta` (updated in place) at one penalty. */
+function descend(s: Centred, p: number, lambda: number, alpha: number, beta: Float64Array): void {
+  const l1 = lambda * alpha, l2 = lambda * (1 - alpha);
+  for (let sweep = 0; sweep < 300; sweep++) {
+    let change = 0;
+    for (let j = 0; j < p; j++) {
+      const diagonal = s.gram[j * p + j]; if (diagonal < 1e-12) { beta[j] = 0; continue; }
+      let r = s.c[j]; for (let k = 0; k < p; k++) if (k !== j && beta[k]) r -= s.gram[j * p + k] * beta[k];
+      const next = (r > l1 ? r - l1 : r < -l1 ? r + l1 : 0) / (diagonal + l2);
+      change = Math.max(change, Math.abs(next - beta[j])); beta[j] = next;
+    }
+    if (change < 1e-8) break;
+  }
+}
+const interceptOf = (s: Centred, beta: Float64Array) => s.meanY - beta.reduce((sum, b, j) => sum + b * s.meanX[j], 0);
+export interface PenalizedFit { intercept: number; coefficients: number[]; lambda: number }
+export function penalizedFit(x: number[][], y: number[], lambda: number, alpha: number): PenalizedFit {
+  const n = y.length, p = x[0]?.length ?? 0, beta = new Float64Array(p);
+  if (!n || !p) return { intercept: n ? y.reduce((a, b) => a + b, 0) / n : 0, coefficients: [...beta], lambda };
+  const s = centredOf(momentsOf(x, y, Array.from({ length: n }, (_, i) => i))); descend(s, p, lambda, alpha, beta);
+  return { intercept: interceptOf(s, beta), coefficients: [...beta], lambda };
+}
+/* The penalty with the lowest squared error over `folds` interleaved folds, from a descending grid of `steps` values that starts where every
+   coefficient is zero; ties keep the stronger penalty. Fold moments come from the totals, so each fold costs O(p²) before its descent. */
+export function penalizedSelect(x: number[][], y: number[], alpha: number, folds = 5, steps = 12, floor = 1e-3): PenalizedFit {
+  const n = y.length, p = x[0]?.length ?? 0, all = momentsOf(x, y, Array.from({ length: n }, (_, i) => i));
+  if (!n || !p) return { intercept: n ? all.sumY / n : 0, coefficients: new Array(p).fill(0), lambda: 0 };
+  const full = centredOf(all), top = Math.max(...Array.from(full.c, Math.abs)) / alpha;
+  if (!(top > 1e-12)) return { intercept: full.meanY, coefficients: new Array(p).fill(0), lambda: 0 };
+  const grid = Array.from({ length: steps }, (_, i) => top * floor ** (i / (steps - 1))), k = Math.min(folds, n), errors = new Float64Array(steps);
+  for (let f = 0; f < k; f++) {
+    const held = Array.from({ length: Math.ceil((n - f) / k) }, (_, i) => f + i * k), train = centredOf(withoutMoments(all, momentsOf(x, y, held))), beta = new Float64Array(p);
+    grid.forEach((lambda, g) => {
+      descend(train, p, lambda, alpha, beta); const intercept = interceptOf(train, beta);
+      for (const i of held) { let fitted = intercept; for (let j = 0; j < p; j++) fitted += beta[j] * x[i][j]; errors[g] += (y[i] - fitted) ** 2; }
+    });
+  }
+  let best = 0; for (let g = 1; g < steps; g++) if (errors[g] < errors[best] - 1e-12) best = g;
+  const beta = new Float64Array(p); for (let g = 0; g <= best; g++) descend(full, p, grid[g], alpha, beta);
+  return { intercept: interceptOf(full, beta), coefficients: [...beta], lambda: grid[best] };
+}
+
+/* Pearson correlations between columns, and the variance inflation factor of each (the diagonal of the inverse correlation matrix).
+   A column without variation has no correlation (null) and no factor. */
+export function collinearity(x: number[][]): { correlation: Array<Array<number | null>>; vif: Array<number | null> } {
+  const n = x.length, p = x[0]?.length ?? 0, means = Array.from({ length: p }, (_, j) => x.reduce((sum, row) => sum + row[j], 0) / n);
+  const sds = means.map((m, j) => Math.sqrt(x.reduce((sum, row) => sum + (row[j] - m) ** 2, 0) / n)), live = sds.map((sd, j) => sd > 1e-9 ? j : -1).filter(j => j >= 0);
+  const correlation: Array<Array<number | null>> = Array.from({ length: p }, () => new Array<number | null>(p).fill(null)), R = live.map(() => new Float64Array(live.length));
+  live.forEach((a, i) => live.forEach((b, j) => { if (j < i) return; let sum = 0; for (let r = 0; r < n; r++) sum += (x[r][a] - means[a]) * (x[r][b] - means[b]); const value = Math.max(-1, Math.min(1, sum / n / (sds[a] * sds[b]))); R[i][j] = R[j][i] = value; correlation[a][b] = correlation[b][a] = value; }));
+  // Gauss–Jordan inverse with partial pivoting; a tiny ridge keeps an exactly collinear set invertible.
+  const m = live.length, inverse = R.map((row, i) => { const out = new Float64Array(2 * m); out.set(row); out[i] += 1e-9; out[m + i] = 1; return out; });
+  for (let c = 0; c < m; c++) {
+    let pivot = c; for (let r = c + 1; r < m; r++) if (Math.abs(inverse[r][c]) > Math.abs(inverse[pivot][c])) pivot = r;
+    [inverse[c], inverse[pivot]] = [inverse[pivot], inverse[c]]; const lead = inverse[c][c]; for (let j = 0; j < 2 * m; j++) inverse[c][j] /= lead;
+    for (let r = 0; r < m; r++) if (r !== c) { const factor = inverse[r][c]; if (factor) for (let j = 0; j < 2 * m; j++) inverse[r][j] -= factor * inverse[c][j]; }
+  }
+  const vif = new Array<number | null>(p).fill(null); live.forEach((j, i) => { vif[j] = Math.min(1e6, Math.max(1, inverse[i][m + i])); });
+  return { correlation, vif };
+}

@@ -39,7 +39,7 @@ The app opens on **Goals**. A goal is the place where you learn something, for e
 2. Open the goal. In **Roadmap**, write stages as headings and steps as to-dos. Open **Details** on a step to add an estimate, a target date, notes and links.
 3. Select **Focus on this goal** or **Focus on this step**. Focus opens with the goal, its area and the step. Select **Begin focus**.
 4. In **Tasks**, add one-off steps. In **Plan & review**, add weekly actions and write your weekly review.
-5. In **Behaviour**, see how you study this goal: activity modes, times of day, roadmap steps, returns, interruptions and self-ratings.
+5. In **Behaviour**, see how you study this goal: time by activity mode and roadmap step, planned actions, and the same Insights figures as in Patterns for this goal.
 
 Areas are the former focus fields. They group goals. You manage them in **Settings > Your areas**. You can still start a session without a goal: select **Free focus** on the Focus page.
 
@@ -101,7 +101,7 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
 
 The field, timing and intention stay visible together. Preparation from Goals or Tasks shows as a compact linked summary.
 
-Below the duration, Focus can show up to two hints from the last 90 days. They come from the prepared goal, or from the area if you chose no goal. A hint can suggest a session length. Select the button on the hint, for example **Use 25 min**, to set the timer. A hint can also suggest a time of day. Hints use the same rules as the Insights tab, so they appear only when you have enough records. If the app cannot read them, it shows none.
+Below the duration, Focus can show up to three hints from the last 90 days. They come from the prepared goal, or from the area if you chose no goal. Each hint comes from a different group. One hint suggests a session length or a pause. Select the button on it, for example **Use 25 min**, to set the timer. One hint suggests a time of day. One hint tells you what to do before you start, for example to write the first small step. If you saved an adjustment for this week, Focus shows it above the hints. Hints use the same rules as the Insights tab, so they appear only when you have enough records. If the app cannot read them, it shows none.
 
 ### Use tasks
 
@@ -308,7 +308,9 @@ The weekly review shows totals, the rating distribution and the most frequent in
 
 Patterns has two tabs: **Overview** and **Insights**. Overview is the page that the sections above describe. The date range, area and goal filters apply to both tabs. Insights reads your finished, included sessions on this computer. It sends nothing to any service.
 
-At the top, **The data behind these insights** shows five values:
+The first card compares the last 7 days with the 28 days before them: perceived focus, drifts per hour, the median time to the first drift and window switches per hour. It also shows the adjustment that you saved for this week and for last week. A change is a hint. It does not prove that the adjustment worked.
+
+The card **The data behind these insights** shows five values:
 
 - How many sessions the analysis uses.
 - How many of them you rated.
@@ -321,11 +323,11 @@ Notes tell you which records the analysis left out and why.
 | Figure | What it shows | What it needs |
 |---|---|---|
 | **When you focus best** | Your focus rating by start hour, with a band for the uncertainty. Drifts per active hour. A grid of weekday and time of day. | 10 rated sessions |
-| **How long until the first drift** | The share of sessions that are still without a drift as active minutes pass, and the median time. You can group the curve by time of day or by activity mode. | 15 sessions with **I'm back** available and 8 first drifts |
-| **The shape of a session** | Blocks of 5 active minutes, up to 120 minutes: time with input, window switches, drifts and off-task check-ins. | 10 sessions with activity collection on |
+| **How long your attention lasts** | The share of sessions that are still without a drift as active minutes pass, and the median time. You can group the curve by time of day or by activity mode. A table shows drifts per hour in the warm-up (0–10 min), sustain (10–25 min) and fatigue (25+ min) phases. A second curve shows the time after **I'm back** until the next drift. | 15 sessions with **I'm back** available and 8 first drifts |
+| **The shape of a session** | Blocks of 5 active minutes, up to 120 minutes: time with input, window switches, drifts and off-task check-ins. Dashed lines mark minute 10 and minute 25. A note compares the 2 minutes before a drift with the other minutes. | 10 sessions with activity collection on |
 | **Interaction states** | Groups of minutes by how you used the keyboard and mouse, for example Typing, Scrolling or Quiet, and how often the state changes. | 300 minutes with input time from 5 sessions |
 | **What got in the way** | Your answers with the mean focus, the interruptions that you marked, window switching and the challenge answers. | 10 sessions |
-| **What tends to go with higher focus** | Which facts about a session go with a higher or lower rating, for example time of day or starting energy. | 30 rated sessions over 14 days |
+| **What tends to go with higher focus** | Which facts about a session go with a higher or lower rating. One view uses facts that you know before you start, for example time of day or starting energy. A second view uses facts from during and after the session. The lasso marks the features it keeps. Features that it sets to zero show as "No clear association found". | 30 rated sessions over 14 days |
 | **Suggestions to try** | Up to five suggestions with their numbers. | The rules in the [data dictionary](DATA-DICTIONARY.md#suggestions) |
 
 If a figure does not have enough data, it says what is missing. The count of sessions or minutes shows how far you are.
@@ -579,7 +581,7 @@ During a focus session, the question "Where is your attention right now?" appear
 
 ### Review behaviour
 
-Expand **Behaviour** in the completion reflection or in a Calendar session. It shows interaction totals, collection coverage, a timeline in recorded active time, return markers and pauses.
+Expand **Behaviour** in the completion reflection or in a Calendar session. It shows interaction totals (also the share of time with input and the window switches), collection coverage, and a timeline in recorded active time. The timeline marks returns, interruptions, check-in answers and pauses. A bar shows the warm-up, sustain and fatigue phases. Calendar cards also show the detractor and the challenge answers.
 
 - A recorded zero, partial coverage, disabled collection and unavailable data are different states.
 - A return marks the time when you reported that you came back. It does not show when the distraction started or how long it was. It does not change recorded time.

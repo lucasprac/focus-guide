@@ -104,7 +104,7 @@ export class AgentService {
     const insights = this.command('insights.read', { from, to, ...(fieldId ? { fieldId } : {}), ...(goalId ? { goalId } : {}) }) as FocusInsights;
     const trim = (curve: SurvivalCurve): SurvivalCurve => curve.points.length <= POINT_LIMIT ? curve : { ...curve, points: Array.from({ length: POINT_LIMIT }, (_, i) => curve.points[Math.round(i * (curve.points.length - 1) / (POINT_LIMIT - 1))]) };
     const span = insights.attentionSpan;
-    return { ...insights, attentionSpan: { ...span, overall: span.overall && trim(span.overall), byBand: span.byBand.map(trim), byMode: span.byMode.map(trim) } };
+    return { ...insights, attentionSpan: { ...span, overall: span.overall && trim(span.overall), recovery: span.recovery && trim(span.recovery), afterWarmUp: span.afterWarmUp && trim(span.afterWarmUp), byBand: span.byBand.map(trim), byMode: span.byMode.map(trim) } };
   }
 
   private sessions(input: Record<string, unknown>, now: string) {

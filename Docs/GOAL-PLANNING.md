@@ -115,12 +115,19 @@ When you pause or archive a goal, the app stops future prompts and keeps the rec
 
 ### Duration suggestions
 
-The app suggests a duration only when these conditions are all true:
+The app has one rule for the duration. The first choice is how long your attention held before a drift:
+
+- There are enough finished, included sessions with the same activity mode in the last 90 days, first for the goal, then for the field. They need 15 sessions recorded with **I'm back** and 8 first drifts.
+- The suggestion is the median time to the first drift. If drifts cluster in the first 10 minutes, it is not less than 25 minutes.
+
+If that is not possible, the app uses the recorded duration. It needs all of these conditions:
 
 - There are at least 10 finished, included sessions with the same field and activity mode as the action.
 - These sessions cover at least 14 calendar days within the last 28 days.
 
-The suggestion is the median duration of these sessions. The app rounds it to a minute and keeps it in the range that the timer supports. You can see the date range, the sample count and the supporting sessions. When there is not sufficient data, the app shows the editable examples.
+Then the suggestion is the median duration of these sessions. The app says which of the two rules it used.
+
+The app rounds the suggestion to a minute and keeps it in the range that the timer supports. You can see the date range, the sample count and the supporting sessions. When there is not sufficient data, the app shows the editable examples.
 
 ### Barrier suggestions
 

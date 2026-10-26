@@ -627,7 +627,7 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .return-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
 .return-list { max-height: 180px; overflow: auto; }
 .behaviour-review { min-width: 0; padding: 4px 0 10px; }
-.behaviour-totals { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 12px 0; }
+.behaviour-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px,1fr)); gap: 8px; margin: 12px 0; }
 .behaviour-totals span { font-size: 11px; color: var(--muted); }
 .behaviour-totals strong { display: block; font-size: 20px; color: var(--text); margin-bottom: 4px; }
 .coverage-label { font-size: 12px; }
@@ -645,6 +645,13 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .timeline-events > span { position: absolute; font-size: 13px; transform: translateX(-50%); }
 .timeline-return { color: var(--accent); }
 .timeline-pause { color: var(--muted); top: 10px; }
+.timeline-interruption { color: var(--text); font-weight: 700; }
+.timeline-probe { color: var(--accent); top: 10px; font-size: 11px; }
+.timeline-phases { display: flex; margin: 2px 0 2px 70px; margin-right: 8px; height: 16px; border-radius: 4px; overflow: hidden; font-size: 10px; line-height: 16px; color: var(--muted); }
+.timeline-phases > span { overflow: hidden; white-space: nowrap; text-overflow: clip; padding-left: 6px; border-right: 1px solid var(--line); }
+.timeline-phases .phase-0 { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.timeline-phases .phase-1 { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.timeline-phases .phase-2 { background: color-mix(in srgb, var(--accent) 24%, transparent); }
 .timeline-axis { display: flex; justify-content: space-between; margin-left: 70px; font-size: 10px; color: var(--muted); }
 /* Shared main-window geometry; floating-window dimensions remain independently scoped. */
 .app-shell .main-content { --page-gutter: clamp(18px, 2vw, 32px); container-type: inline-size; container-name: workspace; overflow-x: clip; }

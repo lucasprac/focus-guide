@@ -3,8 +3,8 @@ import { Store } from './store';
 import { TimerEngine } from './timer';
 import type { Command, FocusSession, Task } from '../shared/types';
 import * as v from '../shared/validation';
-import { selectedSessions, totalMinutes } from '../shared/analytics';
-import { focusInsights } from '../shared/focus-insights';
+import { addDays, selectedSessions, totalMinutes } from '../shared/analytics';
+import { INSIGHT_THRESHOLDS, focusInsights } from '../shared/focus-insights';
 import type { ProbeScheduler } from './probes';
 import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
@@ -151,7 +151,8 @@ export class FocusService {
         const revision = this.store.revision(), key = JSON.stringify([revision, from, to, fieldId ?? '', goalId ?? '']);
         const hit = revision === null ? undefined : this.insights.find(entry => entry.key === key);
         if (hit) return structuredClone(hit.value);
-        const data = this.store.all(), sessions = selectedSessions(data, from, to, fieldId, goalId);
+        // The cycle comparison also reads the recent and baseline windows, which can reach back further than the range.
+        const data = this.store.all(), reach = addDays(to, -(INSIGHT_THRESHOLDS.cycle.recentDays + INSIGHT_THRESHOLDS.cycle.baselineDays - 1)), sessions = selectedSessions(data, from < reach ? from : reach, to, fieldId, goalId);
         const value = focusInsights(data, sessions.flatMap(s => this.store.activity(s.id)), { from, to, fieldId, goalId, now: Date.parse(now) });
         if (revision !== null) this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
         return value;

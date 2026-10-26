@@ -1,5 +1,22 @@
 # Release notes
 
+## Unreleased — behaviour cycle analysis (3.1.0)
+
+The analysis of the cycle now uses one set of rules in every place. It also separates a slow start from fatigue. No schema or backup format change.
+
+- **One review of a session.** The **Behaviour** review of a session shows time with input and window switches. It marks interruptions and attention check-ins on the timeline. It shows the warm-up (0–10 min), sustain (10–25 min) and fatigue (25+ min) phases. Calendar cards show the detractor and challenge answers.
+- **One analysis for a goal.** The **Behaviour** tab of a goal keeps the effort summary, the time by roadmap step and the planned actions. It shows the same Insights figures as Patterns for that goal. The two tables that repeated this data are removed. **Try next week** adds the suggestion to the goal review of the week.
+- **One rule for the duration.** The action editor and Focus now use one rule. The first choice is how long your attention held before a drift (last 90 days). Only without enough markers, the editor uses the median recorded duration. The editor says which one it used.
+- **Focus hints.** Focus shows up to three hints, one from each group: a length or a pause, a time of day, and something to do before you start. It also shows the adjustment that you saved for this week.
+- **Cycle comparison.** Insights starts with the last 7 days against the 28 days before them: perceived focus, drifts per hour, median time to the first drift and window switches per hour. It shows the saved weekly adjustments of this week and of last week.
+- **Attention span.** A new curve shows the time from an I'm back to the next drift. A table shows drifts per hour in the warm-up, sustain and fatigue phases. When drifts cluster in the warm-up, the **length** suggestion stays at 25 minutes or more. A new **warmup** suggestion explains why.
+- **Pause.** The **break** suggestion now compares the early and the later rate in the same sessions, those that reached the candidate minute. Short sessions no longer hide fatigue.
+- **Shape of a session.** The figure marks minute 10 and minute 25. It draws window switches and off-task check-ins. It compares the 2 minutes before a drift with the other minutes.
+- **Interaction states.** Window switches are now a sixth input of the grouping when most minutes have them. A new **Light interaction** name replaces a wrong "Typing" for a state with low counts. Each state shows its drifts per hour.
+- **Focus model.** Ridge, lasso and elastic net compete in the rolling origin test. The app shows which one it used and why. Collinear features show their correlation and variance inflation factor. The lasso shows which features it keeps and how often. The two hour terms become one effect. A second view explains the rating with facts from during and after the session.
+- **Agent.** `get_focus_insights` returns the new fields. `get_goal_behaviour` returns the input share and the window switches per minute of each activity mode.
+- **Speed.** The example dataset (58 sessions) takes about 250 ms. The three estimators and the second model view are the main cost.
+
 ## Unreleased — goal deletion
 
 - **Delete a goal.** The goal workspace has a **Delete goal** button (trash icon) next to **Edit goal**. The dialog shows what is removed and what stays, then **Back up & delete goal** saves a recovery backup and deletes the goal permanently.

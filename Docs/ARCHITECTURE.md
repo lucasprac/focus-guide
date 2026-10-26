@@ -85,16 +85,21 @@ The scheduler cancels a check-in and saves no record in these cases:
 
 - **Input.** Finished, included sessions that start in the range, with the optional area and goal filters. A session with more than 8 active hours leaves the analysis.
 - **Drift.** A drift is an **I'm back** marker or an interruption. A probe answer and a parked thought are not drifts. Check-ins follow a schedule, so counting them would raise the drift rate after minute 8 for no real reason. A probe answer has its own measure: the share of answered check-ins that are off the task.
-- **Sections.** Day rhythm, attention span (Kaplan–Meier), session shape, interaction states (k-means++), detractors, a ridge model of perceived focus, and suggestions. Each section has an eligibility rule and gives a reason when it is not eligible. [Data dictionary](DATA-DICTIONARY.md#calculation-rules-for-insights) has all thresholds. They are in `INSIGHT_THRESHOLDS`.
+- **Sections.** Day rhythm, attention span (Kaplan–Meier, with a recovery curve and the warm-up, sustain and fatigue phases), session shape (with the minutes before drifts), interaction states (k-means++), detractors, a model of perceived focus (ridge, lasso and elastic net, with a second view of the facts during and after a session), the cycle comparison, and suggestions. Each section has an eligibility rule and gives a reason when it is not eligible. [Data dictionary](DATA-DICTIONARY.md#calculation-rules-for-insights) has all thresholds. They are in `INSIGHT_THRESHOLDS`.
 - **Intervals.** Every interval is a 90% interval.
 
 Builder decisions that the design left open:
 
 - `SurvivalCurve.medianOpen` is true when the upper band never falls to one half. The upper limit of the median is then open, and `median.high` holds only the last observed time. The interface writes "or longer".
 - The ridge penalty λ comes from a grid of eight values (0.003 to 10) that the engine multiplies by the number of training rows. The engine picks the λ with the lowest PRESS, that is, the mean squared leave-one-out error in closed form. A tie keeps the stronger penalty.
-- The **break** suggestion tests only change points that have a window guard: at least 5 sessions must still run 20 minutes after the point. Among the points that qualify, it keeps the point with the highest two-rate Poisson likelihood. It gets `moderate` strength only if a Bonferroni-corrected one-sided 95% bound of the rate ratio stays above 1. The correction counts the points that were tried.
+- The **break** suggestion tests change points from minute 25 on (`fatigueMinutes`). Each point uses only the sessions that reached it, so the early rate and the later rate come from the same sessions. At least 5 of them must still run 15 minutes after the point. Among the points that qualify, it keeps the point with the largest likelihood-ratio statistic of two Poisson rates against one rate. It gets `moderate` strength only if a Bonferroni-corrected one-sided 95% bound of the rate ratio stays above 1. The correction counts the points that were tried.
+- **Warm-up friction.** When the drift rate in minutes 0–10 is at least 1.5 times the rate in minutes 10–25, with 5 drifts or more, the **length** suggestion does not fall below 25 minutes. It uses the median of the first drift after minute 10 when that is known. The **warmup** suggestion explains the cause.
+- **One duration rule.** `suggestedDuration()` in `focus-insights.ts` serves the action editor. It uses the **length** plan of the goal, then of the area, over the last 90 days. Only without it, the median recorded duration of `durationSuggestion()` in `goal-planning.ts` answers. The result names its source.
+- **Cycle comparison.** The window of the last 7 days and the window of the 28 days before it do not depend on the range of the other figures. `insights.read` therefore loads the activity rows from the earlier of the range start and 34 days before the end.
 - `focusGap` is 0.3 focus points. The **window**, **detractor** and **challenge** suggestions need at least this difference in mean focus.
 - The model chooses its activity-mode columns again for each training window, from the training rows only. A mode needs 5 sessions in those rows. Rarer modes join the reference mode, and the label says so. A later session cannot add a column to an earlier test.
+- Three estimators compete in the rolling origin test: ridge, lasso and elastic net (mix 0.5). The lasso and the elastic net use coordinate descent with soft-thresholding. A 5-fold cross-validation picks their penalty. If features are collinear (variance inflation factor above 5 or correlation of 0.70 or more) and the lasso changes its features between windows (mean overlap below 0.6), the elastic net decides when its selection is more stable and its error is not higher. Otherwise the lower error of ridge and lasso decides. The lasso always marks the features it keeps, with the share of test windows and bootstrap resamples that keep them.
+- The sine and cosine of the start hour become one effect: the focus gap between the best hour and the opposite hour. Its amplitude is the square root of the sum of the squared effects.
 - The bootstrap intervals of the model are plain percentile intervals (5th to 95th percentile of 200 resamples). With shrinkage, an estimate can lie outside its interval. The interface shows both.
 
 ### `insights.read`
@@ -267,7 +272,7 @@ flowchart LR
 | `src/main/agent-bridge.ts`, `agent-service.ts`, `agent-edits.ts` | Local named-pipe endpoint for the MCP server, agent read tools, proposals with apply/reject, direct edits with their audit log and undo |
 | `src/mcp/server.ts` | Stdio MCP server, bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
 | `src/shared/behaviour-analytics.ts`, `agent-tools.ts` | Goal behaviour profile; agent tool list and bridge file contract |
-| `src/shared/focus-insights.ts`, `insight-stats.ts` | Pure insight engine with its thresholds (`INSIGHT_THRESHOLDS`), and its numerical methods |
+| `src/shared/focus-insights.ts`, `insight-stats.ts` | Pure insight engine with its thresholds (`INSIGHT_THRESHOLDS`), and its numerical methods (Kaplan–Meier, ridge, lasso and elastic net, correlation and variance inflation, k-means++) |
 | `src/preload/index.ts` | Narrow `focusGuide` bridge |
 | `src/shared/types.ts` | Dataset, state, command names and event interfaces |
 | `src/shared/analytics.ts` | Local-date splits, filters, averages, Spearman calculation with tied ranks |
