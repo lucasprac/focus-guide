@@ -1,6 +1,43 @@
-# Goal planning — Focus Guide 1.5.0
+# Goal planning — Focus Guide 2.0
 
 Focus Guide helps with study, work and personal goals. You define an outcome, plan repeatable actions, check in when you want to, and adjust the plan each week. All data stays in the existing local profile. Personal guidance uses transparent rules, not a remote model.
+
+## Learn inside a goal
+
+A goal is a learning workspace. Open it from **Goals**. It has five sections:
+
+| Section | What you do there |
+|---|---|
+| Overview | See recorded effort, roadmap progress, the next step, today's actions, recent sessions and agent proposals. Select **Focus on this goal** or **Focus on this step**. |
+| Roadmap | Write the roadmap: headings are stages, to-dos are steps. Open **Details** on a step to add an estimate, a target date, notes and links. Each stage and step shows recorded time against its estimate. |
+| Tasks | Add one-off tasks for the goal and link them to a step. **Focus** on a task prepares a session with that task and its step. |
+| Behaviour | Read the goal's behaviour profile for 7, 30 or 90 days, or all time. |
+| Plan & review | Edit weekly actions, record outcome observations and write the weekly review. |
+
+- A session that you start from a goal records the goal, and the step when you choose one. The next session stays in the same goal until you select **Free focus**.
+- The Focus page shows the goal and step that you study. Under **Optional details**, you can choose another roadmap step.
+- A step's recorded time is effort. It does not show mastery. Tick a step only when you confirm its result.
+
+### Behaviour profile
+
+The profile uses finished, included sessions linked to the goal. It shows time by activity mode, time of day, weekday and roadmap step. It shows keyboard, click and scroll rates per observed minute and the share of minutes with mouse movement, only for minutes with recorded collection, next to their coverage. It also shows returns and interruptions per recorded hour, self-ratings, action check-ins, reported barriers and the same Spearman gates as Patterns. The profile describes your records. It does not measure attention and does not show causes.
+
+### Direct changes by an AI agent
+
+When you allow **Read and edit** in **Settings > AI agent**, a local AI agent can create goals and change goals, roadmaps, roadmap step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups.
+
+- **Agent activity** on the Goals page and on each goal's Overview lists every change with the app's summary and the agent's reason. **Undo** puts back the earlier state. A goal, task or action that the agent created is archived, not deleted. If you changed the record after the agent did, the app asks before it overwrites your later edit.
+- The agent replaces a roadmap only with the revision that it read. A row keeps its links only when its title stays the same. Rows that the agent leaves out are archived. New steps start open, and steps that you ticked stay ticked.
+- If the agent changes a roadmap while you edit it, your save stops and the app shows the conflict. **Show the agent's version** discards your unsaved edits. **Keep my version** saves yours and archives the rows that only the agent added. Undo in Agent activity is still available.
+- A schedule change to a weekly action starts the next day. Earlier days keep their plan.
+
+### Proposals from an AI agent
+
+When you allow **Read and propose** in **Settings > AI agent**, a local AI agent can propose a new goal, a revised roadmap, tasks, a weekly action or a review note. Proposals appear on the goal list (new goals) and on the goal's Overview.
+
+- **Apply** runs the change. **Edit then apply** lets you change the title, outcome, roadmap Markdown or note first. **Reject** keeps the proposal in the history without a change.
+- A roadmap proposal keeps the identity of each row whose title matches, so task and session links stay. Rows that the proposal leaves out are archived, not deleted. A step that you checked stays checked.
+- If you changed the roadmap after the agent wrote its proposal, the proposal shows **stale**. The comparison then uses your current roadmap, and **Apply anyway** asks for your confirmation.
 
 ## Use the planner
 
@@ -78,12 +115,19 @@ When you pause or archive a goal, the app stops future prompts and keeps the rec
 
 ### Duration suggestions
 
-The app suggests a duration only when these conditions are all true:
+The app has one rule for the duration. The first choice is how long your attention held before a drift:
+
+- There are enough finished, included sessions with the same activity mode in the last 90 days, first for the goal, then for the field. They need 15 sessions recorded with **I'm back** and 8 first drifts.
+- The suggestion is the median time to the first drift. If drifts cluster in the first 10 minutes, it is not less than 25 minutes.
+
+If that is not possible, the app uses the recorded duration. It needs all of these conditions:
 
 - There are at least 10 finished, included sessions with the same field and activity mode as the action.
 - These sessions cover at least 14 calendar days within the last 28 days.
 
-The suggestion is the median duration of these sessions. The app rounds it to a minute and keeps it in the range that the timer supports. You can see the date range, the sample count and the supporting sessions. When there is not sufficient data, the app shows the editable examples.
+Then the suggestion is the median duration of these sessions. The app says which of the two rules it used.
+
+The app rounds the suggestion to a minute and keeps it in the range that the timer supports. You can see the date range, the sample count and the supporting sessions. When there is not sufficient data, the app shows the editable examples.
 
 ### Barrier suggestions
 
@@ -132,6 +176,18 @@ Schema 5 adds reason tags (`whyTags`) to goals and an order (`position`) to mile
 ### Schema 6
 
 Schema 6 adds a block kind (`kind`) to milestones: to-do, heading, bullet, numbered item or text. The migration saves a `before-schema-v6-*.sqlite` snapshot, then gives every existing milestone the kind `todo` in one transaction. JSON backups of versions 1–5 are upgraded the same way on import.
+
+### Schema 7
+
+Schema 7 adds step details to milestones (`estimatedMinutes`, `targetDate`, `notes`, `resources`) and `milestoneId` to sessions. The migration saves a `before-schema-v7-*.sqlite` snapshot, then adds the session column and empty details in one transaction.
+
+### Schema 8
+
+Schema 8 adds agent proposals and the `agentAccess` setting. The migration saves a `before-schema-v8-*.sqlite` snapshot, then creates the `agentProposals` table and sets agent access to off. JSON backups of versions 1–7 are upgraded on import.
+
+### Schema 9
+
+Schema 9 adds the agent change log (`agentChanges`) and the `edit` access level. The migration saves a `before-schema-v9-*.sqlite` snapshot, then creates the table and sets agent access to off. JSON backups of versions 1–8 are upgraded on import.
 
 ### Milestone checklist
 

@@ -1,13 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import type { Store } from './store';
 import type { Command, Task } from '../shared/types';
-import { goalData, type Goal, type GoalAction, type GoalMilestone, type GoalOccurrence, type GoalReview, type MilestoneKind } from '../shared/goal-types';
+import { goalData, milestoneDefaults, type Goal, type GoalAction, type GoalMilestone, type GoalOccurrence, type GoalReview, type MilestoneDetails, type MilestoneKind } from '../shared/goal-types';
 import * as v from '../shared/validation';
-import { goalDate, goalPlan, goalStatus, milestoneKind, validateGoalRecord, whyTags, GOAL_LIMITS } from '../shared/goal-validation';
+import { goalDate, goalPlan, goalStatus, milestoneDetails, milestoneKind, validateGoalRecord, whyTags, GOAL_LIMITS } from '../shared/goal-validation';
 import { MILESTONE_LIMITS } from '../shared/milestone-markdown';
-import { barrierSuggestions, plannedOccurrences } from '../shared/goal-planning';
-import { localDay, monday } from '../shared/analytics';
+import { ROADMAP_CHANGED, barrierSuggestions, plannedOccurrences, roadmapRevision } from '../shared/goal-planning';
+import { localDay, monday, selectedSessions } from '../shared/analytics';
+import { goalBehaviourProfile } from '../shared/behaviour-analytics';
 
+/** An analysis range of any length: valid dates with from <= to. */
+export function dateRange(input: Record<string, unknown>): { from: string; to: string } {
+  let from: string, to: string;
+  try { from = goalDate(input.from); to = goalDate(input.to); } catch { throw new Error('Choose a valid date range.'); }
+  if (from > to) throw new Error('Choose a start date on or before the end date.');
+  return { from, to };
+}
 export class GoalService {
   constructor(private store: Store) {}
   private records() { return goalData(this.store.all()); }
@@ -20,7 +28,7 @@ export class GoalService {
   taskLinks(task: Task, input: Record<string, unknown>) {
     const goalId = 'goalId' in input ? input.goalId ? v.id(input.goalId) : null : task.goalId ?? null;
     const milestoneId = 'milestoneId' in input ? input.milestoneId ? v.id(input.milestoneId) : null : goalId === task.goalId ? task.milestoneId ?? null : null;
-    if (goalId) { const goal = this.goal(goalId); if (goal.fieldId !== task.fieldId || goal.status === 'archived' && goalId !== task.goalId) throw new Error('Choose a goal from this task’s field.'); }
+    if (goalId) { const goal = this.goal(goalId); if (goal.fieldId !== task.fieldId || goal.status === 'archived' && goalId !== task.goalId) throw new Error('Choose a goal from this task’s area.'); }
     if (milestoneId && (!goalId || !this.records().milestones.some(m => m.id === milestoneId && m.goalId === goalId && m.kind === 'todo'))) throw new Error('Choose a to-do milestone from this goal.');
     return { goalId, milestoneId };
   }
@@ -36,12 +44,15 @@ export class GoalService {
     const inferred = primaryTaskId ? this.store.task(primaryTaskId)?.goalId : null;
     const goalId = 'goalId' in input ? input.goalId ? v.id(input.goalId) : null : inferred ?? null;
     let occurrence: GoalOccurrence | null = null;
-    if (goalId) { const goal = this.goal(goalId); if (goal.fieldId !== fieldId || goal.status !== 'active') throw new Error('Choose an active goal from the session field.'); }
+    if (goalId) { const goal = this.goal(goalId); if (goal.fieldId !== fieldId || goal.status !== 'active') throw new Error('Choose an active goal from the session area.'); }
     if (input.occurrenceId) {
       occurrence = this.occurrence({ id: input.occurrenceId, goalId, originalDate: input.occurrenceDate },now);
       if (!goalId || occurrence.goalId !== goalId || occurrence.date !== localDay(now,occurrence.plan.timezone) || this.records().goalActions.find(a => a.id === occurrence!.actionId)?.archived) throw new Error('Choose an action planned for today.');
     }
-    return { goalId, occurrenceId: occurrence?.id ?? null, occurrence };
+    // The roadmap step is optional and, like the goal, is fixed when the session starts.
+    const milestoneId = input.milestoneId ? v.id(input.milestoneId) : null;
+    if (milestoneId && (!goalId || !this.records().milestones.some(m => m.id === milestoneId && m.goalId === goalId && m.kind === 'todo' && !m.archived))) throw new Error('Choose a roadmap step from this goal.');
+    return { goalId, occurrenceId: occurrence?.id ?? null, occurrence, milestoneId };
   }
   private saveAction(input: Record<string, unknown>, now: string): GoalAction {
     const goal = this.goal(input.goalId), id = input.id ? v.id(input.id) : randomUUID();
@@ -61,12 +72,30 @@ export class GoalService {
     return value.map(item => { const r = v.object(item), kind = r.kind === undefined ? 'todo' : milestoneKind(r.kind); return { id: r.id ? v.id(r.id) : null, title: v.text(r.title,'Milestone',MILESTONE_LIMITS.title,true).replace(/\s+/g,' '), kind, completed: kind === 'todo' && (r.completed === undefined ? false : v.bool(r.completed,'Completed milestone')) }; });
   }
   // Task links point only to to-dos, so a linked to-do keeps its kind until its tasks are unlinked.
+  // Sessions also point only to to-dos, and their links are history, so a step with sessions stays a to-do.
   private keepLinkedTodo(old: GoalMilestone | undefined, kind: MilestoneKind) {
-    if (old?.kind === 'todo' && kind !== 'todo' && this.store.all().tasks.some(t => t.milestoneId === old.id)) throw new Error(`“${old.title}” has linked tasks. Unlink them on the Tasks page before you change it from a to-do.`);
+    if (old?.kind !== 'todo' || kind === 'todo') return;
+    const data = this.store.all();
+    if (data.tasks.some(t => t.milestoneId === old.id)) throw new Error(`“${old.title}” has linked tasks. Unlink them on the Tasks page before you change it from a to-do.`);
+    if (data.sessions.some(s => s.milestoneId === old.id)) throw new Error(`“${old.title}” has focus sessions linked to it, so it stays a to-do.`);
+  }
+  // Details survive edits of the title, order and state. A row that stops being a to-do loses its estimate and date.
+  private details(old: GoalMilestone | undefined, kind: MilestoneKind): MilestoneDetails {
+    const kept = old ? { estimatedMinutes: old.estimatedMinutes ?? null, targetDate: old.targetDate ?? null, notes: old.notes ?? '', resources: old.resources ?? [] } : milestoneDefaults();
+    return kind === 'todo' ? kept : { ...kept, estimatedMinutes: null, targetDate: null };
   }
   private review(goalId: string, now: string): GoalReview {
     const week = monday(localDay(now,this.store.getSettings().timezone));
     return this.records().goalReviews.find(r => r.goalId === goalId && r.week === week) ?? { id: `${goalId}_${week}`, goalId, week, adjustment: '', previousOutcome: 'undecided', decisions: [], updatedAt: now };
+  }
+  // goal.delete: FocusService calls this with the goal of the timer's current session and the host's recovery backup.
+  // A session that is not finished still writes its goal link, so deletion waits until it ends.
+  remove(input: Record<string, unknown>, currentGoalId: string | null, backup?: (kind: 'goal') => void): void {
+    const goal = this.goal(input.id);
+    if (currentGoalId === goal.id || this.store.all().sessions.some(s => s.goalId === goal.id && s.status !== 'completed')) throw new Error('Finish this goal’s running or paused session before deleting it.');
+    if (!backup) throw new Error('A recovery backup is required before deleting a goal.');
+    backup('goal');
+    this.store.removeGoal(goal.id);
   }
   run(command: Command, input: Record<string, unknown>, now: string): unknown {
     switch (command) {
@@ -76,8 +105,8 @@ export class GoalService {
         const status = goalStatus(input.status ?? existing?.status ?? 'draft');
         if (status === 'achieved' && existing?.status !== 'achieved' && input.confirmed !== true) throw new Error('Confirm that this goal’s outcome was achieved.');
         const fieldId = v.id(input.fieldId ?? existing?.fieldId), field = this.store.field(fieldId);
-        if (!field || field.archived && (!existing || existing.fieldId !== fieldId)) throw new Error('Choose an active focus field.');
-        if (existing && fieldId !== existing.fieldId) throw new Error('A goal retains its field to preserve task and session history.');
+        if (!field || field.archived && (!existing || existing.fieldId !== fieldId)) throw new Error('Choose an active area.');
+        if (existing && fieldId !== existing.fieldId) throw new Error('A goal keeps its area to preserve task and session history.');
         const changes = { ...(existing ?? {}), ...Object.fromEntries(['title','outcome','why','deadline','baseline','target','unit'].filter(k => k in input).map(k => [k,input[k]])), ...('whyTags' in input ? { whyTags: whyTags(input.whyTags) } : {}) };
         if (existing && this.records().goalProgress.some(p => p.goalId === existing.id) && (input.target === null || 'unit' in input && input.unit !== existing.unit)) throw new Error('Keep the unit and measure while this goal has progress records.');
         const row = { title: '',outcome: '',why: '',whyTags: [],deadline: null,baseline: null,target: null,unit: '',...changes,
@@ -85,7 +114,7 @@ export class GoalService {
         const drafts = this.milestoneRows(input.milestones ?? []);
         this.store.db.transaction(() => {
           this.put('goals',row);
-          if (!existing) drafts.forEach((m,position) => this.put('milestones',{ id: randomUUID(),goalId: row.id,title: m.title,kind: m.kind,completed: m.completed,archived: false,position,createdAt: now,updatedAt: now }));
+          if (!existing) drafts.forEach((m,position) => this.put('milestones',{ id: randomUUID(),goalId: row.id,title: m.title,kind: m.kind,completed: m.completed,archived: false,position,createdAt: now,updatedAt: now,...milestoneDefaults() }));
         })(); return row.id;
       }
       case 'goal.milestone.save': {
@@ -94,19 +123,21 @@ export class GoalService {
         const kind = input.kind === undefined ? old?.kind ?? 'todo' : milestoneKind(input.kind), completed = input.completed === undefined ? kind === 'todo' && (old?.completed ?? false) : v.bool(input.completed,'Completed milestone');
         if (completed && kind !== 'todo') throw new Error('Only a to-do can be ticked.');
         this.keepLinkedTodo(old,kind);
-        this.put('milestones',{ id,goalId: goal.id,title: v.text(input.title ?? old?.title,'Milestone',200,true),kind,completed,archived: input.archived === undefined ? old?.archived ?? false : v.bool(input.archived,'Archived milestone'),position: old?.position ?? this.nextPosition(goal.id),createdAt: old?.createdAt ?? now,updatedAt: now }); return id;
+        const kept = this.details(old,kind), details = ['estimatedMinutes','targetDate','notes','resources'].some(k => k in input) ? milestoneDetails({ ...kept,...Object.fromEntries(['estimatedMinutes','targetDate','notes','resources'].filter(k => k in input).map(k => [k,input[k]])) },kind) : kept;
+        this.put('milestones',{ id,goalId: goal.id,title: v.text(input.title ?? old?.title,'Milestone',200,true),kind,completed,archived: input.archived === undefined ? old?.archived ?? false : v.bool(input.archived,'Archived milestone'),position: old?.position ?? this.nextPosition(goal.id),createdAt: old?.createdAt ?? now,updatedAt: now,...details }); return id;
       }
       case 'goal.milestones.sync': {
         // Replaces the order and content of a goal's active checklist. Omitted milestones are archived, never deleted, so task links survive.
         // The editor makes the identifier of a new row, so a repeated save never creates a duplicate; an unknown identifier creates that milestone.
         const goal = this.goal(input.goalId), rows = this.milestoneRows(input.rows), records = this.records().milestones, all = records.filter(m => m.goalId === goal.id);
+        if (input.revision !== undefined && input.revision !== roadmapRevision(this.store.all(),goal.id)) throw new Error(ROADMAP_CHANGED);
         const kept = new Set<string>();
         for (const row of rows) if (row.id) { const old = records.find(m => m.id === row.id); if (old && old.goalId !== goal.id) throw new Error('Choose a milestone from this goal.'); if (kept.has(row.id)) throw new Error('Each milestone can appear once.'); this.keepLinkedTodo(old,row.kind); kept.add(row.id); }
         this.store.db.transaction(() => {
           const active = rows.length;
-          rows.forEach((row,position) => { const old = row.id ? all.find(m => m.id === row.id) : undefined; this.put('milestones',{ id: row.id ?? randomUUID(),goalId: goal.id,title: row.title,kind: row.kind,completed: row.completed,archived: false,position,createdAt: old?.createdAt ?? now,updatedAt: old && old.title === row.title && old.kind === row.kind && old.completed === row.completed && !old.archived && old.position === position ? old.updatedAt : now }); });
+          rows.forEach((row,position) => { const old = row.id ? all.find(m => m.id === row.id) : undefined; this.put('milestones',{ id: row.id ?? randomUUID(),goalId: goal.id,title: row.title,kind: row.kind,completed: row.completed,archived: false,position,createdAt: old?.createdAt ?? now,updatedAt: old && old.title === row.title && old.kind === row.kind && old.completed === row.completed && !old.archived && old.position === position ? old.updatedAt : now,...this.details(old,row.kind) }); });
           all.filter(m => !m.archived && !kept.has(m.id)).forEach((m,i) => this.put('milestones',{ ...m,archived: true,position: active + i,updatedAt: now }));
-        })(); return;
+        })(); return { revision: roadmapRevision(this.store.all(),goal.id) };
       }
       case 'goal.action.save': return this.saveAction(input,now).id;
       case 'goal.occurrence.save': {
@@ -149,12 +180,17 @@ export class GoalService {
         this.store.db.transaction(() => {
           if (decision !== 'dismissed') {
             if (input.action) { const change = v.object(input.action); if (change.id !== suggestion.actionId || change.goalId !== goal.id) throw new Error('Edit the suggested action.'); this.saveAction(change,now); }
-            else if (suggestion.barrier === 'capability') this.put('milestones',{ id: randomUUID(),goalId: goal.id,title: `Explore a strategy for ${this.records().goalActions.find(a => a.id === suggestion.actionId)!.title}`.slice(0,200),kind: 'todo',completed: false,archived: false,position: this.nextPosition(goal.id),createdAt: now,updatedAt: now });
+            else if (suggestion.barrier === 'capability') this.put('milestones',{ id: randomUUID(),goalId: goal.id,title: `Explore a strategy for ${this.records().goalActions.find(a => a.id === suggestion.actionId)!.title}`.slice(0,200),kind: 'todo',completed: false,archived: false,position: this.nextPosition(goal.id),createdAt: now,updatedAt: now,...milestoneDefaults() });
             else if (suggestion.barrier === 'motivation') this.put('goals',{ ...goal,status: 'paused',statusHistory: [...goal.statusHistory,{ at: now,status: 'paused' }],updatedAt: now });
             else throw new Error('Choose the revised cue or smaller action before applying.');
           }
           this.put('goalReviews',{ ...oldReview,decisions: [...oldReview.decisions,{ suggestionId,decision: decision as GoalReview['decisions'][number]['decision'],at: now }],updatedAt: now });
         })(); return;
+      }
+      case 'goal.behaviour': {
+        const goal = this.goal(input.goalId), { from, to } = dateRange(input);
+        const data = this.store.all(), sessions = selectedSessions(data, from, to, '', goal.id);
+        return goalBehaviourProfile(data, sessions.flatMap(s => this.store.activity(s.id)), goal.id, from, to, Date.parse(now));
       }
       default: throw new Error('This goal command is not available.');
     }

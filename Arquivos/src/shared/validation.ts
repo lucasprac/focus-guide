@@ -1,9 +1,24 @@
-import type { Settings } from './types';
-import { ACTIVITY_MODES, type ActivityMode } from './types';
+import type { AgentAccess, FocusVisual, Settings } from './types';
+import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, PROBE_ANSWERS, type ActivityMode, type Challenge, type Detractor, type ProbeAnswer } from './types';
 
 export function activityMode(value: unknown): ActivityMode {
   if (!ACTIVITY_MODES.includes(value as ActivityMode)) throw new Error('Choose a valid activity mode.');
   return value as ActivityMode;
+}
+/* Reflection answers are optional; an absent answer stays null. */
+export function detractor(value: unknown): Detractor | null {
+  if (value === null || value === undefined) return null;
+  if (!DETRACTORS.includes(value as Detractor)) throw new Error('Choose a valid main distraction.');
+  return value as Detractor;
+}
+export function challenge(value: unknown): Challenge | null {
+  if (value === null || value === undefined) return null;
+  if (!CHALLENGES.includes(value as Challenge)) throw new Error('Choose a valid challenge level.');
+  return value as Challenge;
+}
+export function probeAnswer(value: unknown): ProbeAnswer {
+  if (!PROBE_ANSWERS.includes(value as ProbeAnswer)) throw new Error('Choose a valid check-in answer.');
+  return value as ProbeAnswer;
 }
 export function shortcut(value: unknown): string {
   const result = text(value, 'Return shortcut', 80);
@@ -67,8 +82,19 @@ export function settings(value: unknown): Settings {
     animation: bool(v.animation, 'Animation'), sound: bool(v.sound, 'Sound'),
     palette: v.palette as Settings['palette'], weeklyGoalMinutes: number(v.weeklyGoalMinutes, 'Weekly goal', 0, 10080),
     autoOvertime: v.autoOvertime === undefined ? true : bool(v.autoOvertime, 'Automatic overtime'),
-    theme, sidebarCollapsed: v.sidebarCollapsed === undefined ? false : bool(v.sidebarCollapsed, 'Collapsed side panel')
+    theme, sidebarCollapsed: v.sidebarCollapsed === undefined ? false : bool(v.sidebarCollapsed, 'Collapsed side panel'),
+    agentAccess: agentAccess(v.agentAccess ?? 'off'),
+    focusVisual: focusVisual(v.focusVisual ?? 'brain'),
+    attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, 'Attention check-ins')
   };
+}
+function focusVisual(value: unknown): FocusVisual {
+  if (value !== 'brain' && value !== 'instrument') throw new Error('Choose the brain or the session gauge for Focus.');
+  return value;
+}
+export function agentAccess(value: unknown): AgentAccess {
+  if (value !== 'off' && value !== 'read' && value !== 'propose' && value !== 'edit') throw new Error('Choose Off, Read only, Read and propose, or Read and edit for the AI agent.');
+  return value;
 }
 function vBoolean(value: unknown): boolean { return value === undefined ? false : bool(value, 'Activity collection'); }
 export function timestamp(value: unknown): string {

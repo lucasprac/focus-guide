@@ -3,11 +3,16 @@ import { Store } from './store';
 import { TimerEngine } from './timer';
 import type { Command, FocusSession, Task } from '../shared/types';
 import * as v from '../shared/validation';
-import { totalMinutes } from '../shared/analytics';
-import { GoalService } from './goal-service';
+import { addDays, selectedSessions, totalMinutes } from '../shared/analytics';
+import { INSIGHT_THRESHOLDS, focusInsights } from '../shared/focus-insights';
+import type { ProbeScheduler } from './probes';
+import { GoalService, dateRange } from './goal-service';
+import { AgentService } from './agent-service';
 
 export class FocusService {
-  constructor(readonly store: Store, readonly timer: TimerEngine, private beforeFieldDelete?: () => void) {}
+  constructor(readonly store: Store, readonly timer: TimerEngine, private beforeDelete?: (kind: 'field' | 'goal') => void, readonly probes?: ProbeScheduler) {}
+  // Runtime-only results of insights.read, keyed by the input and the data revision; never persisted.
+  private insights: Array<{ key: string; value: unknown }> = [];
   private categoryInput(value: unknown): string | null {
     if (value === null || value === undefined || value === '') return null;
     const id = v.id(value), category = this.store.category(id);
@@ -21,32 +26,41 @@ export class FocusService {
     if (primaryTaskId && !checklistIds.includes(primaryTaskId)) throw new Error('Include the primary task in the checklist.');
     for (const id of checklistIds) {
       const task = this.store.task(id), alreadyLinked = active && this.timer.current?.checklistIds.includes(id);
-      if (!task || task.fieldId !== fieldId || (!alreadyLinked && (task.archived || task.completed))) throw new Error('Choose open tasks from the selected field.');
+      if (!task || task.fieldId !== fieldId || (!alreadyLinked && (task.archived || task.completed))) throw new Error('Choose open tasks from the selected area.');
     }
     return { primaryTaskId, checklistIds };
   }
+  // Agent code runs commands through this; permanent deletion stays a user command only.
+  private agentCommand = (command: Command, input: Record<string, unknown>): unknown => {
+    if (command === 'goal.delete' || command === 'field.delete') throw new Error('An agent cannot delete records.');
+    return this.run(command, input);
+  };
+  // The local agent bridge calls only this method; it never reaches the renderer commands directly.
+  agentTool(name: unknown, input: Record<string, unknown>, source: string): unknown { return new AgentService(this.store,this.agentCommand).tool(name,input,source); }
   run(command: Command, input: Record<string, unknown> = {}): unknown {
     const now = new Date().toISOString();
     const goals = new GoalService(this.store);
+    if (command === 'goal.delete') { goals.remove(input, this.timer.current?.goalId ?? null, this.beforeDelete); return; }
     if (command.startsWith('goal.')) return goals.run(command,input,now);
+    if (command.startsWith('agent.')) return new AgentService(this.store,this.agentCommand).run(command,input,now);
     switch (command) {
       case 'field.create': {
-        if (this.store.allFields().length >= 1000) throw new Error('The field limit has been reached.');
+        if (this.store.allFields().length >= 1000) throw new Error('The area limit has been reached.');
         const f = { id: randomUUID(), name: v.text(input.name, 'Field name', 60, true), color: v.color(input.color), archived: false, createdAt: now };
         this.store.putField(f); return f.id;
       }
       case 'field.update': case 'field.archive': {
-        const f = this.store.field(v.id(input.id)); if (!f) throw new Error('This field no longer exists.');
+        const f = this.store.field(v.id(input.id)); if (!f) throw new Error('This area no longer exists.');
         if (command === 'field.archive') { f.archived = v.bool(input.archived, 'Archived'); }
         else { f.name = v.text(input.name, 'Field name', 60, true); f.color = v.color(input.color); }
         this.store.putField(f); return;
       }
       case 'field.delete': {
         const id = v.id(input.id);
-        if (!this.store.field(id)) throw new Error('This field no longer exists.');
-        if (this.timer.current?.fieldId === id || this.store.all().sessions.some(s => s.fieldId === id && s.status !== 'completed')) throw new Error('Finish this field’s running or paused session before deleting it.');
-        if (!this.beforeFieldDelete) throw new Error('A recovery backup is required before deleting a field.');
-        this.beforeFieldDelete();
+        if (!this.store.field(id)) throw new Error('This area no longer exists.');
+        if (this.timer.current?.fieldId === id || this.store.all().sessions.some(s => s.fieldId === id && s.status !== 'completed')) throw new Error('Finish this area’s running or paused session before deleting it.');
+        if (!this.beforeDelete) throw new Error('A recovery backup is required before deleting an area.');
+        this.beforeDelete('field');
         this.store.removeField(id); return;
       }
       case 'category.create': {
@@ -61,7 +75,7 @@ export class FocusService {
         this.store.putCategory(c); return;
       }
       case 'task.create': {
-        const field = this.store.field(v.id(input.fieldId)); if (!field || field.archived) throw new Error('Choose an active field.');
+        const field = this.store.field(v.id(input.fieldId)); if (!field || field.archived) throw new Error('Choose an active area.');
         const t: Task = { categoryId: this.categoryInput(input.categoryId), notes: v.text(input.notes ?? '', 'Task notes', 2000), priority: v.priority(input.priority ?? 'normal'), dueDate: v.date(input.dueDate ?? null), id: randomUUID(), fieldId: field.id, title: v.text(input.title, 'Task title', 200, true), completed: false, archived: false, createdAt: now, updatedAt: now };
         Object.assign(t,goals.taskLinks(t,input));
         this.store.db.transaction(() => { this.store.putTask(t); if (input.attachToSession === true && this.timer.current?.fieldId === field.id) this.timer.addTask(t.id); })(); return t.id;
@@ -80,7 +94,7 @@ export class FocusService {
       }
       case 'session.start': {
         if (this.timer.snapshot().mode !== 'idle') throw new Error('Finish the current session or break first.');
-        const f = this.store.field(v.id(input.fieldId)); if (!f || f.archived) throw new Error('Choose an active field.');
+        const f = this.store.field(v.id(input.fieldId)); if (!f || f.archived) throw new Error('Choose an active area.');
         const { primaryTaskId, checklistIds } = this.taskSelection(input, f.id);
         const timingMode = input.timingMode ?? 'countdown';
         if (timingMode !== 'countdown' && timingMode !== 'stopwatch') throw new Error('Choose Timer or Stopwatch.');
@@ -90,7 +104,7 @@ export class FocusService {
         const plannedMs = timingMode === 'stopwatch' ? null : v.number(input.durationMinutes,'Duration',1,1440) * 60000;
         try { this.store.db.transaction(() => {
           if (links.occurrence) this.store.putGoalRecord('goalOccurrences',links.occurrence);
-          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,activityMode,behaviourVersion: 3,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy });
+          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null });
           this.store.setMeta('settings',{ ...this.store.getSettings(),activityModes: { ...this.store.getSettings().activityModes,[f.id]: activityMode } });
         })(); } catch (error) { this.timer.recover(); throw error; }
         return this.timer.current!.id;
@@ -101,13 +115,15 @@ export class FocusService {
       case 'session.review': case 'session.edit': case 'session.exclude': case 'session.delete': {
         const s = this.store.session(v.id(input.id)); if (!s || s.status !== 'completed') throw new Error('Only a finished session can be edited or removed.');
         if (command === 'session.delete') { this.store.removeSession(s.id); return; }
-        const before = { fieldId: s.fieldId, intention: s.intention, energy: s.energy, focus: s.focus, note: s.note, excluded: s.excluded };
+        const before = { fieldId: s.fieldId, intention: s.intention, energy: s.energy, focus: s.focus, note: s.note, excluded: s.excluded, detractor: s.detractor ?? null, challenge: s.challenge ?? null };
         if (command === 'session.exclude') s.excluded = v.bool(input.excluded, 'Excluded');
         else {
           s.focus = v.rating(input.focus); s.note = v.text(input.note ?? '', 'Note', 2000);
+          if ('detractor' in input) s.detractor = v.detractor(input.detractor);
+          if ('challenge' in input) s.challenge = v.challenge(input.challenge);
           if (command === 'session.edit') {
-            const f = this.store.field(v.id(input.fieldId)); if (!f) throw new Error('Choose an existing field.');
-            if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; }
+            const f = this.store.field(v.id(input.fieldId)); if (!f) throw new Error('Choose an existing area.');
+            if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; s.milestoneId = null; }
             s.fieldId = f.id; s.intention = v.text(input.intention ?? '', 'Intention', 500); s.energy = v.rating(input.energy);
           }
         }
@@ -120,6 +136,27 @@ export class FocusService {
         return this.timer.recordReturn(source);
       }
       case 'attention.remove': this.store.removeReturn(v.id(input.id)); return;
+      case 'probe.answer': {
+        const id = v.id(input.id), answer = v.probeAnswer(input.answer), source = input.source;
+        if (source !== 'main' && source !== 'floating') throw new Error('Invalid check-in source.');
+        const pending = this.probes?.pending;
+        if (!pending || pending.id !== id || pending.sessionId !== this.timer.current?.id || this.timer.current.status !== 'running') throw new Error('This check-in has expired.');
+        const { offsetMs, latencyMs } = this.probes!.answer(id);
+        return this.timer.recordProbe(answer, offsetMs, source, latencyMs);
+      }
+      case 'insights.read': {
+        const { from, to } = dateRange(input);
+        const fieldId = input.fieldId == null || input.fieldId === '' ? undefined : v.id(input.fieldId);
+        const goalId = input.goalId == null || input.goalId === '' ? undefined : v.id(input.goalId);
+        const revision = this.store.revision(), key = JSON.stringify([revision, from, to, fieldId ?? '', goalId ?? '']);
+        const hit = revision === null ? undefined : this.insights.find(entry => entry.key === key);
+        if (hit) return structuredClone(hit.value);
+        // The cycle comparison also reads the recent and baseline windows, which can reach back further than the range.
+        const data = this.store.all(), reach = addDays(to, -(INSIGHT_THRESHOLDS.cycle.recentDays + INSIGHT_THRESHOLDS.cycle.baselineDays - 1)), sessions = selectedSessions(data, from < reach ? from : reach, to, fieldId, goalId);
+        const value = focusInsights(data, sessions.flatMap(s => this.store.activity(s.id)), { from, to, fieldId, goalId, now: Date.parse(now) });
+        if (revision !== null) this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
+        return value;
+      }
       case 'behaviour.read': {
         const sessionId = v.id(input.id); if (!this.store.session(sessionId)) throw new Error('Session no longer exists.');
         return this.store.activity(sessionId);

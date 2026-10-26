@@ -5,7 +5,8 @@
 | Area | Entry points and responsibility |
 |---|---|
 | Desktop lifecycle | `src/main/index.ts`, `coordination.ts`: windows, IPC and serialized native operations |
-| Domain and persistence | `src/main/service.ts`, `timer.ts`, `store.ts`, `backup.ts`, `behaviour.ts`, `goal-service.ts` |
+| Domain and persistence | `src/main/service.ts`, `timer.ts`, `store.ts`, `backup.ts`, `behaviour.ts`, `goal-service.ts`, `agent-service.ts`, `agent-edits.ts` |
+| Local AI agent | `src/main/agent-bridge.ts` (named pipe), `src/mcp/server.ts` (stdio MCP server), `src/shared/agent-tools.ts`. `scripts/build-mcp.cjs` bundles the server to `out/mcp/`. |
 | Process boundary | `src/preload/index.ts`: restricted bridge |
 | Shared contracts | `src/shared/types.ts`, `validation.ts`, `analytics.ts`, goal planning, timer and brain display helpers |
 | Renderer | `src/renderer/src/App.tsx`, page components, `ui.tsx`, `components.tsx`, `app.css` |
@@ -36,6 +37,19 @@ npm.cmd run build
 npm.cmd run package
 ```
 
+`npm.cmd run build` also runs `npm.cmd run build:mcp`. That step bundles the MCP server, `@modelcontextprotocol/server` and `zod` into `out/mcp/focus-guide-mcp.cjs`. Packaging copies the file to `resources/mcp/`. These two packages are development dependencies because the bundle contains them.
+
+## Test the MCP server
+
+Use a test data folder, never the personal one.
+
+1. Run `npm.cmd run build`.
+2. Start the app with `FOCUS_GUIDE_TEST_MODE=1` and `FOCUS_GUIDE_DATA_DIR=<test folder>`. Set **Settings > AI agent** to the access level that you test.
+3. Start the server as a client does: `node_modules\electron\dist\electron.exe out\mcp\focus-guide-mcp.cjs`, with `ELECTRON_RUN_AS_NODE=1` and the same `FOCUS_GUIDE_DATA_DIR`.
+4. Send MCP JSON-RPC messages on standard input (`initialize`, `tools/list`, `tools/call`).
+
+The server finds the app through `agent-bridge.json` in the data folder. Without the file, or with the app closed, each tool returns an error that tells the user to open Focus Guide.
+
 ## Update the app
 
 `npm.cmd run package` writes the package to `Arquivos/dist/win-unpacked`. It never overwrites the running app. To install the package:
@@ -59,7 +73,8 @@ The preview adapter is for development only. It uses the production `TimerEngine
 - All dependency versions and the lockfile are pinned.
 - Vite bundles the runtime React, Anime.js and Three.js code. Three.js loads as a separate local chunk.
 - `better-sqlite3` is the only production dependency that Vite does not bundle.
+- The MCP server runs inside `FocusGuide.exe` with `ELECTRON_RUN_AS_NODE=1`. Do not disable the `RunAsNode` Electron fuse, or the client configuration stops working.
 - The app needs no CDN and no downloaded model.
-- `AppState.graphicsMode` is a runtime-only field. It must not go into persisted settings, datasets or backups.
+- `AppState.graphicsMode` and `AppState.agent` are runtime-only fields. They must not go into persisted settings, datasets or backups.
 
 For rendering budgets, see [Visual design](VISUAL-DESIGN.md). For timer and data invariants, see [Architecture](ARCHITECTURE.md).

@@ -1,6 +1,6 @@
 # Focus Guide — user guide
 
-Version 1.5.0 · Windows x64 · English · offline
+Version 2.0.0 · Windows x64 · English · offline
 
 This guide describes the app in the `Aplicativo` folder. For the current interface, see [Visual design](VISUAL-DESIGN.md).
 
@@ -23,9 +23,68 @@ You can make a Windows shortcut to the executable in **Aplicativo**. The app kee
 3. Open **Focus Guide.lnk**.
 4. Resume a paused session manually, if one exists.
 
-Version 1.5.0 upgrades older databases to schema 5. Before the upgrade, it saves a snapshot of the database. To go back to an older app, you need the database snapshot that matches it.
+Version 2.0.0 upgrades older databases to schema 5. Before the upgrade, it saves a snapshot of the database. To go back to an older app, you need the database snapshot that matches it.
 
 The milestone block editor upgrades the database to schema 6 in the same way. It saves a `before-schema-v6` snapshot first, and every existing milestone becomes a to-do.
+
+The goal workspace upgrades the database to schemas 7, 8 and 9. Each step saves a `before-schema-vN` snapshot first. After the upgrade, agent access is **Off**.
+
+Behaviour insights upgrade the database to schema 10. The app saves a `before-schema-v10` snapshot first. After the upgrade, attention check-ins are **off**. Version 2.0.0 and earlier cannot open a schema 10 database, and they cannot restore a version 10 backup. Before you update, save a full JSON backup with your current version. To go back, you need the snapshot and the older app.
+
+## Learn with goals
+
+The app opens on **Goals**. A goal is the place where you learn something, for example "Learn linear algebra".
+
+1. Select **New goal**. Choose its area (for example Mathematics), a title and an outcome.
+2. Open the goal. In **Roadmap**, write stages as headings and steps as to-dos. Open **Details** on a step to add an estimate, a target date, notes and links.
+3. Select **Focus on this goal** or **Focus on this step**. Focus opens with the goal, its area and the step. Select **Begin focus**.
+4. In **Tasks**, add one-off steps. In **Plan & review**, add weekly actions and write your weekly review.
+5. In **Behaviour**, see how you study this goal: time by activity mode and roadmap step, planned actions, and the same Insights figures as in Patterns for this goal.
+
+Areas are the former focus fields. They group goals. You manage them in **Settings > Your areas**. You can still start a session without a goal: select **Free focus** on the Focus page.
+
+### Delete a goal
+
+To hide a goal but keep all of it, set its status to **Archived** in **Edit goal**. To remove a goal permanently:
+
+1. Finish any running or paused session of the goal.
+2. Open the goal. Select **Delete goal** (the trash icon next to **Edit goal**).
+3. Look at the number of planning records that will be removed, and the tasks and sessions that will stay.
+4. Select one of these:
+   - **Keep goal** to cancel.
+   - **Back up & delete goal** to remove the goal. The app goes back to the goal list.
+
+The app removes the goal's roadmap, weekly actions, action check-ins, outcome observations, weekly reviews, and agent proposals and changes. Tasks and focus sessions stay in their area with all their recorded time; only their link to the goal is removed.
+
+Before it removes records, the app saves a JSON recovery backup in the `backups` directory of the data folder. If the backup fails, the goal does not change. To get the goal back, restore that backup (a restore replaces the full dataset). An AI agent cannot delete a goal.
+
+For the full rules, see [Goal planning](GOAL-PLANNING.md).
+
+## Connect an AI agent (MCP)
+
+Focus Guide can serve a local AI agent, such as Claude Code or Claude Desktop, through the Model Context Protocol (MCP). The agent can read your goals and focus records, and it can propose changes that you review.
+
+1. Open **Settings > AI agent (MCP)**.
+2. Choose the access level:
+   - **Off** (default): no agent can connect.
+   - **Read only**: the agent can read areas, goals, roadmaps, tasks, sessions, weekly reviews, behaviour summaries and focus insights.
+   - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions and review notes. Nothing changes until you apply a proposal.
+   - **Read and edit**: the agent can also change goals, roadmaps, step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page, where you can undo it.
+3. Select **Copy configuration**.
+4. Add the configuration to your client:
+   - Claude Desktop: add the `focus-guide` entry to `mcpServers` in `claude_desktop_config.json`, then restart Claude Desktop.
+   - Claude Code: save the text as `.mcp.json` in a project folder, or add the entry with `claude mcp add-json`.
+5. Keep Focus Guide open while the agent works.
+
+The configuration starts `FocusGuide.exe` as a small MCP server. You do not need Node.js. The server connects only to the running app on this computer, through a Windows named pipe with a new random key each time the app starts.
+
+**Privacy.** The agent sends what it reads to its AI provider. With access on, your goals, sessions, notes and activity summaries can leave this computer. Use **Read only** or **Off** if you do not want that. A restore always sets access to **Off**.
+
+**Proposals change nothing until you apply them.** Review them on the goal list and on each goal's Overview. Select **Apply**, **Edit then apply** or **Reject**. If you move or replace the `Aplicativo` folder, copy the configuration again, because it contains the path of the executable.
+
+The tool `get_focus_insights` gives the agent the same values as the Insights tab of Patterns. They describe your records and are not scores of attention. The default range is the last 90 days. Each curve has at most 60 points.
+
+The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analyse_goal_behaviour` give the agent a ready plan for these tasks.
 
 ## Begin a focus session
 
@@ -41,6 +100,8 @@ The milestone block editor upgrades the database to schema 6 in the same way. It
    - If you collapse this section, the app keeps your draft.
 
 The field, timing and intention stay visible together. Preparation from Goals or Tasks shows as a compact linked summary.
+
+Below the duration, Focus can show up to three hints from the last 90 days. They come from the prepared goal, or from the area if you chose no goal. Each hint comes from a different group. One hint suggests a session length or a pause. Select the button on it, for example **Use 25 min**, to set the timer. One hint suggests a time of day. One hint tells you what to do before you start, for example to write the first small step. If you saved an adjustment for this week, Focus shows it above the hints. Hints use the same rules as the Insights tab, so they appear only when you have enough records. If the app cannot read them, it shows none.
 
 ### Use tasks
 
@@ -99,6 +160,13 @@ During focus, open **Session tools**. It has these commands:
 
 After completion, you can rate your focus from 1 to 5 and write a note. You can also skip both.
 
+The reflection also has two questions that you can leave empty:
+
+- **What got in the way most?** The answers are Nothing notable, Phone or notifications, People or noise, Wandering thoughts, Tiredness or hunger, Unclear or too hard task, and Something else.
+- **How demanding was it?** The answers are Too easy, About right and Too hard.
+
+To remove an answer, select it again or select **Clear**. You can change both answers later with **Edit** in Calendar. The Insights tab uses them.
+
 **Save & take a 10-minute break** starts a separate break. A break never adds focus minutes. A break does not continue after an app restart.
 
 ### Automatic exclusion
@@ -126,6 +194,18 @@ The moon and sun button in the top bar changes between dark mode and light mode 
 - The app saves the theme and panel preferences locally. Full JSON backups include them.
 - Older backups use light mode and an expanded panel by default.
 
+### Session gauge
+
+The Focus page can show a session gauge instead of the brain. In Settings, set **Focus visual** to **Session gauge** and click **Save preferences**.
+
+- The gauge is a dial indicator on a stand. The large needle turns once for each 10 minutes of session time.
+- The small dial counts the turns up to 12, that is, 2 hours. Its short marker shows the planned length of the session. Before you start, the marker follows the duration that you select.
+- The screw jack under the plunger lifts a little at each turn, so the plunger and the needle always agree.
+- During a break, the needle and the plunger are blue.
+- The gauge shows the timer of the app. It does not measure attention, and it does not change recorded time.
+- The bottom-right corner of the Focus card shows the turn and the minutes, for example "turn 3 of 12 · 34 of 50 min".
+- The gauge does not use WebGL, so it also works in software rendering.
+
 ## Floating timer and tray
 
 ### Floating timer
@@ -139,6 +219,8 @@ Click **Floating timer** in the top bar.
 - At rest, only the brain is visible.
 - A light edge helps the brain, the time and the icons stay visible on dark backgrounds.
 - In software rendering mode, the floating timer shows the earlier brain image.
+
+Sometimes an [attention check-in](#attention-check-ins) is due while the main window has no focus. The floating timer then shows three small icon buttons: **On the task**, **Drifting** and **Somewhere else**. They do not take keyboard focus. If you hid the floating timer, it appears without taking focus and hides again after the check-in. If you close or hide the window while a check-in shows, the app cancels the check-in and saves nothing. The buttons cover only the lower part of the window. You can still drag the brain, press **I'm back** and use the timer controls.
 
 To show the time and the controls, move the pointer onto the window. When the pointer moves away, they hide again. This also occurs after you click a control. Tab or keyboard focus also shows them.
 
@@ -189,7 +271,7 @@ The monthly calendar shows before the planned actions of the selected day. The c
 
 Session commands:
 
-- **Edit** changes the field, intention, energy, focus rating and reflection. It does not change the raw duration. When you change the field, the app clears the task links to the previous field.
+- **Edit** changes the field, intention, energy, focus rating and reflection. It also changes the two optional answers about what got in the way and how demanding the session was. It does not change the raw duration. When you change the field, the app clears the task links to the previous field.
 - **Exclude** keeps a wrong record but removes it from analysis and neural progress.
 - **Delete** asks you to confirm. Then it removes the session and its events.
 
@@ -222,30 +304,77 @@ Two scatterplots show starting energy versus your focus rating, and recorded dur
 
 The weekly review shows totals, the rating distribution and the most frequent interruption categories. You can save one adjustment for the next week. In Settings, you can set an optional weekly time intention. It does not change cosmetic unlocks and gives no penalties.
 
+### Insights tab
+
+Patterns has two tabs: **Overview** and **Insights**. Overview is the page that the sections above describe. The date range, area and goal filters apply to both tabs. Insights reads your finished, included sessions on this computer. It sends nothing to any service.
+
+The first card compares the last 7 days with the 28 days before them: perceived focus, drifts per hour, the median time to the first drift and window switches per hour. It also shows the adjustment that you saved for this week and for last week. A change is a hint. It does not prove that the adjustment worked.
+
+The card **The data behind these insights** shows five values:
+
+- How many sessions the analysis uses.
+- How many of them you rated.
+- How much active time the keyboard and mouse collection covered.
+- How many sessions have drift markers.
+- How many check-ins you answered.
+
+Notes tell you which records the analysis left out and why.
+
+| Figure | What it shows | What it needs |
+|---|---|---|
+| **When you focus best** | Your focus rating by start hour, with a band for the uncertainty. Drifts per active hour. A grid of weekday and time of day. | 10 rated sessions |
+| **How long your attention lasts** | The share of sessions that are still without a drift as active minutes pass, and the median time. You can group the curve by time of day or by activity mode. A table shows drifts per hour in the warm-up (0–10 min), sustain (10–25 min) and fatigue (25+ min) phases. A second curve shows the time after **I'm back** until the next drift. | 15 sessions with **I'm back** available and 8 first drifts |
+| **The shape of a session** | Blocks of 5 active minutes, up to 120 minutes: time with input, window switches, drifts and off-task check-ins. Dashed lines mark minute 10 and minute 25. A note compares the 2 minutes before a drift with the other minutes. | 10 sessions with activity collection on |
+| **Interaction states** | Groups of minutes by how you used the keyboard and mouse, for example Typing, Scrolling or Quiet, and how often the state changes. | 300 minutes with input time from 5 sessions |
+| **What got in the way** | Your answers with the mean focus, the interruptions that you marked, window switching and the challenge answers. | 10 sessions |
+| **What tends to go with higher focus** | Which facts about a session go with a higher or lower rating. One view uses facts that you know before you start, for example time of day or starting energy. A second view uses facts from during and after the session. The lasso marks the features it keeps. Features that it sets to zero show as "No clear association found". | 30 rated sessions over 14 days |
+| **Suggestions to try** | Up to five suggestions with their numbers. | The rules in the [data dictionary](DATA-DICTIONARY.md#suggestions) |
+
+If a figure does not have enough data, it says what is missing. The count of sessions or minutes shows how far you are.
+
+How to read the figures:
+
+- Every interval is a 90% interval. A wide interval means that the result is uncertain.
+- Your ratings and markers are what you reported. They are not a measure of attention.
+- You choose when you focus. A pattern is an association. It does not show a cause.
+- A missing value stays a gap. It never counts as zero.
+- The open end of a median shows as "or longer". It means that the curve did not reach a clear end.
+- The model card shows effects only when the model predicts your next rating at least 5% better than your average rating. If not, it shows the two errors.
+- Under the three chart figures, **Show values** opens a table with the same numbers. A screen reader can read it. The other figures already show their numbers as text.
+- Each suggestion has a label, **Tentative** or **Moderate evidence**, and shows the numbers behind it. **Try next week** adds the suggestion to your weekly adjustment on the Overview tab. Then you can edit and save it.
+
+### Behaviour tutorial
+
+The **Behaviour tutorial** is a short guide with 9 steps. It explains keyboard and mouse totals, attention check-ins, the **I'm back** marker, reflection questions, the Insights tab, how to read the numbers, the Behaviour section of a goal and the agent tool `get_focus_insights`. Some steps have a button, for example **Open Settings**, that closes the tutorial and opens the right page.
+
+To open it, select **Open tutorial** in Settings, in the Activity & shortcuts group. Or select **Behaviour tutorial** at the top of Patterns. Use **Back** and **Next** to move between steps. The tutorial does not change your settings or your data.
+
 ### Example data
 
-**Explore an example** shows 36 invented observations for a short time. A label identifies them clearly. They add nothing to your personal dataset. To save a weekly adjustment, go back to your dataset. Exports always contain your personal records, also while you look at the example.
+**Explore an example** shows 60 invented sessions from the last 30 days, with activity, markers, check-ins and reflection answers. They fill the Insights tab too. In the example, **Try next week** is off. A label identifies them clearly. They add nothing to your personal dataset. To save a weekly adjustment, go back to your dataset. Exports always contain your personal records, also while you look at the example.
 
 ## Neural World
 
-Each field adds to a persistent constellation. Its growth uses the recorded time of finished, included sessions.
+Neural World shows your goals as a network of neurons. It reads your records only; it changes nothing.
 
-- Open **Palettes & horizons** to select a cosmetic palette. Palettes unlock at 5, 20 and 50 recorded hours.
-- Palettes change the world illustration only. Your light or dark interface choice is separate.
-- **Focus by field** shows the totals of all fields.
+- **Soma.** Each goal is a neuron. Its body grows with the recorded focus time of the goal (finished, included sessions), on a scale that slows down for large totals.
+- **Axon.** The to-do steps of the roadmap sit along the axon in roadmap order. Finished steps are lit. The next step is larger and pulses slowly when animations are on. Later steps are faint. A long roadmap shows 12 steps around the next step; the side panel lists every step.
+- **Sparks.** Each action that you recorded as done in the last 28 days adds a spark around the soma. A smaller version adds a smaller spark. Skipped or unrecorded actions add nothing.
+- **Progress arc.** A goal with a baseline and a target shows an arc for its latest progress value.
+- **Status.** Active goals have full colour. Drafts are translucent with a dashed axon. Paused goals are muted and do not pulse. Achieved goals move to an outer ring. Archived goals do not appear.
+- **Areas.** Goals of the same area stay together and use the area colour. The layout comes from identities, so it does not move when totals change.
+- Open **Palettes & horizons** to select a palette. The palette tints the sky and the light of the world. Palettes unlock at 5, 20 and 50 recorded hours. Your light or dark interface choice is separate.
+- **Focus by area** shows the totals of all areas.
 - Days off do not erase progress. There are no penalties for a broken streak.
-- The app draws a bounded number of stars and field regions. The dataset keeps every field and its full time total.
 
-### Explore the constellation
+### Explore the network
 
-In the current development build, **Your Focus Constellation** uses a Three.js perspective scene with an SVG fallback.
-
-- To select a cluster, click it or its field button.
-- To turn the scene, drag it, use the rotate and tilt buttons, or give the scene focus and use the arrow keys.
-- **+** and **−** zoom. **Home** resets the view. The toolbar has the same commands.
-- Select a field below the scene to highlight its name and recorded time.
-- **Pause orbit** stops the automatic rotation. Rotation also pauses while the pointer is on the constellation or the constellation has focus. Rotation obeys Gentle animations, system reduced motion and window visibility.
-- The scene shows eight fields at most. **Focus by field** keeps the full list.
+- To select a goal, click its neuron or its button below the scene. The world turns and the camera moves to that goal. **Overview**, **Esc** or **Home** go back.
+- Click a synapse, or a step in the side panel, to select that step.
+- The side panel shows the goal's status, area, focus time, the last 28 days, recorded actions, progress and roadmap. **Focus on next step** (or **Focus on this step** for a selected open step) prepares a session for the goal and the step and opens Focus. Only active goals can start a session. **Open goal** opens the goal workspace.
+- To turn the scene, drag it, use the rotate and tilt buttons, or give the scene focus and use the arrow keys. **+** and **−** zoom.
+- **Pause orbit** stops the automatic rotation. Rotation also pauses while the pointer is on the scene, the scene has focus, or a goal is in view. Rotation obeys Gentle animations, system reduced motion and window visibility.
+- **Show achieved goals** hides or shows the outer ring. The scene shows 24 goals at most; the list below it shows every goal.
 - View controls do not change recorded time.
 
 The **Year overview** in Calendar contains the annual heatmap and the day comparisons. Patterns keeps the field charts and weekday charts visible. **Session distributions** and **Possible associations** show more charts and their limits.
@@ -386,7 +515,26 @@ Collection is local, and it is off until you turn it on.
   - Observed intervals that contain mouse movement.
 - Movement time shows the intervals with activity. It is not an exact measure of how long the mouse moved.
 - The app never sends typed text, key identities, mouse coordinates or application names to Electron. It never stores them.
-- After the first installation, a migration or a backup restore, collection is disabled.
+- After the first installation, a migration or a backup restore, collection is disabled. Attention check-ins are off too.
+
+### Window switches
+
+With keyboard and mouse collection on, the helper also counts how many times the window in front changes. It also marks each second in which any key press, click, scroll or pointer movement occurred. This is the input time. The Insights tab uses both.
+
+The app records one number for each minute. It does not record:
+
+- A window name or a window title.
+- A program name.
+- What the window shows.
+
+Rules:
+
+- The app ignores its own windows. If you press **I'm back** in the floating timer, the app does not count a switch.
+- The first window after a start is not a switch.
+- A return to the same window after a visit to Focus Guide is not a switch.
+- A change of tab inside a browser is not a switch, because the window does not change. A change between two browser windows is a switch.
+- The helper looks at the window once for each second. A change that lasts less than about one second can be missed.
+- Older records have no switch count and no input time. The analysis leaves them out.
 
 ### I'm back marker
 
@@ -412,9 +560,28 @@ Feedback for a marker:
 - Hidden windows do not open or replay feedback.
 - A marker needs a running focus session. A shared guard of one second prevents duplicate presses.
 
+### Attention check-ins
+
+A check-in asks where your attention is right now. It is off until you turn it on.
+
+1. In Settings, enable **Attention check-ins**.
+2. Click **Save preferences**.
+
+During a focus session, the question "Where is your attention right now?" appears with three answers: **On the task**, **Drifting** and **Somewhere else**. One click answers it.
+
+- The first check-in comes after 8 to 20 active minutes. The next ones come 15 to 35 active minutes after the one before. A session has 6 check-ins at most.
+- A check-in appears below the top bar, on every page. If Focus Guide is not the window with focus, the floating timer shows small buttons instead. This also happens when you switch away from Focus Guide, hide it or minimize it while a check-in shows. The check-in never takes keyboard focus.
+- If you do not answer in 45 seconds, the check-in disappears. The app saves it as missed.
+- There are no check-ins in Offline mode, while the timer is paused, during a break, or in the last 5 minutes of a countdown.
+- Some events cancel a check-in on screen. They are a pause, a finished session, a break, a lock or sleep, a change of the setting and closing the floating timer. The app saves nothing for it.
+- If you turn check-ins on during a session, the first one comes 8 to 20 active minutes later.
+- A check-in is a small interruption. The Insights tab tells you how many sessions had check-ins.
+- A check-in answer is not a drift marker. The Insights tab counts the answers separately.
+- Screen readers announce a check-in when it appears.
+
 ### Review behaviour
 
-Expand **Behaviour** in the completion reflection or in a Calendar session. It shows interaction totals, collection coverage, a timeline in recorded active time, return markers and pauses.
+Expand **Behaviour** in the completion reflection or in a Calendar session. It shows interaction totals (also the share of time with input and the window switches), collection coverage, and a timeline in recorded active time. The timeline marks returns, interruptions, check-in answers and pauses. A bar shows the warm-up, sustain and fatigue phases. Calendar cards also show the detractor and the challenge answers.
 
 - A recorded zero, partial coverage, disabled collection and unavailable data are different states.
 - A return marks the time when you reported that you came back. It does not show when the distraction started or how long it was. It does not change recorded time.

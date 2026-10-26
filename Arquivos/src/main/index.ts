@@ -7,7 +7,10 @@ import { Store } from './store';
 import { TimerEngine } from './timer';
 import { FocusService } from './service';
 import { BehaviourCollector } from './behaviour';
+import { ProbeScheduler } from './probes';
 import { CommandQueue, TransitionCoordinator } from './coordination';
+import { AgentBridge } from './agent-bridge';
+import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
 import { localDay, totalMinutes } from '../shared/analytics';
 import type { AppEvent, AppState, BackupFile, Command } from '../shared/types';
@@ -31,6 +34,9 @@ let store: Store;
 let timer: TimerEngine;
 let service: FocusService;
 let collector: BehaviourCollector;
+let probes: ProbeScheduler;
+let hideProbeFloat = false;
+let bridge: AgentBridge | null = null;
 let quitting = false;
 let quitPending = false;
 let backupStatus = 'Your data stays on this computer.';
@@ -48,7 +54,7 @@ const applicationIcon = join(__dirname, '../renderer/icon.png');
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? 'Your timer ended — overtime is recording' : 'Focus session complete' : 'Your break is complete', body: mode === 'focus' ? timer?.current?.autoOvertime ? 'Extra time stays in this session. Finish when you are ready.' : 'Take a breath. Your session has been saved.' : 'Choose your next intention when you are ready.', silent: !store.getSettings().sound }).show();
 }
-function state(): AppState { return { ...store.all(), timer: timer.snapshot(), collector: collector?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
+function state(): AppState { return { ...store.all(), timer: timer.snapshot(), probe: probes?.pending ?? null, collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'An unexpected error occurred.'; }
@@ -101,31 +107,58 @@ function createMain(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
   mainWindow.setMenuBarVisibility(false);
   observeVisibility(mainWindow);
-  mainWindow.on('blur', () => { shortcutCaptureUntil = 0; });
-  mainWindow.on('hide', () => { shortcutCaptureUntil = 0; });
+  mainWindow.on('blur', () => { shortcutCaptureUntil = 0; presentPendingProbe(); });
+  mainWindow.on('hide', () => { shortcutCaptureUntil = 0; presentPendingProbe(); });
+  mainWindow.on('minimize', presentPendingProbe);
   mainWindow.webContents.on('did-start-loading', () => { shortcutCaptureUntil = 0; });
   showWhenLoaded(mainWindow);
   mainWindow.on('close', e => { saveBounds(mainWindow!, 'mainBounds'); if (!quitting) { e.preventDefault(); mainWindow!.hide(); } });
   loadWindow(mainWindow);
 }
 function showMain(): void { if (!mainWindow || mainWindow.isDestroyed()) createMain(); else { mainWindow.show(); if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus(); } }
-function showFloating(): void {
-  if (floatingWindow && !floatingWindow.isDestroyed()) { floatingWindow.show(); return; }
+function showFloating(inactive = false): void {
+  if (!inactive) hideProbeFloat = false;
+  if (floatingWindow && !floatingWindow.isDestroyed()) { if (!inactive) floatingWindow.show(); return; }
   const a = screen.getPrimaryDisplay().workArea;
   const defaults = { x: a.x + a.width - 152, y: a.y + Math.min(55, Math.max(0, a.height - 156)), width: 132, height: 156 };
   floatingWindow = new BrowserWindow({ ...safeBounds('floatBounds', defaults), minWidth: 132, minHeight: 156, maxWidth: 132, maxHeight: 156, frame: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, show: false, backgroundColor: '#00000000', icon: applicationIcon,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
-  showWhenLoaded(floatingWindow);
+  if (!inactive) showWhenLoaded(floatingWindow);
   observeVisibility(floatingWindow);
-  floatingWindow.on('close', e => { saveBounds(floatingWindow!, 'floatBounds'); if (!quitting) { e.preventDefault(); floatingWindow!.hide(); } });
+  floatingWindow.on('close', e => { saveBounds(floatingWindow!, 'floatBounds'); if (!quitting) { e.preventDefault(); hideProbeFloat = false; floatingWindow!.hide(); if (probes?.cancel()) changed(); } });
   loadWindow(floatingWindow, true);
+}
+// A check-in never steals focus: without a focused main window it appears in the floating timer, shown inactive.
+function presentProbe(): void {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) return;
+  showFloating(true);
+  if (!floatingWindow!.isVisible()) { hideProbeFloat = true; floatingWindow!.showInactive(); }
+}
+// The main window lost focus, hid or minimized while a check-in waits: move it to the floating timer before it expires unseen.
+function presentPendingProbe(): void { if (!quitting && probes?.pending) presentProbe(); }
+function dismissProbe(): void {
+  if (hideProbeFloat && floatingWindow && !floatingWindow.isDestroyed()) floatingWindow.hide();
+  hideProbeFloat = false;
+}
+function pollProbes(): void {
+  const result = probes.tick(timer.snapshot(), timer.current, !!store.getSettings().attentionProbes);
+  if (!result) return;
+  if (result.type === 'show') presentProbe(); else dismissProbe();
+  if (result.type === 'expire') {
+    const { probe, offsetMs } = result;
+    void enqueue(async () => {
+      if (timer.current?.id !== probe.sessionId || timer.current.status !== 'running') return;
+      timer.recordProbe('missed', offsetMs, null, null); collector.flush(); changed();
+    });
+  }
+  changed();
 }
 function updateTray(): void {
   if (!tray) return;
   const snapshot = timer.snapshot();
   tray.setToolTip(snapshot.mode === 'idle' ? 'Focus Guide — choose an intention' : snapshot.phase === 'stopwatch' ? `Focus Guide — ${Math.floor(snapshot.elapsedMs / 60000)} min recorded` : snapshot.phase === 'overtime' ? `Focus Guide — overtime +${Math.floor(snapshot.overtimeMs / 60000)} min` : `Focus Guide — ${Math.ceil(snapshot.remainingMs / 60000)} min remaining`);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Focus Guide', click: showMain }, { label: 'Show floating timer', click: showFloating },
+    { label: 'Open Focus Guide', click: showMain }, { label: 'Show floating timer', click: () => showFloating() },
     { label: snapshot.running ? 'Pause timer' : 'Resume timer', enabled: snapshot.mode !== 'idle', click: () => { try { void enqueue(async () => { await transitions.run(() => { timer.snapshot().running ? timer.pause() : timer.resume(); }); changed(); }); } catch (e) { report(e); } } },
     { type: 'separator' }, { label: 'Quit (save and pause)', click: () => app.quit() }
   ]));
@@ -187,17 +220,17 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     if (next.palette !== previous.palette && hours < ({ cyan: 0, violet: 5, amber: 20, rose: 50 }[next.palette])) throw new Error('This palette is not yet available.');
     // Registration rejection leaves collection untouched; unrelated preferences remain editable.
     if (next.returnShortcut !== previous.returnShortcut) await collector.configureShortcut(next.returnShortcut ?? 'Ctrl+Alt+Space');
-    try { return await transitions.run(() => service.run(command, input)); }
+    try { const value = await transitions.run(() => service.run(command, input)); bridge?.sync(); return value; }
     catch (error) { await collector.configureShortcut(previous.returnShortcut ?? 'Ctrl+Alt+Space').catch(() => {}); throw error; }
   }
-  if (['session.pause', 'session.resume', 'session.finish', 'activity.delete', 'field.delete'].includes(command)) {
+  if (['session.pause', 'session.resume', 'session.finish', 'activity.delete', 'field.delete', 'goal.delete'].includes(command)) {
     return transitions.run(() => service.run(command, input));
   }
   switch (command) {
     case 'shortcut.retry': await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); return;
     case 'window.float': showFloating(); return;
     case 'window.main': showMain(); return;
-    case 'window.hide': floatingWindow?.hide(); return;
+    case 'window.hide': probes.cancel(); hideProbeFloat = false; floatingWindow?.hide(); return;
     case 'backup.create': await dailyBackup(true); return backupStatus;
     case 'export.sessions': case 'export.events': case 'export.backup': case 'export.activity': case 'export.goals': {
       const filePath = selectedFile;
@@ -221,11 +254,14 @@ async function handle(command: Command, input: Record<string, unknown>, selected
       await store.backup(join(directory, `before-restore-${Date.now()}.sqlite`));
       const data = pendingRestore.data; store.restore(data); pendingRestore = null; timer.recover();
       try { await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); } catch { /* Conflict stays visible in status. */ }
+      bridge?.sync();
       backupStatus = 'Restored successfully. A copy of the previous database is in backups.'; return;
     }
     default: {
       const value = service.run(command, input);
-      if (command === 'attention.return') { collector.flush(); acknowledgeReturn(value); }
+      if (['attention.return', 'interruption.record', 'thought.record', 'probe.answer'].includes(command)) collector.flush();
+      if (command === 'attention.return') acknowledgeReturn(value);
+      if (command === 'probe.answer') dismissProbe();
       return value;
     }
   }
@@ -252,19 +288,20 @@ app.on('before-quit', e => {
     } catch (error) { quitPending = false; showMain(); report(error); changed(); }
   })();
 });
-app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); tray?.destroy(); store?.close(); });
+app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); bridge?.stop(); tray?.destroy(); store?.close(); });
 app.on('window-all-closed', () => { /* The tray owns the application lifetime. */ });
 
 if (locked) void app.whenReady().then(async () => {
   store = new Store(app.getPath('userData'));
   timer = new TimerEngine(store, undefined, notify);
-  service = new FocusService(store, timer, () => {
+  probes = new ProbeScheduler();
+  service = new FocusService(store, timer, kind => {
     const directory = join(store.directory, 'backups');
     mkdirSync(directory, { recursive: true });
-    const file = join(directory, `before-field-delete-${Date.now()}-${randomUUID()}.json`);
+    const file = join(directory, `before-${kind}-delete-${Date.now()}-${randomUUID()}.json`);
     atomicWrite(file, serializeBackup(store.all(true)));
-    backupStatus = 'A recovery backup was saved before field deletion.';
-  });
+    backupStatus = `A recovery backup was saved before ${kind === 'goal' ? 'goal' : 'area'} deletion.`;
+  }, probes);
   collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, 'activity-helper.exe') : resolve(__dirname, '../../native/bin/activity-helper.exe'),
     () => {
       if (shortcutCaptureUntil > Date.now() && mainWindow?.isFocused()) {
@@ -277,6 +314,18 @@ if (locked) void app.whenReady().then(async () => {
     () => { if (mainWindow) publish({ type: 'state', state: state() }); });
   try { await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); } catch { /* Status exposes a conflict; the floating button still works. */ }
   transitions = new TransitionCoordinator(timer, collector);
+  // The MCP server runs as plain Node.js inside this executable, so no separate Node.js installation is needed.
+  const mcpScript = app.isPackaged ? join(process.resourcesPath, 'mcp', 'focus-guide-mcp.cjs') : resolve(__dirname, '../mcp/focus-guide-mcp.cjs');
+  bridge = new AgentBridge({ directory: store.directory, access: () => store.getSettings().agentAccess ?? 'off',
+    launch: { command: process.execPath, args: [mcpScript], env: { ELECTRON_RUN_AS_NODE: '1', FOCUS_GUIDE_DATA_DIR: store.directory } }, onStatus: () => { if (mainWindow) publish({ type: 'state', state: state() }); },
+    call: (tool, input, source) => commandQueue.run(async () => {
+      if (quitPending) throw new Error('Focus Guide is saving and closing.');
+      const value = service.agentTool(tool, input, source);
+      if (isAgentTool(tool) && AGENT_TOOLS[tool] !== 'read') changed();
+      if (isAgentTool(tool) && AGENT_TOOLS[tool] === 'edit') publish({ type: 'notice', message: `Your AI agent: ${(value as { summary?: string }).summary ?? 'changed your goals'}. You can undo it in Goals.` });
+      return value;
+    }) });
+  bridge.sync();
   collector.reconcile();
   const rendererRoot = resolve(__dirname, '../renderer');
   protocol.handle('focus', async request => {
@@ -296,7 +345,7 @@ if (locked) void app.whenReady().then(async () => {
   const systemPause = (reason: string) => {
     try {
       // Freeze time synchronously: the OS may suspend before a queued drain runs.
-      timer.pause(reason); transitions.needsRecovery = true;
+      timer.pause(reason); if (probes.cancel()) dismissProbe(); transitions.needsRecovery = true;
       publish({ type: 'state', state: state() }); updateTray();
       void enqueue(async () => { await transitions.run(() => {}); changed(); });
     } catch (error) { report(error); }
@@ -313,6 +362,7 @@ if (locked) void app.whenReady().then(async () => {
       if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error('Invalid command input.');
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
+        if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
         if (command === 'shortcut.capture') {
           if (event.sender !== mainWindow?.webContents || typeof args.enabled !== 'boolean') throw new Error('Invalid shortcut capture request.');
           if (args.enabled && !mainWindow.isFocused()) throw new Error('Focus this window before configuring a shortcut.');
@@ -325,12 +375,15 @@ if (locked) void app.whenReady().then(async () => {
     } catch (e) { report(e); return { ok: false, error: errorMessage(e) }; }
   });
   updateInterval = setInterval(() => {
-    if (transitions.busy || transitions.needsRecovery) return;
+    // A failed transition leaves the timer waiting for recovery; a check-in shown then could never be answered.
+    if (transitions.needsRecovery && probes.cancel()) { dismissProbe(); changed(); }
+    if (quitPending || transitions.busy || transitions.needsRecovery) return;
     try {
       if (timer.current?.status === 'running' && timer.current.timingMode === 'countdown' && !timer.current.autoOvertime && timer.snapshot().remainingMs <= 0) {
         void enqueue(async () => { await transitions.run(() => timer.tick()); changed(); });
       } else if (timer.tick()) changed();
       collector.reconcile(); publish({ type: 'timer', timer: timer.snapshot() });
+      pollProbes();
     } catch (e) { report(e); changed(); }
   }, 250);
   checkpointInterval = setInterval(() => { void enqueue(async () => { timer.checkpoint(); collector.flush(); }); }, 5000);

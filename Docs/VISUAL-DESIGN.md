@@ -13,6 +13,17 @@ Focus shows a procedural 3D brain (`BrainScene.ts`) with a fixed camera. The vie
 - **Meaning.** The brain is a metaphor for session progress. The progress value comes from the existing timer projection. It does not measure attention. It does not change timer accounting.
 - **Motion.** During a running session, the brain sways and breathes slightly, the sparks twinkle and soft pulses travel through the lit area. Animation time advances only while the scene moves, so a pause freezes the pose. A paused, reduced-motion or hidden scene renders one still frame and stops its loop.
 
+### Session gauge (optional Focus visual)
+
+When `settings.focusVisual` is `instrument`, Focus shows an isometric SVG dial indicator (`figures/session-gauge/`) instead of the brain. The drawing follows the Anatomy skill: a real object made of many small solid parts, four neutral tones and one lit part.
+
+- **Object.** A surface plate on feet with a ruler strip and a label plate, a magnetic stand with a post, a clamp and an arm, a dial indicator with a knurled bezel, and a screw jack under the plunger. The parts are about 60 solids and lines.
+- **Meaning.** One needle turn is one 10-minute milestone (`BRAIN_MILESTONE_MS`). The small dial counts turns up to 12 (`BRAIN_MILESTONES`, 2 hours), so the gauge and the floating brain keep the same pace. The marker outside the small dial shows `plannedMs`; before a session it follows the prepared duration. The jack lifts the anvil and the plunger by one world unit for each turn, so the plunger height and the needle come from the same value.
+- **Truth.** `model.ts` reads only `elapsedMs` and `plannedMs` from the main-process snapshot. The figure does not measure time.
+- **Colour.** The needle and the plunger are the lit part: `--accent` for focus and `--blue` for breaks, through `--figure-lit` on the SVG.
+- **Motion.** While the timer runs, the moving parts ease toward each new snapshot value in about 0.35 s and then stop the frame loop. They draw at 30 frames per second at most. A paused, hidden, reduced-motion or animation-off figure jumps to the value without a loop. Only the needle, the small hand, the wheel index, the screw and the lifted group change; they are written through refs, so a timer update does not re-render the static art.
+- **Geometry.** `geometry.ts` builds every static path once at module load with `iso/iso-kit.ts`. The exposed part of the jack screw is the only solid that is rebuilt per frame.
+
 ### Floating timer
 
 The floating timer shows a constellation of neurons in the shape of a brain (`NeuronScene.ts`), seen from the left side. It uses the same 108 × 90 slot as the old brain sprite. The canvas is transparent.
@@ -26,14 +37,17 @@ The floating timer shows a constellation of neurons in the shape of a brain (`Ne
 
 ### Neural World
 
-Neural World uses real perspective, shaded points and connecting lines.
+Neural World shows goals as a network of neurons (`GoalWorldScene.ts`). `shared/goal-world.ts` builds the model from records, and `goal-world-layout.ts` places it. The layout has no Three.js import, so the SVG fallback uses the same positions.
 
-- It shows eight field clusters at most.
-- The existing rules for recorded-time inclusion, palette eligibility and point-count limits still apply.
-- The field identity sets the seed for the detail of each cluster. The layout sorts by identity. It does not change when the time rankings change.
-- The selected field and its recorded time stay readable in HTML.
-- You can explore in several equivalent ways: drag, arrow keys, zoom buttons, + and −, Home or reset, and the field buttons.
-- Rotation pauses while you interact with the scene.
+- **Neuron.** The soma radius follows the goal's total recorded time on a log scale, from 0.08 to 0.22 world units. The to-do steps of the roadmap are synapses along the axon, in roadmap order. The axon is lit up to the last finished step. The next step pulses when motion is on. Done and smaller actions of the last 28 days add sparks around the soma; skipped and unrecorded actions add nothing. A goal with a baseline and a target has a progress arc.
+- **Status.** Active: full colour. Draft: translucent soma, dashed axon. Paused: muted, no pulse. Achieved: on an outer ring, without an axon. Archived: not drawn.
+- **Layout.** Each area has a sector. Goals in an area sort by identity, and the goal identity seeds its dendrites, height and axon curl. The layout does not change when time totals change. Long roadmaps show a window of 12 steps around the next step and pack the synapses closer.
+- **Colour.** The area colour identifies a goal. The palette tints the sky, the area nebulae and the guides. With a goal in view, the other goals are muted.
+- **Camera.** Selecting a goal turns the world so that its axon points right, pivots the world around the neuron and moves the camera in over about 0.6 s. Reduced motion and disabled animations jump to the end state. **Esc**, **Home** and **Overview** return to the overview.
+- **HTML.** The selected goal, its roadmap, time, actions and progress stay readable in the side panel. A label follows the selected soma; the scene writes its position through a ref, without a React render. Every goal has a button below the scene.
+- **Truth.** The page reads records only. The scene does not measure time. **Focus on next step** uses the existing goal session preparation.
+- You can explore in several equivalent ways: drag, arrow keys, zoom buttons, + and −, Home, Esc, the goal buttons and the step list.
+- Rotation pauses while you interact with the scene and while a goal is in view.
 - The scene requests no external images, models or fonts.
 
 ## UX decisions
@@ -78,7 +92,7 @@ In software rendering, or when its scene fails, the floating window shows its tr
 - **Resize and cleanup.** `ResizeObserver` controls the projection aspect and the canvas size. Cleanup cancels frames, stops observation, removes listeners, and disposes unique geometries, materials and renderer resources.
 - **Focus budget.** The brain uses 5 draw calls (4 surface meshes with one shared material, and one point cloud) and about 94,000 triangles. The canvas is small (at most 400 × 250 CSS pixels), so this count is safe for low-power GPUs. The geometry is built once when the scene mounts. This takes about 170 ms on the development computer. Building and merging the hemisphere sphere is the slowest step, so both hemispheres share one sphere. The camera distance fits the brain to the canvas at every aspect ratio.
 - **Floating budget.** The brain constellation uses 2 draw calls (one merged line mesh and one instanced mesh for the neurons) and about 29,000 triangles. The geometry is built once. It renders 20 frames per second at most, because it stays on screen while you work. A return marker animates the scene in place. It does not remount the scene.
-- **World budget.** World nodes use instancing. The scene with eight regions must stay within 35 draw calls and 50,000 triangles. The scene needs no post-processing to be readable.
+- **World budget.** Somas, synapses and pick targets use instancing. Halos, sparks, nebulae and the sky are one point cloud with a small shader. The scene draws 24 goals at most and must stay within 35 draw calls and 50,000 triangles; the preview data uses 8 draw calls and about 5,800 triangles. Geometry is rebuilt only when a drawn value changes (`worldKey`); selection and theme only rewrite colours. The scene needs no post-processing to be readable.
 - **Test data.** Development and test tools can read these canvas attributes: `data-scene`, `data-frames`, `data-draw-calls`, `data-triangles` and `data-geometries`. The stage shows the camera yaw, pitch and zoom. Reset view and disabled motion give deterministic captures.
 
 ## Verification
@@ -115,10 +129,14 @@ The app does not import Tailwind Preflight yet. This is intentional. Preflight r
 | Type | `text-badge` 12, `text-caption` 13 (smallest readable text), `text-label` 14, `text-body` 15, `text-title` 16, `text-heading` 20, `text-display` 28, `text-timer` 64 |
 | Elevation | `shadow-elevation-1` (panels), `shadow-elevation-2` (overlays) |
 | Motion | `--motion-control` 180ms, `--motion-page` 280ms, with `ease-standard` |
+| Mono and lift | `font-mono` (plates and engraved figure text), `shadow-elevation-lift` (plates) |
+| Isometric figures | `--anatomy-paper`, `--anatomy-shade-0`…`3`, `--anatomy-hi`, `--anatomy-mid`, `--anatomy-lo`, `--anatomy-faint`, mixed from `--panel` and `--text`. `iso/iso.css` derives `--anatomy-lit` per figure from `--figure-lit` (default `--accent`). |
 
 Color rule: purple `accent` marks actions and selection. Blue `info` marks data and information.
 
 Text pairs have a contrast of 4.5:1 at minimum. Control borders have 3:1 at minimum. These limits apply in both windows and both themes. For this reason, the main light `--control-line` is #918FA5 and `--blue` is #2F62D9.
+
+In figures, `--anatomy-hi` and `--anatomy-mid` have 3:1 at minimum against `--anatomy-paper` (measured: light 15.1 and 3.5, dark 11.3 and 4.2). `--anatomy-lo` and `--anatomy-faint` are lower on purpose, because they draw minor ticks, grooves and seams only.
 
 ## Base components
 
@@ -129,6 +147,7 @@ Text pairs have a contrast of 4.5:1 at minimum. Control borders have 3:1 at mini
 | `Button` | `primary`, `secondary`, `text-button` (ghost), `danger-button` | Props: `variant`, `size` (`md` is a 44px target, `sm` is 36px), optional leading `icon`. Secondary uses `line-strong` borders and `ink` text, so it does not look disabled. |
 | `IconButton` | `icon-button` | The required `label` becomes the `aria-label` and the tooltip. Use `tone="danger"` for destructive actions. |
 | `Card` | `panel`, `section-title` | Optional `title`, `icon`, `actions`, `headingLevel`. |
+| `Plate` | `plate`, `panel` | A figure-plate frame: `Fig n` and the `title` heading at the top, a `hint` and a `readout` at the bottom (`data-readout`, not a live region). It keeps the legacy `.panel` base, so page rules such as `.focus-stage` still apply. Used by the Focus card and the first three Patterns charts. |
 | `PageHeader` | `page-heading` | Title, optional one-line description and actions. |
 | `Field` | `field` | Links the label, hint and error to its single control (`id`, `aria-describedby`, `aria-invalid`). |
 | `Badge` | `badge` | Tones `neutral`, `accent`, `info`, `success`, `danger`. The contrast test includes every tone pair. |
@@ -149,6 +168,8 @@ The top bar shows these items, in this order:
 5. **Floating timer**.
 
 The top-bar labels are different from the **Pause** and **Resume** buttons on the Focus page. Thus queries for an exact name find only one control.
+
+During an attention check-in only, a banner shows below the bar. See [Attention check-ins](#attention-check-ins).
 
 ### Navigation
 
@@ -199,9 +220,52 @@ Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one
   3. Goal and field filters.
 - The app calculates the selected range from the dates. Thus a custom range selects no shortcut.
 - KPI labels use sentence case at caption size. Values use `text-display` with tabular figures.
-- Charts, correlations, the weekly review and the weekly intention use `Card`. Rho is in the correlation header. Interruption tags are neutral `Badge` components.
+- The three main charts (areas, weekdays, activity modes) use `Plate` as Fig 1–3. Each readout shows the total or the largest row. The other charts, correlations, the weekly review and the weekly intention use `Card`. Rho is in the correlation header. Interruption tags are neutral `Badge` components.
 - While the example shows, **Explore an example** changes to a primary **Return to my dataset** button.
 - `Card` headers align to the start. Thus the legacy rule `.charts-grid .section-title` (space-between) no longer moves an icon away from its title.
+
+## Insights tab
+
+Patterns has two tabs below the filter toolbar: **Overview** and **Insights**. The `Tabs` control in `ui.tsx` (Radix Tabs) draws them. The active tab has an accent underline. Only the selected panel is mounted, so Insights reads its data when you open it. The filters apply to both tabs.
+
+### Layout
+
+- The first card, **The data behind these insights**, is a strip of five values and a list of notes.
+- The figures follow in a grid of two columns. The first figure uses both columns. The grid has one column when the workspace container is 860px wide or less.
+- The five figures use `Plate` as Fig 1–5. The model and the suggestions use `Card`.
+- A figure that is not eligible shows one dashed box with the reason and the count of what is missing. It shows no empty chart.
+- While the app reads again, the panel is at 60% opacity with `aria-busy`. A status line says "Updating insights…". If a read fails, the earlier result stays, with an alert and **Try again**.
+
+### Figure rules
+
+- The charts are inline SVG. They are drawn at the measured width of their container (at least 240px). Thus 12px axis text stays 12px.
+- Data marks use `--blue`. An interval is a band (14% opacity, 20% in dark mode) or a whisker. A reference curve is gray.
+- A missing value is a gap. A line stops at the gap. A missing value never draws as zero.
+- Columns have a 4px rounded data end and a square baseline. Grid lines are hairlines in `--line`. Each chart has one y scale.
+- Each hour, block or step has a transparent hit area with a tooltip title. The tooltip repeats the numbers.
+- Heat tables (weekday by time of day, states by activity mode) mix `--blue` into the cell up to 40%. An empty cell shows a dash.
+- The survival curve is a step line with a step band. A median has a vertical marker. An open upper limit of the median reads "or longer".
+- The model effects are a forest plot. Each row has a label, a small SVG with a zero line, a whisker and a dot, and the value with its interval. On narrow containers (560px or less), the label takes its own line. The dot and the whisker are placed separately, because a percentile interval can leave out its estimate.
+- A suggestion shows a `Badge`: neutral for **Tentative** and info for **Moderate evidence**.
+
+### Accessibility
+
+- Every chart is an `svg` with `role="img"`. Its `aria-label` states the main result, for example the highest hour with its interval.
+- The three chart figures (day rhythm, attention span, session shape) have a **Show values** disclosure with a table of the same numbers. The table uses `th` with `scope`. Gaps show as a dash. The other figures show their numbers as text, lists or labelled tables.
+- The heat tables have an `aria-label`. Lists of rows use `role="list"`.
+- No meaning depends on color alone. Values are in text, titles and tables.
+- The tabs, the group control for the survival curve and the disclosures use Radix controls with keyboard operation and visible focus.
+
+## Attention check-ins
+
+The check-in is a prompt, not a dialog. It never takes keyboard focus, and it never moves the content under the pointer.
+
+- **Main window.** `ProbePrompt` is inside the sticky top bar. It is placed `top: calc(100% + 8px)` with `left: 0` and `right: 0`, so it floats over the page below the bar, also when the bar wraps. It shows the question "Where is your attention right now?" and three small secondary `Button` controls: **On the task**, **Drifting**, **Somewhere else**. It has a soft background, a border that mixes 30% accent, and a 14px radius. It shows on every page.
+- **Floating window.** `probe-mini` sits at 40px from the top, 6px from each side, and covers only the lower part of the brain. Thus the brain stays draggable, and **I'm back** and the timer controls stay usable. It has three icon buttons of 26px height (focus, thought and world icons). Each button has an `aria-label` and a `title` with its answer. The small question text is `aria-hidden`. The buttons use `no-drag`.
+- **Live region.** `ProbeAnnouncer` stays mounted for the whole focus session in both windows. It is a `role="status"` region with `aria-live="polite"`. It gets its text when a check-in appears, so a screen reader announces it. Focus does not move.
+- **While saving**, the buttons are disabled. A second click cannot send a second answer.
+- **Reflection questions.** The two questions after a session use single-choice toggle groups with pill-shaped options. The word "optional" and **Clear** are on the line of the question. Thus a new **Clear** does not move the options.
+- **Focus hints.** Hints for length and time of day are rows on a `--blue-soft` background below the duration. They are read-only text, with one button for the length.
 
 ## Page migration: Calendar
 
@@ -226,7 +290,7 @@ Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one
 
 ## Page migration: Neural World
 
-- World controls, palette cards and field buttons keep their legacy styles. They use the active palette color (`--world-color`), not the action accent.
+- World controls and palette cards keep their legacy styles. They use the active palette color (`--world-color`), not the action accent. Goal buttons, the side panel and roadmap steps use the area colour (`--area-color`).
 - View controls use explicit icons: chevron left, right, up and down, and a minus icon for zoom out. Before, legacy `nth-child` rotations turned one chevron into four directions. `transform-none` cancels these rotations.
 - Labels use sentence case. Constellation controls, field buttons, palette cards and field-progress rows use caption text (13px).
 

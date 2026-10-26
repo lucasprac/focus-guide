@@ -1,6 +1,6 @@
 # Focus Guide
 
-Offline Windows app (Electron, React, TypeScript, SQLite) for planning focus sessions, recording focus time and exploring a private personal dataset. Version **1.5.0**.
+Offline Windows app (Electron, React, TypeScript, SQLite) for planning focus sessions, recording focus time and exploring a private personal dataset. Version **2.0.0**.
 
 | Folder | Contents |
 |---|---|

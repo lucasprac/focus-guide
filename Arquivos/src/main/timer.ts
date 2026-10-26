@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FocusSession, SessionEvent, TimerSnapshot } from '../shared/types';
+import type { FocusSession, ProbeAnswer, SessionEvent, TimerSnapshot } from '../shared/types';
 import { MIN_INCLUDED_SESSION_MS } from '../shared/types';
 import type { Store } from './store';
 
@@ -109,7 +109,25 @@ export class TimerEngine {
   record(kind: 'interruption' | 'thought', text: string, category = ''): void {
     if (!this.current) throw new Error('Start a focus session first.');
     const event = this.event(kind, text, category); event.endedAt = event.startedAt;
-    this.store.putEvent(event);
+    if (this.current.status !== 'running') { event.activeOffsetMs = this.current.activeMs; this.store.putEvent(event); return; }
+    this.persistMarker(event);
+  }
+  /** The marker, the session total and the closed active interval commit together, so recovery never leaves a marker beyond durable time. */
+  private persistMarker(event: SessionEvent, offsetMs?: number): void {
+    const activeMs = this.elapsed();
+    this.reachTarget(activeMs);
+    event.activeOffsetMs = Math.min(offsetMs ?? activeMs, activeMs);
+    const next = { ...this.current!, activeMs };
+    try { this.store.persist(next, this.closedInterval(activeMs), [event]); }
+    catch (error) { this.failStorage(); throw error; }
+    this.current = next; this.savedMs = activeMs;
+  }
+  recordProbe(answer: ProbeAnswer | 'missed', offsetMs: number, source: 'floating' | 'main' | null, latencyMs: number | null): SessionEvent {
+    if (!this.current || this.current.status !== 'running') throw new Error('This check-in has expired.');
+    const event = this.event('probe', JSON.stringify({ latencyMs }), answer);
+    event.endedAt = event.startedAt; event.source = source;
+    this.persistMarker(event, Math.max(0, offsetMs));
+    return event;
   }
   recordReturn(source: 'shortcut' | 'floating' | 'main'): SessionEvent | null {
     if (!this.current || this.current.status !== 'running') throw new Error('Return markers require a running focus session.');

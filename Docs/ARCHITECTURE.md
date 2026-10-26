@@ -1,4 +1,190 @@
-# Architecture — Focus Guide 1.5.0
+# Architecture — Focus Guide 2.0
+
+## Behaviour insights (schema 10, unreleased)
+
+Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. All data stays on this computer. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
+
+```mermaid
+flowchart LR
+    Helper[activity-helper.exe<br/>input counts, window switches]
+    Collector[behaviour.ts<br/>minute blocks with inputMs and switches]
+    Probes[probes.ts<br/>ProbeScheduler]
+    Timer[TimerEngine<br/>probe, interruption and thought markers]
+    Store[(SQLite schema 10)]
+    Service[FocusService<br/>insights.read and cache]
+    Engine[focus-insights.ts<br/>pure engine]
+    UI[Patterns Insights tab<br/>Focus hints]
+    Agent[AgentService<br/>get_focus_insights]
+    Helper --> Collector --> Store
+    Probes --> Timer --> Store
+    Store --> Service --> Engine
+    Service --> UI
+    Service --> Agent
+```
+
+### Records and migration
+
+- A session has `detractor` and `challenge`. New sessions get `behaviourVersion` 4.
+- An activity block has `inputMs` and `switches`. A null value means unknown. It never means zero.
+- The event kind `probe` stores one check-in. Interruption and thought markers now save `activeOffsetMs` too.
+- The setting `attentionProbes` is `false` by default.
+- The migration saves a `before-schema-v10-<timestamp>.sqlite` snapshot with `VACUUM INTO`, except for an empty new database. Then one transaction adds four columns, sets `attentionProbes` to `false` and sets `user_version` to 10.
+- `putSession` and `putActivity` name their columns. A column order that differs from the expected order cannot write a value into the wrong column.
+- When two activity blocks of the same minute merge, `inputMs` and `switches` add up. If one side is null, the result is null.
+- The previous app rejects a schema 10 database. A rollback needs the matching snapshot. Version 2.0.0 and earlier also cannot restore a version 10 backup.
+
+### Window switches
+
+`activity-helper.cpp` counts changes of the foreground window. It reads the foreground window once for each second, and only while it collects.
+
+1. It takes the root owner window with `GetAncestor(…, GA_ROOTOWNER)`. A dialog counts as the window that opened it.
+2. It ignores windows of the Focus Guide process. The helper compares the process identifier of the window with the identifier that it got on its command line. A click on **I'm back** in the floating window is not a switch.
+3. It counts a switch when the root window differs from the last counted window. The first window after a start is not a switch. A return to the same window after a visit to Focus Guide is not a switch.
+4. It keeps only the handle of the last window, in memory. It never reads a process name or a window title.
+5. A change of tab inside a browser is not a switch, because the window does not change. A change between two browser windows is a switch.
+6. A window change that lasts less than about one second can be missed.
+
+Each sample carries `switches`. If a helper does not send it, the collector saves null and keeps working. If the value is malformed (not a whole number from 0 to 1000), the collector calls `fail()`. That stops the collection and also turns off the global **I'm back** shortcut. The collector sets `inputMs` for each one-second sample that has a key, a click, a scroll or a movement. It counts the whole observed time of that sample.
+
+### Markers
+
+The timer saves a probe, an interruption or a thought marker in one transaction with the session total and the closed active interval. The marker offset never goes beyond the saved total, so a recovery cannot leave a marker after durable time. The collector flushes after `attention.return`, `interruption.record`, `thought.record` and `probe.answer`.
+
+### Attention check-ins
+
+`ProbeScheduler` (`src/main/probes.ts`) is runtime only. The desktop app and the browser preview share it. It reads authoritative active time from the timer snapshot and a monotonic clock for expiry.
+
+| Rule | Value |
+|---|---|
+| First check-in | A random point between 8 and 20 active minutes |
+| Gap to the next check-in | A random time between 15 and 35 active minutes |
+| Maximum for each session | 6 |
+| Expiry | 45 seconds after display. The app saves the check-in as `missed`. |
+| Countdown end guard | None in the last 5 minutes. A check-in appears only if at least 5 minutes 46 seconds remain: the 45 seconds of expiry plus a margin of 1 second (`PROBE_EXPIRY_MARGIN_MS`), so the 250 ms poll records it as `missed` before the guard. If not, the next try waits until the planned time plus 15 minutes. |
+| Stopwatch and overtime | No end guard |
+| Activity mode | None in Offline |
+| Turned on during a session | The first check-in waits 8 to 20 active minutes from that moment |
+
+The scheduler cancels a check-in and saves no record in these cases:
+
+- Pause, finish or a break.
+- Check-ins turned off, or Offline mode.
+- The end guard of a countdown.
+- A system lock or sleep.
+- A failed transition that waits for recovery.
+- The closing or hiding of the floating window.
+
+- The main process calls the scheduler every 250 ms. Both windows draw the pending check-in. If the main window is not visible, is minimized or has no focus, the main process also shows the floating window without taking focus (`showInactive`). The same happens when the main window loses focus, hides or minimizes while a check-in is pending. A floating window that was hidden hides again afterwards.
+- `AppState.probe` is runtime only. It never reaches settings, datasets or backups.
+- `probe.answer` accepts only the identifier of the pending check-in while the session runs. A late or repeated answer fails with "This check-in has expired." The main process sets the source (`floating` or `main`) from the sender window. The renderer value is not trusted.
+- A probe answer is not a drift. See the engine rules below.
+
+### Insight engine
+
+`src/shared/focus-insights.ts` and `src/shared/insight-stats.ts` form a pure engine without dependencies. The same input gives the same output. A seeded generator (`mulberry32(42)`) drives the minute sample, the k-means starts and the bootstrap. The main process runs it for `insights.read`. The renderer runs it for the example dataset.
+
+- **Input.** Finished, included sessions that start in the range, with the optional area and goal filters. A session with more than 8 active hours leaves the analysis.
+- **Drift.** A drift is an **I'm back** marker or an interruption. A probe answer and a parked thought are not drifts. Check-ins follow a schedule, so counting them would raise the drift rate after minute 8 for no real reason. A probe answer has its own measure: the share of answered check-ins that are off the task.
+- **Sections.** Day rhythm, attention span (Kaplan–Meier, with a recovery curve and the warm-up, sustain and fatigue phases), session shape (with the minutes before drifts), interaction states (k-means++), detractors, a model of perceived focus (ridge, lasso and elastic net, with a second view of the facts during and after a session), the cycle comparison, and suggestions. Each section has an eligibility rule and gives a reason when it is not eligible. [Data dictionary](DATA-DICTIONARY.md#calculation-rules-for-insights) has all thresholds. They are in `INSIGHT_THRESHOLDS`.
+- **Intervals.** Every interval is a 90% interval.
+
+Builder decisions that the design left open:
+
+- `SurvivalCurve.medianOpen` is true when the upper band never falls to one half. The upper limit of the median is then open, and `median.high` holds only the last observed time. The interface writes "or longer".
+- The ridge penalty λ comes from a grid of eight values (0.003 to 10) that the engine multiplies by the number of training rows. The engine picks the λ with the lowest PRESS, that is, the mean squared leave-one-out error in closed form. A tie keeps the stronger penalty.
+- The **break** suggestion tests change points from minute 25 on (`fatigueMinutes`). Each point uses only the sessions that reached it, so the early rate and the later rate come from the same sessions. At least 5 of them must still run 15 minutes after the point. Among the points that qualify, it keeps the point with the largest likelihood-ratio statistic of two Poisson rates against one rate. It gets `moderate` strength only if a Bonferroni-corrected one-sided 95% bound of the rate ratio stays above 1. The correction counts the points that were tried.
+- **Warm-up friction.** When the drift rate in minutes 0–10 is at least 1.5 times the rate in minutes 10–25, with 5 drifts or more, the **length** suggestion does not fall below 25 minutes. It uses the median of the first drift after minute 10 when that is known. The **warmup** suggestion explains the cause.
+- **One duration rule.** `suggestedDuration()` in `focus-insights.ts` serves the action editor. It uses the **length** plan of the goal, then of the area, over the last 90 days. Only without it, the median recorded duration of `durationSuggestion()` in `goal-planning.ts` answers. The result names its source.
+- **Cycle comparison.** The window of the last 7 days and the window of the 28 days before it do not depend on the range of the other figures. `insights.read` therefore loads the activity rows from the earlier of the range start and 34 days before the end.
+- `focusGap` is 0.3 focus points. The **window**, **detractor** and **challenge** suggestions need at least this difference in mean focus.
+- The model chooses its activity-mode columns again for each training window, from the training rows only. A mode needs 5 sessions in those rows. Rarer modes join the reference mode, and the label says so. A later session cannot add a column to an earlier test.
+- Three estimators compete in the rolling origin test: ridge, lasso and elastic net (mix 0.5). The lasso and the elastic net use coordinate descent with soft-thresholding. A 5-fold cross-validation picks their penalty. If features are collinear (variance inflation factor above 5 or correlation of 0.70 or more) and the lasso changes its features between windows (mean overlap below 0.6), the elastic net decides when its selection is more stable and its error is not higher. Otherwise the lower error of ridge and lasso decides. The lasso always marks the features it keeps, with the share of test windows and bootstrap resamples that keep them.
+- The sine and cosine of the start hour become one effect: the focus gap between the best hour and the opposite hour. Its amplitude is the square root of the sum of the squared effects.
+- The bootstrap intervals of the model are plain percentile intervals (5th to 95th percentile of 200 resamples). With shrinkage, an estimate can lie outside its interval. The interface shows both.
+
+### `insights.read`
+
+The command takes `from`, `to`, and the optional `fieldId` and `goalId`. Any valid range with `from` not after `to` is accepted, also All time. `goal.behaviour` accepts the same ranges. The cost depends on the number of sessions, not on the number of days.
+
+`FocusService` keeps a cache of the last 4 results.
+
+- The key is the validated input plus `Store.revision()`. The revision is the SQLite `total_changes()` value of the connection.
+- Any `INSERT`, `UPDATE` or `DELETE` changes the revision, so any write clears the cache. If the revision is not available, nothing is cached.
+- The cache lives in memory only. A restart empties it. Callers get a copy of the result.
+
+### Agent tool
+
+`get_focus_insights` (level `read`) returns the object that the Insights tab shows. The input is `{ from?, to?, goalId?, fieldId? }`. The default range is the last 90 days in the timezone of the settings. With no input, `from` is today minus 89 days and `to` is today. With only `to`, `from` is `to` minus 89 days. With only `from`, `to` is today. Each survival curve has at most 60 points: the first, the last and evenly spaced points between them. The tool uses `insights.read`, so it uses the same cache. The description tells the agent that the values describe records and are not scores.
+
+### Invariants
+
+- Only the main process measures time. The scheduler uses active time from the timer. The renderer only submits an answer.
+- A probe is saved with the durable session total.
+- Missing values stay missing. The engine never turns an unknown value into zero.
+- `AppState.probe` and the insight cache never reach settings, datasets or backups.
+- The preview never reads the personal database. Its check-ins use the same scheduler. With `&probes=fast` in the preview URL, they use short times.
+- A restore turns `attentionProbes` off, like `collectActivity` and `agentAccess`.
+- At the `read` level, an agent can read insights. It cannot change records.
+
+### Budget
+
+The design target for `insights.read` is less than 300 ms for 1 000 sessions and 60 000 activity minutes. The engine limits its work:
+
+- K-means trains on at most 5 000 minutes. The silhouette uses at most 1 500 points.
+- The model tests at most 40 later sessions. The bootstrap uses 200 resamples.
+
+A call without cache takes about 380 ms at 1 000 sessions. This is above the target. The team accepted it. The cache removes repeated calls. The timer uses a monotonic clock, so a long call does not change recorded time. The interface can freeze for a moment during that call.
+
+## Learning workspace and local agent bridge (unreleased)
+
+### Goal workspace
+
+Goals is the first page. `App.tsx` keeps the open goal (`activeGoalId`), so the goal stays open when you go to Focus and back. `GoalWorkspace.tsx` has five sections: Overview, Roadmap, Tasks, Behaviour, and Plan & review. `focusGoal()` in `App.tsx` prepares a session with the goal, its area, an optional roadmap step and task, and the activity mode of the goal's latest session. The main process still owns all timing.
+
+A field is still the parent of goals, tasks and sessions. The interface calls it an "area". Command names, tables and backup keys keep `field`.
+
+### Behaviour profile
+
+`goal.behaviour { goalId, from, to }` is a read command in `GoalService`. Activity samples are not part of `AppState`, so the main process computes the profile with `goalBehaviourProfile()` in `src/shared/behaviour-analytics.ts`. The Behaviour section and the agent bridge use the same function.
+
+### Roadmap steps (schema 7)
+
+Milestone bodies hold step details (estimate, target date, notes, links). `sessions.milestoneId` records the step when the session starts, with the same rule as the goal link: a to-do of the session's goal, fixed at the start. `roadmapEffort()` in `goal-planning.ts` sums recorded time for each step.
+
+### Agent bridge and proposals (schema 8)
+
+```mermaid
+flowchart LR
+    Client[AI client<br/>Claude Code / Claude Desktop]
+    MCP[focus-guide-mcp.cjs<br/>stdio MCP server<br/>FocusGuide.exe with ELECTRON_RUN_AS_NODE=1]
+    File[(agent-bridge.json<br/>pipe name + token<br/>in the data folder)]
+    Bridge[agent-bridge.ts<br/>named pipe, token check,<br/>agent tool allowlist]
+    Queue[Command queue]
+    Agent[AgentService<br/>read tools, proposals]
+    Store[(SQLite)]
+    UI[Goal pages<br/>Apply / Edit / Reject]
+    Client <--> MCP
+    MCP --> File
+    MCP <--> Bridge
+    Bridge --> Queue --> Agent --> Store
+    UI -->|agent.proposal.apply / reject over IPC| Queue
+```
+
+- The MCP server (`src/mcp/server.ts`) holds no data and never opens the database. It reads `agent-bridge.json`, sends one JSON line for each tool call to the named pipe, and returns the reply.
+- `AgentBridge` (`src/main/agent-bridge.ts`) listens only while `settings.agentAccess` is not `off`. Each start makes a new random pipe name and a 256-bit token, and writes them to `agent-bridge.json` in the data folder. A request must carry the token, compared in constant time. Requests are limited to 64 KiB. The bridge accepts only the tools in `src/shared/agent-tools.ts`, never renderer commands. Each call runs in the command queue.
+- `AgentService` (`src/main/agent-service.ts`) checks the access level again (`off` < `read` < `propose` < `edit`). Read tools return copies of records. Propose tools validate a payload against the current records and save an `agentProposals` row. They change nothing else.
+- The user applies a proposal with `agent.proposal.apply`. The service validates the payload again, with the user's edits, then runs the normal commands (`goal.create`, `goal.milestones.sync`, `task.create`, `goal.action.save`, `goal.review.save`) and marks the proposal `applied` in one transaction. A roadmap proposal whose basis fingerprint no longer matches becomes `stale` and needs `confirmStale`.
+- `AppState.agent` is a runtime-only status with the launch command for client configuration. It never reaches settings, datasets or backups.
+
+- At the `edit` level (schema 9), `AgentEditor` (`src/main/agent-edits.ts`) runs the same validated commands at once. In one transaction it reads the changed fields, applies the change and saves an `agentChanges` record with the state before and after. The app writes the summary. The editor refuses deletion, `achieved` and `archived` goal status, step completion, and tasks without a goal, and allows 60 direct changes per hour. `agent.change.undo` puts back the earlier state through the normal commands and asks for confirmation when the record changed after the agent's change.
+- Roadmap writes carry a revision (`roadmapRevision()` and `rowsRevision()` in `goal-planning.ts`). `update_roadmap` requires the revision from `get_goal`, and the editor in `MilestoneChecklist.tsx` sends the revision of the rows that it last saved. A stale `goal.milestones.sync` fails without a change, so an edit never archives rows that the agent added. Agent roadmap writes match rows by exact title only.
+
+Invariants:
+
+- Below the `edit` level, an agent never changes records directly. At the `edit` level, every agent change has an `agentChanges` record from the same transaction, and the user can undo it.
+- An agent never deletes records, marks a goal achieved or archived, or ticks a roadmap step.
+- Agent access is `off` after the schema 8 migration and after every restore.
+- The pipe never accepts timer, deletion, restore, export or settings commands.
 
 ## Goal planning boundary (1.4.0)
 
@@ -79,14 +265,19 @@ flowchart LR
 | `src/main/index.ts` | Native windows, tray and power events, local protocol, sender checks, command queue, backup and export dialogs |
 | `src/main/coordination.ts` | Serialized mutations, dialog preparation outside the queue, ownership of collector transitions |
 | `src/main/timer.ts` | Clock, checkpoints, pause, resume and finish, recovery, break clock |
-| `src/main/store.ts` | Prepared SQL statements, schema version 6, migration, persistence and restore transactions |
+| `src/main/store.ts` | Prepared SQL statements, schema version 10, migration, persistence, the `revision()` value for the insight cache, and restore transactions |
 | `src/main/service.ts` | Validated application commands and business rules |
 | `src/main/backup.ts` | Versioned JSON validation, atomic exports, safe CSV cells |
+| `src/main/probes.ts` | Runtime scheduler for attention check-ins. It uses authoritative active time and a monotonic clock for expiry |
+| `src/main/agent-bridge.ts`, `agent-service.ts`, `agent-edits.ts` | Local named-pipe endpoint for the MCP server, agent read tools, proposals with apply/reject, direct edits with their audit log and undo |
+| `src/mcp/server.ts` | Stdio MCP server, bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
+| `src/shared/behaviour-analytics.ts`, `agent-tools.ts` | Goal behaviour profile; agent tool list and bridge file contract |
+| `src/shared/focus-insights.ts`, `insight-stats.ts` | Pure insight engine with its thresholds (`INSIGHT_THRESHOLDS`), and its numerical methods (Kaplan–Meier, ridge, lasso and elastic net, correlation and variance inflation, k-means++) |
 | `src/preload/index.ts` | Narrow `focusGuide` bridge |
 | `src/shared/types.ts` | Dataset, state, command names and event interfaces |
 | `src/shared/analytics.ts` | Local-date splits, filters, averages, Spearman calculation with tied ranks |
 | `src/shared/demo.ts` | Invented example observations. It writes nothing to storage. |
-| `src/renderer/src` | Seven main views, mini-window, progressive Three.js and SVG visuals, styles |
+| `src/renderer/src` | Seven main views (Goals opens a goal workspace), mini-window, progressive Three.js and SVG visuals, styles |
 | `src/renderer/src/components.tsx` | Main-window `Brain`, compact `FloatingBrain`, icons, formatting and shared controls |
 | `src/renderer/src/NeuralVisual.tsx`, `ThreeScene.tsx` | Local lazy loading of Three.js, bounded geometry, scene lifecycle and SVG fallback |
 | `src/renderer/src/BrainScene.ts` | Procedural Focus brain: seeded fold geometry, progress shaders, lighting and per-frame update |
@@ -363,6 +554,23 @@ A dataset with no fields is valid. Selection and filter cleanup follow the state
 - Workspace container queries stack the columns when the width is less than 900px.
 - Field lists and Calendar history grow with the page scroll.
 - Palette color passes down through the constellation groups. Field colors stay available in other places.
+
+## Goal deletion (unreleased)
+
+The typed `goal.delete` command takes a goal id. It follows the field deletion design, with one difference: tasks and sessions stay.
+
+1. `FocusService` sends the command to `GoalService.remove` with the goal of the timer's current session and the host backup callback. `GoalService` rejects a goal that does not exist. It also rejects the deletion if the current session, or any unfinished session, has this goal. The reason: the timer writes the full in-memory session at each checkpoint, so a detached link would come back and break the foreign key.
+2. The native host runs the command through the serialized transition coordinator, as for `field.delete`. The host saves a validated, atomic JSON backup at `backups/before-goal-delete-<timestamp>-<uuid>.json`. If the backup fails, the deletion stops.
+3. In one SQLite transaction, `Store.removeGoal`:
+   1. Sets `goalId`, `occurrenceId` and `milestoneId` to `NULL` on sessions that point to the goal, its occurrences or its milestones. `activeMs`, events and activity do not change, so recorded time still equals the sum of durable intervals.
+   2. Sets `goalId` and `milestoneId` to `NULL` on tasks that point to the goal or its milestones.
+   3. Deletes the goal. `ON DELETE CASCADE` removes its milestones, actions, occurrences, progress, goal reviews, agent proposals and agent changes. This matches field deletion, where the same cascade removes agent records. A `goal.create` proposal has a null `goalId`, so it stays as an audit record.
+
+No schema migration or backup format change is necessary. The browser preview saves its recovery copy in synthetic `localStorage` and does the same changes in one transaction (`PreviewStore.removeGoal`).
+
+The agent can never reach this command. No agent tool maps to it, and the command callback that `FocusService` gives to `AgentService` and `AgentEditor` refuses `goal.delete` and `field.delete`.
+
+The goal workspace opens a shared destructive dialog. It counts the planning records that leave and the tasks, sessions and time that stay. It blocks the button while a session of the goal is unfinished and cannot close while the deletion is pending. After a success, it goes back to the goal list. Filters and session preparation that pointed to the goal clear themselves at the next state broadcast.
 
 ## Version 1.5.0: goal creation usability
 

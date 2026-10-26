@@ -34,6 +34,7 @@ npm-debug.log*
 *.key
 *.pfx
 *.p12
+.mcp.json
 
 # Editors and OS
 .vscode/
@@ -48,3 +49,6 @@ desktop.ini
 
 # graphify knowledge graph (local only)
 graphify-out/
+
+#backup
+Aplicativo-backup-2.0.0/

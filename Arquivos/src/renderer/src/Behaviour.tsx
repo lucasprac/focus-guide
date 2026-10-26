@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ActivitySample, FocusSession, SessionEvent } from '../../shared/types';
+import type { ActivitySample, FocusSession, ProbeAnswer, SessionEvent } from '../../shared/types';
+import { INSIGHT_THRESHOLDS, PROBE_ANSWER_LABELS } from '../../shared/focus-insights';
 import type { Action, ViewProps } from './App';
 import { Disclosure, Icon, useMotionEnabled, minutesLabel } from './components';
 
@@ -44,35 +45,56 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
     }).catch(e => { if (mounted) setError(String(e)); });
     return () => { mounted = false; };
   }, [open, session.id, session.activeMs, data.collector?.state]);
-  const rows = samples ?? [], observed = rows.reduce((sum, row) => sum + row.observedMs, 0);
-  const totals = rows.reduce((sum, row) => ({ keys: sum.keys + row.keys, clicks: sum.clicks + row.clicks, scrolls: sum.scrolls + row.scrolls, movementMs: sum.movementMs + row.movementMs }), { keys: 0, clicks: 0, scrolls: 0, movementMs: 0 });
+  const rows = samples ?? [], observed = rows.reduce((sum, row) => sum + row.observedMs, 0), measured = (session.behaviourVersion ?? 0) >= INSIGHT_THRESHOLDS.inputVersion;
+  const totals = rows.reduce((sum, row) => ({ keys: sum.keys + row.keys, clicks: sum.clicks + row.clicks, scrolls: sum.scrolls + row.scrolls, movementMs: sum.movementMs + row.movementMs,
+    inputMs: sum.inputMs + (typeof row.inputMs === 'number' ? row.inputMs : 0), inputObservedMs: sum.inputObservedMs + (typeof row.inputMs === 'number' ? row.observedMs : 0),
+    switches: sum.switches + (typeof row.switches === 'number' ? row.switches : 0), switchesKnown: sum.switchesKnown || typeof row.switches === 'number' }), { keys: 0, clicks: 0, scrolls: 0, movementMs: 0, inputMs: 0, inputObservedMs: 0, switches: 0, switchesKnown: false });
   const totalMs = Math.max(1, session.activeMs), bucketMs = Math.max(60000, Math.ceil(totalMs / 60000 / 120) * 60000);
   const bins = Array.from({ length: Math.ceil(totalMs / bucketMs) }, (_, i) => {
     const start = i * bucketMs, end = Math.min(totalMs, start + bucketMs);
-    const overlap = rows.filter(row => row.endMs > start && row.startMs < end);
-    return { start, end, observed: overlap.reduce((sum, row) => sum + row.observedMs * Math.max(0, Math.min(row.endMs, end) - Math.max(row.startMs, start)) / (row.endMs - row.startMs), 0),
-      keys: overlap.reduce((sum, row) => sum + row.keys, 0), clicks: overlap.reduce((sum, row) => sum + row.clicks, 0), scrolls: overlap.reduce((sum, row) => sum + row.scrolls, 0), movementMs: overlap.reduce((sum, row) => sum + row.movementMs, 0),
+    const overlap = rows.filter(row => row.endMs > start && row.startMs < end), sum = (pick: (row: ActivitySample) => number | null | undefined) => overlap.reduce((total, row) => total + (pick(row) ?? 0), 0);
+    return { start, end, observed: overlap.reduce((total, row) => total + row.observedMs * Math.max(0, Math.min(row.endMs, end) - Math.max(row.startMs, start)) / (row.endMs - row.startMs), 0),
+      keys: sum(row => row.keys), clicks: sum(row => row.clicks), scrolls: sum(row => row.scrolls), movementMs: sum(row => row.movementMs), inputMs: sum(row => row.inputMs), switches: sum(row => row.switches),
       disabled: overlap.some(row => row.status === 'disabled') };
   });
   const events = data.events.filter(e => e.sessionId === session.id), pauses = events.filter(e => e.kind === 'pause');
-  // Pause positions use durable active intervals rather than wall-clock subtraction.
+  // Positions use durable active intervals rather than wall-clock subtraction. Older markers have no offset: it is the active time before the marker.
+  const intervals = events.filter(e => e.kind === 'active').sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  const offsetOf = (e: SessionEvent) => {
+    if (typeof e.activeOffsetMs === 'number') return e.activeOffsetMs;
+    const at = Date.parse(e.startedAt); let offset = 0;
+    for (const i of intervals) { const begin = Date.parse(i.startedAt); if (begin >= at) break; offset += Math.min(i.durationMs, at - begin); }
+    return offset;
+  };
   const chronological = events.filter(e => e.kind === 'active' || e.kind === 'pause').sort((a,b) => a.startedAt.localeCompare(b.startedAt));
   let elapsed = 0;
   const pausePoints = chronological.flatMap(e => { if (e.kind === 'active') { elapsed += e.durationMs; return []; } return [{ event: e, offset: elapsed }]; });
+  const at = (offset: number) => `${Math.max(0, Math.min(100, offset / totalMs * 100))}%`, minute = (offset: number) => minutesLabel(offset / 60000), { warmUpMinutes, fatigueMinutes } = INSIGHT_THRESHOLDS.attentionSpan;
+  const phaseMs = [Math.min(totalMs, warmUpMinutes * 60000), Math.max(0, Math.min(totalMs, fatigueMinutes * 60000) - warmUpMinutes * 60000), Math.max(0, totalMs - fatigueMinutes * 60000)];
+  const probeMark = (answer: string) => answer === 'on-task' ? '●' : answer === 'missed' ? '○' : '◐';
+  const tracks: Array<{ key: 'keys' | 'clicks' | 'scrolls' | 'movementMs' | 'inputMs' | 'switches'; label: string; unit: string }> = [{ key: 'keys', label: 'Keys', unit: 'keys' }, { key: 'clicks', label: 'Clicks', unit: 'clicks' }, { key: 'scrolls', label: 'Scrolls', unit: 'scrolls' }, { key: 'movementMs', label: 'Movement', unit: 'ms in movement intervals' },
+    ...(measured ? [{ key: 'inputMs' as const, label: 'Input', unit: 'ms with input' }, { key: 'switches' as const, label: 'Switches', unit: 'window switches' }] : [])];
   return <Disclosure title="Behaviour" open={open} onOpenChange={setOpen}><div className="behaviour-review">
     <p className="hint">Activity mode · {session.activityMode ?? 'Unspecified'}. Computer interaction and reported returns provide context; they do not measure attention.</p>
     {error ? <p role="alert">{error}</p> : samples === null ? <p role="status">Loading session behaviour…</p> : <>
-      <div className="behaviour-totals"><span><strong>{totals.keys}</strong>key presses</span><span><strong>{totals.clicks}</strong>mouse clicks</span><span><strong>{totals.scrolls}</strong>scroll events</span><span><strong>{(totals.movementMs / 1000).toFixed(1)}s</strong>intervals with mouse movement</span></div>
+      <div className="behaviour-totals"><span><strong>{totals.keys}</strong>key presses</span><span><strong>{totals.clicks}</strong>mouse clicks</span><span><strong>{totals.scrolls}</strong>scroll events</span><span><strong>{(totals.movementMs / 1000).toFixed(1)}s</strong>intervals with mouse movement</span>
+        {measured && totals.inputObservedMs > 0 && <span><strong>{Math.round(Math.min(1, totals.inputMs / totals.inputObservedMs) * 100)}%</strong>of observed time with input</span>}{measured && totals.switchesKnown && <span><strong>{totals.switches}</strong>window switches</span>}</div>
       <p className="coverage-label">Observed {minutesLabel(observed / 60000)} of {minutesLabel(session.activeMs / 60000)} · {Math.round(observed / totalMs * 100)}% coverage</p>
       {!session.behaviourVersion && <p className="hint">Historical session · activity collection was unavailable.</p>}
       <div className="activity-timeline" aria-label="Behaviour timeline in recorded active time">
-        {(['keys', 'clicks', 'scrolls', 'movementMs'] as const).map(track => {
-          const max = Math.max(1, ...bins.map(bin => bin[track]));
-          return <div className="activity-track" key={track}><span>{({ keys: 'Keys', clicks: 'Clicks', scrolls: 'Scrolls', movementMs: 'Movement' })[track]}</span><div className="activity-bars">{bins.map(bin => <span key={bin.start} className={bin.observed === 0 ? bin.disabled ? 'disabled-bin' : 'unavailable-bin' : bin.observed < bin.end - bin.start - 1 ? 'partial-bin' : 'recorded-bin'} title={`${Math.floor(bin.start / 60000)}–${Math.ceil(bin.end / 60000)} active min: ${bin.observed === 0 ? bin.disabled ? 'collection disabled' : 'unavailable' : `${bin[track]} ${track === 'movementMs' ? 'ms in movement intervals' : track}; ${Math.round(bin.observed / (bin.end - bin.start) * 100)}% observed`}`}><i style={{ height: `${bin[track] / max * 100}%` }} /></span>)}</div></div>;
+        {tracks.map(track => {
+          const max = Math.max(1, ...bins.map(bin => bin[track.key]));
+          return <div className="activity-track" key={track.key}><span>{track.label}</span><div className="activity-bars">{bins.map(bin => <span key={bin.start} className={bin.observed === 0 ? bin.disabled ? 'disabled-bin' : 'unavailable-bin' : bin.observed < bin.end - bin.start - 1 ? 'partial-bin' : 'recorded-bin'} title={`${Math.floor(bin.start / 60000)}–${Math.ceil(bin.end / 60000)} active min: ${bin.observed === 0 ? bin.disabled ? 'collection disabled' : 'unavailable' : `${bin[track.key]} ${track.unit}; ${Math.round(bin.observed / (bin.end - bin.start) * 100)}% observed`}`}><i style={{ height: `${bin[track.key] / max * 100}%` }} /></span>)}</div></div>;
         })}
-        <div className="timeline-events">{events.filter(e => e.kind === 'attention-return').map(e => <span key={e.id} className="timeline-return" style={{ left: `${Math.min(100, (e.activeOffsetMs ?? 0) / totalMs * 100)}%` }} title={`Return at ${minutesLabel((e.activeOffsetMs ?? 0) / 60000)} active time`}>↩</span>)}{pausePoints.map(({ event, offset }) => <span key={event.id} className="timeline-pause" style={{ left: `${Math.min(100, offset / totalMs * 100)}%` }} title={`Pause · ${event.text}`}>Ⅱ</span>)}</div>
+        <div className="timeline-events">
+          {events.filter(e => e.kind === 'attention-return').map(e => <span key={e.id} className="timeline-return" style={{ left: at(offsetOf(e)) }} title={`Return at ${minute(offsetOf(e))} active time`}>↩</span>)}
+          {events.filter(e => e.kind === 'interruption').map(e => <span key={e.id} className="timeline-interruption" style={{ left: at(offsetOf(e)) }} title={`Interruption · ${e.category || 'Unspecified'} · ${minute(offsetOf(e))} active time`}>!</span>)}
+          {events.filter(e => e.kind === 'probe').map(e => <span key={e.id} className="timeline-probe" style={{ left: at(offsetOf(e)) }} title={`Check-in · ${e.category === 'missed' ? 'missed' : PROBE_ANSWER_LABELS[e.category as ProbeAnswer] ?? e.category} · ${minute(offsetOf(e))} active time`}>{probeMark(e.category)}</span>)}
+          {pausePoints.map(({ event, offset }) => <span key={event.id} className="timeline-pause" style={{ left: at(offset) }} title={`Pause · ${event.text}`}>Ⅱ</span>)}
+        </div>
+        <div className="timeline-phases" aria-label="Session phases">{([['Warm-up', 0], ['Sustain', 1], ['Fatigue', 2]] as const).map(([label, i]) => phaseMs[i] > 0 && <span key={label} className={`phase-${i}`} style={{ width: `${phaseMs[i] / totalMs * 100}%` }} title={`${label}: ${i === 0 ? `0–${warmUpMinutes}` : i === 1 ? `${warmUpMinutes}–${fatigueMinutes}` : `${fatigueMinutes}+`} active min`}>{label}</span>)}</div>
         <div className="timeline-axis"><span>0 active min</span><span>{Math.ceil(session.activeMs / 60000)} active min</span></div>
-        <p className="hint">Solid: recorded (including zero) · striped: partial · pale: disabled · dotted: unavailable. ↩ Return · Ⅱ Pause ({pauses.length}). Hover a column for values.</p>
+        <p className="hint">Solid: recorded (including zero) · striped: partial · pale: disabled · dotted: unavailable. ↩ Return · ! Interruption · ● On the task · ◐ Drifting or elsewhere · ○ Missed check-in · Ⅱ Pause ({pauses.length}). Phases: warm-up 0–{warmUpMinutes}, sustain {warmUpMinutes}–{fatigueMinutes}, fatigue {fatigueMinutes}+ active minutes. Hover a column for values.</p>
       </div>
     </>}
     <ReturnMarkers events={data.events} sessionId={session.id} act={act} />

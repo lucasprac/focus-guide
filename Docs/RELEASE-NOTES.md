@@ -1,5 +1,84 @@
 # Release notes
 
+## Unreleased — behaviour cycle analysis (3.1.0)
+
+The analysis of the cycle now uses one set of rules in every place. It also separates a slow start from fatigue. No schema or backup format change.
+
+- **One review of a session.** The **Behaviour** review of a session shows time with input and window switches. It marks interruptions and attention check-ins on the timeline. It shows the warm-up (0–10 min), sustain (10–25 min) and fatigue (25+ min) phases. Calendar cards show the detractor and challenge answers.
+- **One analysis for a goal.** The **Behaviour** tab of a goal keeps the effort summary, the time by roadmap step and the planned actions. It shows the same Insights figures as Patterns for that goal. The two tables that repeated this data are removed. **Try next week** adds the suggestion to the goal review of the week.
+- **One rule for the duration.** The action editor and Focus now use one rule. The first choice is how long your attention held before a drift (last 90 days). Only without enough markers, the editor uses the median recorded duration. The editor says which one it used.
+- **Focus hints.** Focus shows up to three hints, one from each group: a length or a pause, a time of day, and something to do before you start. It also shows the adjustment that you saved for this week.
+- **Cycle comparison.** Insights starts with the last 7 days against the 28 days before them: perceived focus, drifts per hour, median time to the first drift and window switches per hour. It shows the saved weekly adjustments of this week and of last week.
+- **Attention span.** A new curve shows the time from an I'm back to the next drift. A table shows drifts per hour in the warm-up, sustain and fatigue phases. When drifts cluster in the warm-up, the **length** suggestion stays at 25 minutes or more. A new **warmup** suggestion explains why.
+- **Pause.** The **break** suggestion now compares the early and the later rate in the same sessions, those that reached the candidate minute. Short sessions no longer hide fatigue.
+- **Shape of a session.** The figure marks minute 10 and minute 25. It draws window switches and off-task check-ins. It compares the 2 minutes before a drift with the other minutes.
+- **Interaction states.** Window switches are now a sixth input of the grouping when most minutes have them. A new **Light interaction** name replaces a wrong "Typing" for a state with low counts. Each state shows its drifts per hour.
+- **Focus model.** Ridge, lasso and elastic net compete in the rolling origin test. The app shows which one it used and why. Collinear features show their correlation and variance inflation factor. The lasso shows which features it keeps and how often. The two hour terms become one effect. A second view explains the rating with facts from during and after the session.
+- **Agent.** `get_focus_insights` returns the new fields. `get_goal_behaviour` returns the input share and the window switches per minute of each activity mode.
+- **Speed.** The example dataset (58 sessions) takes about 250 ms. The three estimators and the second model view are the main cost.
+
+## Unreleased — goal deletion
+
+- **Delete a goal.** The goal workspace has a **Delete goal** button (trash icon) next to **Edit goal**. The dialog shows what is removed and what stays, then **Back up & delete goal** saves a recovery backup and deletes the goal permanently.
+- The goal's roadmap, weekly actions, action check-ins, outcome observations, weekly reviews, agent proposals and agent change records are removed with it.
+- Tasks and focus sessions stay in their area with their recorded time. Only their links to the goal, its roadmap steps and its planned actions are cleared.
+- You cannot delete a goal while its session is running or paused. Archive (in **Edit goal**) still keeps everything.
+- The new `goal.delete` command is for the user only. The AI agent has no delete tool, and the agent's command path refuses `goal.delete` and `field.delete`.
+- No schema or backup format change.
+
+## Unreleased — behaviour tutorial
+
+- **Behaviour tutorial.** A 9-step guide explains how to turn on keyboard and mouse totals, how attention check-ins work, the **I'm back** marker, reflection questions, the Insights tab and its minimum data, the Behaviour section of a goal and the `get_focus_insights` agent tool. Open it with **Open tutorial** in Settings or **Behaviour tutorial** in Patterns. Steps can open the matching page.
+- The tutorial changes no settings, schema or backup. It shows only text and keeps its step in memory.
+
+## Unreleased — behaviour insights
+
+Focus Guide now looks for patterns in your own records. It shows them with their uncertainty. It does not score your attention.
+
+- **Insights tab.** Patterns has two tabs: **Overview** and **Insights**. Insights shows the data behind the results. It has five figures: when you focus best, how long you work before the first drift, the shape of a session, interaction states, and what got in the way. It also shows what goes with higher focus. Last, it gives suggestions with their evidence. A figure says what it needs when data is missing. Every interval is a 90% interval. **Try next week** copies a suggestion into your weekly adjustment.
+- **Reflection questions.** After a session, you can answer two optional questions: **What got in the way most?** and **How demanding was it?** You can change the answers in Calendar, and you can clear them.
+- **Attention check-ins.** Settings > **Attention check-ins** is off by default. When it is on, a one-click question about your attention appears 8 to 20 active minutes into a session. It appears again every 15 to 35 active minutes, up to 6 times. It shows below the top bar, or as three small buttons in the floating timer. It never takes keyboard focus. It disappears after 45 seconds. There are no check-ins in Offline mode or in the last 5 minutes of a countdown.
+- **Window switches and input time.** With keyboard and mouse collection on, the helper also counts changes of the foreground window and marks the seconds with input. It stores no window name, title or program name. Focus Guide windows and tab changes in a browser do not count.
+- **Focus hints.** Focus can suggest a session length and a time of day from your last 90 days. **Use 25 min** sets the timer.
+- **AI agent.** The read tool `get_focus_insights` gives the agent the same values as the Insights tab. The default range is 90 days, and each curve has at most 60 points.
+- **Example data.** **Explore an example** now has 60 invented sessions over 30 days, with activity, markers, check-ins and reflection answers.
+- **All time.** The Behaviour section of a goal and the Insights tab now accept the **All time** range.
+- Interruptions and parked thoughts now save their position in active time. New sessions use `behaviourVersion` 4.
+- **Speed.** The app keeps the last four insight results in memory and clears them at any write. A first call takes about 380 ms with 1 000 sessions. That is above the 300 ms target, and the team accepted it.
+- SQLite and JSON schema 10 add `detractor` and `challenge` to sessions, `inputMs` and `switches` to activity blocks, the event kind `probe` and the setting `attentionProbes`. The migration saves a `before-schema-v10` snapshot first. The Session CSV adds `detractor` and `challenge`. The Activity CSV adds `input_ms` and `window_switches`.
+- JSON backups of versions 1–10 restore. A restore turns attention check-ins off, as it does for activity collection and agent access.
+- **A schema 10 backup cannot be restored by 2.0.0 or earlier.** Those versions also cannot open a schema 10 database. To go back, you need the matching snapshot and the older app. Save a full JSON backup with 2.0.0 before you update.
+- A backup whose settings have no `focusVisual` key, for example one from a version before the session gauge, restores again.
+- The analysis rules and thresholds are in the [data dictionary](DATA-DICTIONARY.md#calculation-rules-for-insights).
+
+## Unreleased — Neural World as a goal network
+
+- **Goal network.** Neural World now shows goals instead of area clusters. Each goal is a neuron: focus time grows its soma, roadmap steps form its axon (finished steps lit, the next step pulsing), done and smaller actions of the last 28 days add sparks, and a measured goal shows a progress arc. Drafts are translucent, paused goals are muted, and achieved goals move to an outer ring.
+- **Explore and act.** Click a neuron or a goal button to turn the world and move the camera to the goal. A side panel shows its roadmap, time, actions and progress. **Focus on next step** prepares a session for that goal and step; **Open goal** opens the workspace. **Esc** returns to the overview.
+- Area colours identify goals. The earned palette now tints the sky and the light. Palette unlock rules do not change.
+- The page reads records only. The schema, backups and commands do not change. The SVG fallback draws the same network.
+
+## Unreleased — session gauge and figure plates
+
+- **Session gauge.** Settings > **Focus visual** can replace the Focus brain with an isometric dial indicator. Its needle turns once for each 10 minutes of session time, its small dial counts up to 12 turns (2 hours), and a marker shows the planned length. Breaks show it in blue. It is SVG only, so software rendering also shows it. The brain stays the default.
+- **Figure plates.** The Focus card and the three main Patterns charts use a plate frame: "Fig n" and the title at the top, a hint and a live value at the bottom, in a monospace font with a thin layered shadow.
+- The isometric drawing kit comes from the Anatomy skill (MIT licence). Its colours come from the app's tokens: four neutral tones and one accent part.
+- Settings add the optional `focusVisual` key. The schema version does not change, and backups without the key restore with the brain. A backup that contains the key cannot be restored by 2.0.0 or earlier, because those versions reject unknown settings keys.
+
+## 2.0.0 — goals as learning workspaces and a local AI agent
+
+Focus Guide now puts goals at the centre. A goal is the place where you learn: it has a roadmap, focus sessions, tasks and a behaviour profile.
+
+- **Goal workspace.** Goals is the first page. Open a goal to see Overview, Roadmap, Tasks, Behaviour, and Plan & review. **Focus on this goal** prepares a session with the goal, its area and the activity mode of its latest session. After the session, the next one stays in the same goal until you select **Free focus**.
+- **Areas.** The interface calls focus fields "areas", for example Mathematics or Languages. An area groups goals. Commands, the database and backups keep the name `field`.
+- **Roadmap steps.** Headings are stages and to-dos are steps. Each step can have an estimate, a target date, notes and links. A session can record the step that it served, and the roadmap shows recorded time against the estimate for each step and stage.
+- **Behaviour profile.** Each goal shows time by activity mode, time of day, weekday and roadmap step, keyboard and mouse rates with their coverage, returns, interruptions, self-ratings and action check-ins. The profile describes records. It does not score attention.
+- **Calendar and Patterns.** Calendar can filter by goal. Patterns shows time by activity mode. A duration suggestion uses the goal's own sessions first.
+- **Local AI agent (MCP).** Settings > AI agent turns on a local Model Context Protocol server for clients such as Claude Code and Claude Desktop. Access is **Off** by default. **Read only** lets the agent read goals, sessions and behaviour summaries. **Read and propose** also lets it propose goals, roadmaps, tasks, weekly actions and review notes. A proposal changes nothing until you apply it on the goal page. You can edit or reject it, and applied and rejected proposals stay as a history.
+- **Direct edits by the agent.** The new **Read and edit** level lets the agent create and change goals, roadmaps, roadmap step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page and on the goal's Overview, with the agent's reason. **Undo** puts back the earlier state, and a record that the agent created is archived. The agent can make at most 60 direct changes per hour.
+- **Safe roadmap edits.** A roadmap change names the revision that it is based on. If the agent changes a roadmap while you edit it, the app does not save over it: you choose **Show the agent's version** or **Keep my version**. An agent's roadmap change keeps a row only when the title is the same; to rename a step, the agent changes that step.
+- SQLite and JSON schema 7 add roadmap step details to milestones and `milestoneId` to sessions. Schema 8 adds the `agentProposals` collection and the `agentAccess` setting. Schema 9 adds the `agentChanges` log. Each migration saves a `before-schema-vN` snapshot first. JSON backups of versions 1–8 still restore. A restore and the schema 8 and 9 migrations set agent access to **Off**.
+
 ## Unreleased — block milestones, same-day defaults and a new brain
 
 - Milestones are now a light block editor. Each row can be a to-do, heading, bullet, numbered item or text line. Type `# `, `- `, `1. ` or `[] ` at the start of a row, or use the **Row type** buttons. Enter, Backspace, Ctrl+Enter and Alt+Up/Down work as in other block editors. Only to-dos can be ticked, count as progress and take task links. A to-do with linked tasks keeps its kind until you unlink them.

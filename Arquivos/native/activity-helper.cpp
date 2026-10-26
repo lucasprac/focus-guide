@@ -10,6 +10,9 @@
 // No raw records leave this process. Key state is transient and used only to suppress repeats.
 static HWND window;
 static HANDLE parentProcess;
+static DWORD parentPid;
+static HWND lastForeground = nullptr;
+static unsigned long long switches = 0;
 static bool collecting = false, moved = false;
 static int epoch = 0;
 static unsigned long long started = 0, boundary = 0, keys = 0, clicks = 0, scrolls = 0;
@@ -20,8 +23,20 @@ static void emitSample() {
   auto now = GetTickCount64(), duration = now - boundary;
   if (duration) std::cout << "{\"type\":\"sample\",\"epoch\":" << epoch << ",\"endMs\":" << now - started
     << ",\"durationMs\":" << duration << ",\"keys\":" << keys << ",\"clicks\":" << clicks
-    << ",\"scrolls\":" << scrolls << ",\"movementMs\":" << (moved ? duration : 0) << "}" << std::endl;
-  boundary = now; keys = clicks = scrolls = 0; moved = false;
+    << ",\"scrolls\":" << scrolls << ",\"movementMs\":" << (moved ? duration : 0) << ",\"switches\":" << switches << "}" << std::endl;
+  boundary = now; keys = clicks = scrolls = switches = 0; moved = false;
+}
+static void sampleForeground() {
+  if (!collecting) return;
+  HWND foreground = GetForegroundWindow();
+  if (!foreground) return;
+  HWND root = GetAncestor(foreground, GA_ROOTOWNER);
+  if (!root) return;
+  DWORD pid = 0;
+  GetWindowThreadProcessId(root, &pid);
+  if (!pid || pid == parentPid) return;
+  if (lastForeground && lastForeground != root) ++switches;
+  lastForeground = root;
 }
 static bool monitor(bool enable) {
   const DWORD flags = enable ? RIDEV_INPUTSINK : RIDEV_REMOVE;
@@ -37,13 +52,13 @@ static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
       emitSample(); monitor(false); collecting = false;
       int next = 0; input >> next;
       if (next > 0 && monitor(true)) {
-        epoch = next; started = boundary = GetTickCount64(); keys = clicks = scrolls = 0; moved = false;
+        epoch = next; started = boundary = GetTickCount64(); keys = clicks = scrolls = switches = 0; moved = false; lastForeground = nullptr;
         for (int i=0; i<256; ++i) down[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
         collecting = true;
       }
       std::cout << "{\"type\":\"started\",\"epoch\":" << next << ",\"ok\":" << (collecting ? "true" : "false") << "}" << std::endl;
     } else if (action == "stop") {
-      emitSample(); monitor(false); collecting = false;
+      emitSample(); monitor(false); collecting = false; lastForeground = nullptr;
       std::cout << "{\"type\":\"stopped\",\"epoch\":" << epoch << "}" << std::endl;
     } else if (action == "hotkey") {
       unsigned int request=0, modifiers=0, key=0; input >> request >> modifiers >> key;
@@ -87,7 +102,7 @@ static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
   if (message == WM_HOTKEY) { std::cout << "{\"type\":\"return\"}" << std::endl; return 0; }
   if (message == WM_TIMER) {
     if (WaitForSingleObject(parentProcess, 0) != WAIT_TIMEOUT) { DestroyWindow(hwnd); return 0; }
-    emitSample(); std::cout << "{\"type\":\"heartbeat\"}" << std::endl; return 0;
+    sampleForeground(); emitSample(); std::cout << "{\"type\":\"heartbeat\"}" << std::endl; return 0;
   }
   if (message == WM_CLOSE) { monitor(false); DestroyWindow(hwnd); return 0; }
   if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
@@ -97,6 +112,7 @@ int main(int argc, char **argv) {
   if (argc != 2) return 2;
   char *end = nullptr; auto pid = strtoul(argv[1], &end, 10);
   if (!pid || !end || *end) return 2;
+  parentPid = pid;
   parentProcess = OpenProcess(SYNCHRONIZE, FALSE, pid); if (!parentProcess) return 3;
   WNDCLASSW cls{}; cls.lpfnWndProc = procedure; cls.hInstance=GetModuleHandle(nullptr); cls.lpszClassName=L"FocusGuideAggregateInput";
   if (!RegisterClassW(&cls)) return 4;

@@ -47,10 +47,10 @@ export function calendarSessionIndex(data: Dataset): Map<string, FocusSession[]>
   }
   return result;
 }
-export function summarizeDays(data: Dataset, fieldId = ''): DaySummary[] {
+export function summarizeDays(data: Dataset, fieldId = '', goalId = ''): DaySummary[] {
   const map = new Map<string, DaySummary>();
   const get = (day: string) => { let row = map.get(day); if (!row) { row = { day, minutes: 0, count: 0, ratings: [], fields: {} }; map.set(day, row); } return row; };
-  const sessions = data.sessions.filter(s => s.status === 'completed' && !s.excluded && (!fieldId || s.fieldId === fieldId));
+  const sessions = data.sessions.filter(s => s.status === 'completed' && !s.excluded && (!fieldId || s.fieldId === fieldId) && (!goalId || s.goalId === goalId));
   const byId = new Map(sessions.map(s => [s.id, s]));
   for (const s of sessions) { const row = get(localDay(s.startedAt, s.timezone)); row.count++; if (s.focus !== null) row.ratings.push(s.focus); }
   for (const e of data.events) {
