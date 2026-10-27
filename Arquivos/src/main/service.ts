@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { Store } from './store';
 import { TimerEngine } from './timer';
-import type { Command, FocusSession, Task } from '../shared/types';
+import type { ActivitySample, Command, Dataset, FocusSession, Task } from '../shared/types';
 import * as v from '../shared/validation';
 import { addDays, selectedSessions, totalMinutes } from '../shared/analytics';
-import { INSIGHT_THRESHOLDS, focusInsights } from '../shared/focus-insights';
+import { INSIGHT_THRESHOLDS, focusInsights, type InsightOptions } from '../shared/focus-insights';
 import type { ProbeScheduler } from './probes';
 import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
@@ -37,6 +37,25 @@ export class FocusService {
   };
   // The local agent bridge calls only this method; it never reaches the renderer commands directly.
   agentTool(name: unknown, input: Record<string, unknown>, source: string): unknown { return new AgentService(this.store,this.agentCommand).tool(name,input,source); }
+  /* insights.read in two steps, so the main process can compute outside the command queue: the job is either a cached value or the
+     inputs of the engine, read in one synchronous step. The key holds the data revision at that moment. */
+  insightsJob(input: Record<string, unknown>, now = new Date().toISOString()): { key: string | null; value: unknown } | { key: string | null; data: Dataset; activity: ActivitySample[]; options: InsightOptions } {
+    const { from, to } = dateRange(input);
+    const fieldId = input.fieldId == null || input.fieldId === '' ? undefined : v.id(input.fieldId);
+    const goalId = input.goalId == null || input.goalId === '' ? undefined : v.id(input.goalId);
+    const revision = this.store.revision(), key = revision === null ? null : JSON.stringify([revision, from, to, fieldId ?? '', goalId ?? '']);
+    const hit = key === null ? undefined : this.insights.find(entry => entry.key === key);
+    if (hit) return { key, value: structuredClone(hit.value) };
+    // The cycle comparison also reads the recent and baseline windows, which can reach back further than the range.
+    const data = this.store.all(), reach = addDays(to, -(INSIGHT_THRESHOLDS.cycle.recentDays + INSIGHT_THRESHOLDS.cycle.baselineDays - 1)), sessions = selectedSessions(data, from < reach ? from : reach, to, fieldId, goalId);
+    return { key, data, activity: sessions.flatMap(s => this.store.activity(s.id)), options: { from, to, fieldId, goalId, now: Date.parse(now) } };
+  }
+  rememberInsights(key: string | null, value: unknown): void {
+    // A result from a snapshot that is no longer current is dropped, so it never evicts results of the current data.
+    const revision = key === null ? null : JSON.parse(key)[0];
+    if (key === null || revision !== this.store.revision()) return;
+    this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
+  }
   run(command: Command, input: Record<string, unknown> = {}): unknown {
     const now = new Date().toISOString();
     const goals = new GoalService(this.store);
@@ -145,17 +164,8 @@ export class FocusService {
         return this.timer.recordProbe(answer, offsetMs, source, latencyMs);
       }
       case 'insights.read': {
-        const { from, to } = dateRange(input);
-        const fieldId = input.fieldId == null || input.fieldId === '' ? undefined : v.id(input.fieldId);
-        const goalId = input.goalId == null || input.goalId === '' ? undefined : v.id(input.goalId);
-        const revision = this.store.revision(), key = JSON.stringify([revision, from, to, fieldId ?? '', goalId ?? '']);
-        const hit = revision === null ? undefined : this.insights.find(entry => entry.key === key);
-        if (hit) return structuredClone(hit.value);
-        // The cycle comparison also reads the recent and baseline windows, which can reach back further than the range.
-        const data = this.store.all(), reach = addDays(to, -(INSIGHT_THRESHOLDS.cycle.recentDays + INSIGHT_THRESHOLDS.cycle.baselineDays - 1)), sessions = selectedSessions(data, from < reach ? from : reach, to, fieldId, goalId);
-        const value = focusInsights(data, sessions.flatMap(s => this.store.activity(s.id)), { from, to, fieldId, goalId, now: Date.parse(now) });
-        if (revision !== null) this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
-        return value;
+        const job = this.insightsJob(input, now); if ('value' in job) return job.value;
+        const value = focusInsights(job.data, job.activity, job.options); this.rememberInsights(job.key, value); return value;
       }
       case 'behaviour.read': {
         const sessionId = v.id(input.id); if (!this.store.session(sessionId)) throw new Error('Session no longer exists.');

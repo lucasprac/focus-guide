@@ -13,6 +13,7 @@
 | Neural visuals | `NeuralVisual.tsx`, `ThreeScene.tsx`, `Constellation.tsx`, `styles.css`: bounded local scenes with SVG fallback |
 | Browser preview | `preview.vite.config.ts`, `src/renderer/src/preview.ts`: synthetic adapter |
 | Windows helper | `native/activity-helper.cpp`. `scripts/build-helper.cjs` compiles it to `native/bin/`. |
+| Statistics module | `native/stats/` (Rust). `scripts/build-stats.cjs` compiles it to WebAssembly and writes `src/shared/stats-wasm.ts`. |
 | Packaging assets | `build/icon.ico`, `build/THIRD-PARTY-NOTICES.txt`, `scripts/Start-Software-Rendering.cmd` |
 
 ## Prerequisites
@@ -22,6 +23,8 @@
 - Windows x64.
 - Internet access for the first install. The install downloads the dependencies and Electron.
 - MinGW C++ to build the helper. The default compiler is `C:\msys64\ucrt64\bin\g++.exe`. To use a different compiler, set `FOCUS_GUIDE_CXX`.
+
+- Rust, only to change the statistics module in `native/stats/`: install [rustup](https://rustup.rs), then run `rustup target add wasm32-unknown-unknown`. To use another `cargo`, set `FOCUS_GUIDE_CARGO`. Without Rust, the build uses the committed `src/shared/stats-wasm.ts` when it matches the crate sources.
 
 If Electron reports that it is not installed correctly, run `node node_modules/electron/install.js`.
 
@@ -37,7 +40,9 @@ npm.cmd run build
 npm.cmd run package
 ```
 
-`npm.cmd run build` also runs `npm.cmd run build:mcp`. That step bundles the MCP server, `@modelcontextprotocol/server` and `zod` into `out/mcp/focus-guide-mcp.cjs`. Packaging copies the file to `resources/mcp/`. These two packages are development dependencies because the bundle contains them.
+`npm.cmd run build` also runs `npm.cmd run build:stats` and `npm.cmd run build:mcp`. After a change to `native/stats/`, run `npm.cmd run build:stats` before `dev` or `preview`, because only the build regenerates `src/shared/stats-wasm.ts`. Commit that file with the change.
+
+`build:mcp` bundles the MCP server, `@modelcontextprotocol/server` and `zod` into `out/mcp/focus-guide-mcp.cjs`. Packaging copies the file to `resources/mcp/`. These two packages are development dependencies because the bundle contains them.
 
 ## Test the MCP server
 

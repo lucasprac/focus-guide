@@ -6,6 +6,7 @@ node_modules/
 Arquivos/out/
 Arquivos/dist/
 Arquivos/native/bin/
+Arquivos/native/stats/target/
 
 # Local user data (must never be committed)
 *.sqlite

@@ -81,7 +81,17 @@ The scheduler cancels a check-in and saves no record in these cases:
 
 ### Insight engine
 
-`src/shared/focus-insights.ts` and `src/shared/insight-stats.ts` form a pure engine without dependencies. The same input gives the same output. A seeded generator (`mulberry32(42)`) drives the minute sample, the k-means starts and the bootstrap. The main process runs it for `insights.read`. The renderer runs it for the example dataset.
+`src/shared/focus-insights.ts` and `src/shared/insight-stats.ts` form a pure engine without dependencies. The same input gives the same output. A seeded generator (`mulberry32(42)`) drives the minute sample, the k-means starts and the bootstrap. A worker thread of the main process runs it for `insights.read`. The renderer runs it for the example dataset, and the browser preview runs it for every read.
+
+#### Statistics module (Rust and WebAssembly)
+
+The matrix kernels of `insight-stats.ts` are written in Rust (`native/stats/src/lib.rs`) and compiled to WebAssembly: ridge (`ridgeFit`, `ridgeSelect`), lasso and elastic net (`penalizedFit`, `penalizedSelect`), `collinearity`, `kMeans` and `silhouettes`. The other helpers (intervals, quantiles, Kaplan–Meier, `mulberry32`) stay in TypeScript. They are cheap, and Kaplan–Meier uses `log` and `exp`, which can differ by one unit in the last place between math libraries.
+
+- **Same numbers.** Each kernel repeats the TypeScript it replaced operation by operation, with the same order of additions and the same guards. WebAssembly uses IEEE 754 doubles, Rust never fuses a multiply and an add, and the kernels use only +, −, ×, ÷ and √. A check against the previous TypeScript (5 778 comparisons of random, constant, collinear and empty inputs, and the full engine on the example dataset) found no difference in any bit. The grid of the lasso penalty uses `floor ** x`, so `penalizedSelect` computes those factors in TypeScript and passes them in.
+- **Random numbers.** `kMeans` keeps its `random` argument. The module imports `env.stats_random`, which calls that function, so k-means++ draws the same seeded stream.
+- **Loading.** `loadStats()` compiles the module once and must finish before the first insight. The main process awaits it before it opens the store, the insights worker awaits it before its first job, and the renderer awaits it before React mounts (the preview too). Browsers refuse to compile a large module synchronously, so loading is asynchronous. A call before loading ends fails with "The statistics engine is still loading."
+- **Build.** `scripts/build-stats.cjs` (`npm.cmd run build:stats`, part of `build`) compiles the crate with `cargo build --release --target wasm32-unknown-unknown` and embeds the module as base64 in `src/shared/stats-wasm.ts`. That generated file is committed, so `dev`, `preview` and `typecheck` work without Rust. It records a hash of the crate sources. Without Rust, the build accepts the committed file only when the hash matches; after a change to `native/stats`, it stops and asks for Rust.
+- **Content Security Policy.** The renderer policy has `script-src 'self' 'wasm-unsafe-eval'`. Chromium needs `wasm-unsafe-eval` to compile WebAssembly. It allows no `eval` of JavaScript, and the module comes from the app bundle.
 
 - **Input.** Finished, included sessions that start in the range, with the optional area and goal filters. A session with more than 8 active hours leaves the analysis.
 - **Drift.** A drift is an **I'm back** marker or an interruption. A probe answer and a parked thought are not drifts. Check-ins follow a schedule, so counting them would raise the drift rate after minute 8 for no real reason. A probe answer has its own measure: the share of answered check-ins that are off the task.
@@ -106,15 +116,22 @@ Builder decisions that the design left open:
 
 The command takes `from`, `to`, and the optional `fieldId` and `goalId`. Any valid range with `from` not after `to` is accepted, also All time. `goal.behaviour` accepts the same ranges. The cost depends on the number of sessions, not on the number of days.
 
+The main process answers it outside the command queue, in two steps:
+
+1. Inside the queue, `FocusService.insightsJob()` returns a cached result, or reads the dataset and the activity rows in one synchronous step. No mutation can interleave with that read.
+2. Outside the queue, `InsightsWorker` (`src/main/insights.ts`, a `worker_threads` worker in `insights-worker.ts`) runs the engine on that snapshot. Checkpoints, check-ins and other commands do not wait for it, and the 250 ms loop keeps running. Two reads with the same key share one computation. A crashed worker fails its pending reads and a new one starts on the next read.
+
 `FocusService` keeps a cache of the last 4 results.
 
-- The key is the validated input plus `Store.revision()`. The revision is the SQLite `total_changes()` value of the connection.
-- Any `INSERT`, `UPDATE` or `DELETE` changes the revision, so any write clears the cache. If the revision is not available, nothing is cached.
+- The key is the validated input plus `Store.revision()`. The revision is the SQLite `total_changes()` value of the connection, less the rows written inside `Store.untracked()`.
+- Only the periodic 5 s checkpoint runs inside `untracked()`. It writes the running session and its activity rows, and the engine reads finished sessions only, so the cache stays valid during a session. Every other `INSERT`, `UPDATE` or `DELETE` changes the revision and clears the cache. If the revision is not available, nothing is cached.
+- A result is cached only if the revision of its snapshot is still the current one, so a slow result never replaces results of newer data.
 - The cache lives in memory only. A restart empties it. Callers get a copy of the result.
+- The preview and the agent call `FocusService.run('insights.read')`, which does both steps in place.
 
 ### Agent tool
 
-`get_focus_insights` (level `read`) returns the object that the Insights tab shows. The input is `{ from?, to?, goalId?, fieldId? }`. The default range is the last 90 days in the timezone of the settings. With no input, `from` is today minus 89 days and `to` is today. With only `to`, `from` is `to` minus 89 days. With only `from`, `to` is today. Each survival curve has at most 60 points: the first, the last and evenly spaced points between them. The tool uses `insights.read`, so it uses the same cache. The description tells the agent that the values describe records and are not scores.
+`get_focus_insights` (level `read`) returns the object that the Insights tab shows. The input is `{ from?, to?, goalId?, fieldId? }`. The default range is the last 90 days in the timezone of the settings. With no input, `from` is today minus 89 days and `to` is today. With only `to`, `from` is `to` minus 89 days. With only `from`, `to` is today. Each survival curve has at most 60 points: the first, the last and evenly spaced points between them. The tool uses `insights.read`, so it uses the same cache. It still computes in the main process, inside the agent's queued command, when the cache has no result. The description tells the agent that the values describe records and are not scores.
 
 ### Invariants
 
@@ -133,7 +150,7 @@ The design target for `insights.read` is less than 300 ms for 1 000 sessions and
 - K-means trains on at most 5 000 minutes. The silhouette uses at most 1 500 points.
 - The model tests at most 40 later sessions. The bootstrap uses 200 resamples.
 
-A call without cache takes about 380 ms at 1 000 sessions. This is above the target. The team accepted it. The cache removes repeated calls. The timer uses a monotonic clock, so a long call does not change recorded time. The interface can freeze for a moment during that call.
+A call without cache takes about 380 ms at 1 000 sessions. This is above the target. The team accepted it. Since the worker, the call no longer blocks the main process, and checkpoints no longer clear the cache. The WebAssembly kernels gave less speed than expected: a synthetic run of the model took 0.66 s instead of 0.71 s at 1 000 rated sessions, and k-means with silhouettes took 62 ms instead of 111 ms at 3 000 points (Node 22, Linux). V8 already runs the old loops close to native speed.
 
 ## Learning workspace and local agent bridge (unreleased)
 
@@ -273,6 +290,8 @@ flowchart LR
 | `src/mcp/server.ts` | Stdio MCP server, bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
 | `src/shared/behaviour-analytics.ts`, `agent-tools.ts` | Goal behaviour profile; agent tool list and bridge file contract |
 | `src/shared/focus-insights.ts`, `insight-stats.ts` | Pure insight engine with its thresholds (`INSIGHT_THRESHOLDS`), and its numerical methods (Kaplan–Meier, ridge, lasso and elastic net, correlation and variance inflation, k-means++) |
+| `native/stats/`, `src/shared/stats-wasm.ts` | Rust kernels of `insight-stats.ts`, and the generated WebAssembly module that embeds them |
+| `src/main/insights.ts`, `insights-worker.ts` | Worker thread that computes `insights.read` outside the command queue |
 | `src/preload/index.ts` | Narrow `focusGuide` bridge |
 | `src/shared/types.ts` | Dataset, state, command names and event interfaces |
 | `src/shared/analytics.ts` | Local-date splits, filters, averages, Spearman calculation with tied ranks |
