@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "build:helper": "node scripts/build-helper.cjs",
     "build:mcp": "node scripts/build-mcp.cjs",
-    "build": "npm run build:helper && electron-vite build && npm run build:mcp",
+    "build:stats": "node scripts/build-stats.cjs",
+    "build": "npm run build:helper && npm run build:stats && electron-vite build && npm run build:mcp",
     "package": "npm run build && electron-builder --win --x64 --dir",
     "postinstall": "electron-builder install-app-deps"
   },

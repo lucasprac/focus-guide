@@ -1,5 +1,16 @@
 # Release notes
 
+## Unreleased — statistics module in Rust
+
+The heavy statistics of Insights now run in Rust compiled to WebAssembly, and the main process computes Insights on a worker thread. The numbers do not change. No schema or backup format change.
+
+- **Same results.** Ridge, lasso, elastic net, the collinearity check, k-means and the silhouette moved to `native/stats`. A check against the previous code found no difference in any bit, also for the full engine on the example dataset.
+- **No freeze.** Opening Insights or the Focus hints no longer blocks the timer loop, checkpoints or check-ins while the engine runs.
+- **Cache during a session.** The 5 s checkpoint of a running session no longer clears the Insights cache.
+- **Speed.** The model part gained about 7 %, k-means and silhouettes about 45 %. The worker is what removes the freeze.
+- **Security.** The renderer policy adds `'wasm-unsafe-eval'`, which Chromium needs to compile WebAssembly. It does not allow JavaScript `eval`.
+- **Build.** `npm.cmd run build` runs the new `build:stats` step. Rust is needed only to change `native/stats`.
+
 ## Unreleased — behaviour cycle analysis (3.1.0)
 
 The analysis of the cycle now uses one set of rules in every place. It also separates a slow start from fatigue. No schema or backup format change.

@@ -1,0 +1,18 @@
+[package]
+name = "focus-guide-stats"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Numerical kernels of the Focus Guide insight engine, compiled to WebAssembly."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -10,6 +10,8 @@ import { BehaviourCollector } from './behaviour';
 import { ProbeScheduler } from './probes';
 import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
+import { InsightsWorker } from './insights';
+import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
 import { localDay, totalMinutes } from '../shared/analytics';
@@ -42,13 +44,16 @@ let quitPending = false;
 let backupStatus = 'Your data stays on this computer.';
 let backupPromise: Promise<void> | null = null;
 const commandQueue = new CommandQueue();
+const insightsWorker = new InsightsWorker();
+// insights.read computations in flight, by cache key, so two windows asking at once share one computation.
+const insightsInFlight = new Map<string, Promise<unknown>>();
 let transitions: TransitionCoordinator;
 let shortcutCaptureUntil = 0;
 let pendingRestore: { token: string; data: BackupFile; expires: number } | null = null;
 let updateInterval: NodeJS.Timeout;
 let checkpointInterval: NodeJS.Timeout;
 let backupInterval: NodeJS.Timeout;
-const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'";
+const csp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'";
 const applicationIcon = join(__dirname, '../renderer/icon.png');
 
 function notify(mode: 'focus' | 'break'): void {
@@ -266,6 +271,18 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     }
   }
 }
+/* insights.read reads its snapshot inside the queue, where no mutation can interleave, and computes outside it on the worker,
+   so checkpoints, check-ins and other commands never wait for the engine. */
+async function readInsights(input: Record<string, unknown>): Promise<unknown> {
+  const job = await commandQueue.run(() => { if (quitPending) throw new Error('Focus Guide is saving and closing.'); return service.insightsJob(input); });
+  if ('value' in job) return job.value;
+  const running = job.key === null ? undefined : insightsInFlight.get(job.key);
+  if (running) return running;
+  const task = insightsWorker.compute(job.data, job.activity, job.options);
+  if (job.key !== null) insightsInFlight.set(job.key, task);
+  try { const value = await task; service.rememberInsights(job.key, value); return value; }
+  finally { if (job.key !== null) insightsInFlight.delete(job.key); }
+}
 app.on('second-instance', showMain);
 app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -288,10 +305,13 @@ app.on('before-quit', e => {
     } catch (error) { quitPending = false; showMain(); report(error); changed(); }
   })();
 });
-app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); bridge?.stop(); tray?.destroy(); store?.close(); });
+app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); insightsWorker.stop(); bridge?.stop(); tray?.destroy(); store?.close(); });
 app.on('window-all-closed', () => { /* The tray owns the application lifetime. */ });
 
 if (locked) void app.whenReady().then(async () => {
+  // The agent's get_focus_insights still computes here, in the main process, so the statistics module loads before any command.
+  // A failure only affects Insights, which then report it; the timer and the data still open.
+  await loadStats().catch(error => console.error(error));
   store = new Store(app.getPath('userData'));
   timer = new TimerEngine(store, undefined, notify);
   probes = new ProbeScheduler();
@@ -360,6 +380,7 @@ if (locked) void app.whenReady().then(async () => {
     try {
       trustedSender(event); const args = v.object(input);
       if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error('Invalid command input.');
+      if (command === 'insights.read') return { ok: true, value: await readInsights(args) };
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
         if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
@@ -386,7 +407,8 @@ if (locked) void app.whenReady().then(async () => {
       pollProbes();
     } catch (e) { report(e); changed(); }
   }, 250);
-  checkpointInterval = setInterval(() => { void enqueue(async () => { timer.checkpoint(); collector.flush(); }); }, 5000);
+  // The periodic checkpoint writes only the running session and its activity, which no insight reads, so it keeps the insights cache valid.
+  checkpointInterval = setInterval(() => { void enqueue(async () => { store.untracked(() => { timer.checkpoint(); collector.flush(); }); }); }, 5000);
   backupInterval = setInterval(() => { void dailyBackup().then(() => { if (mainWindow?.isVisible()) changed(); }); }, 60000);
   await dailyBackup();
 }).catch(error => {

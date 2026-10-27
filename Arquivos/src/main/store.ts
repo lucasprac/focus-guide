@@ -301,7 +301,15 @@ export class Store {
     })();
   }
   async backup(path: string): Promise<void> { await this.db.backup(path); }
-  /** Rows changed through this connection since it opened; any INSERT, UPDATE or DELETE moves it. Null means: do not cache. */
-  revision(): number | null { return (this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n; }
+  /** Rows changed through this connection since it opened, less the rows written by `untracked`. Null means: do not cache. */
+  revision(): number | null { return this.totalChanges() - this.untrackedChanges; }
+  private untrackedChanges = 0;
+  private totalChanges(): number { return (this.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n; }
+  /** Runs `write` without moving the revision. Only for the periodic checkpoint of a running session and its activity:
+      the insights engine reads completed sessions only, so those rows never change an insight. Rows written before a throw still count as untracked. */
+  untracked(write: () => void): void {
+    const before = this.totalChanges();
+    try { write(); } finally { this.untrackedChanges += this.totalChanges() - before; }
+  }
   close(): void { this.db.close(); }
 }
