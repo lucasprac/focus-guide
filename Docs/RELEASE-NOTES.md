@@ -1,5 +1,9 @@
 # Release notes
 
+## Unreleased — floating check-in fix
+
+- **Check-in in the floating timer.** The answer buttons of "Attention right now?" in the floating timer now take a click. Before, the brain's drag area covered them, so a click moved the window instead of saving the answer. No schema or backup format change.
+
 ## Unreleased — statistics module in Rust
 
 The heavy statistics of Insights now run in Rust compiled to WebAssembly, and the main process computes Insights on a worker thread. The numbers do not change. No schema or backup format change.
