@@ -97,11 +97,12 @@ export default function App() {
   if (!data) return mini ? <div className="mini-app mini-loading" role="status"><Icon name="world" size={32} /><span>{error || 'Opening timer…'}</span></div> : <div className="loading-screen"><Icon name="world" size={42} /><h1>Focus Guide</h1><p>{error || 'Opening your focus space…'}</p></div>;
   if (mini) return <div className="mini-app" tabIndex={0} role="group" aria-label="Floating timer. Hover or focus to reveal time and controls.">
     {data.timer.mode === 'focus' && <ProbeAnnouncer probe={data.probe} />}
-    {data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} mini />}
     <div className="mini-drag" title="Drag the brain to move the floating timer">
       <ReturnFeedback sessionId={data.timer.sessionId} animation={data.settings.animation} neutral={brainColorProgress(data.timer.elapsedMs, visualDuration(data.timer)) === 0}><FloatingNetwork elapsedMs={data.timer.elapsedMs} progress={brainColorProgress(data.timer.elapsedMs, visualDuration(data.timer))} running={data.timer.running} pause={data.timer.mode === 'break'} animation={data.settings.animation} software={data.graphicsMode === 'software'} /></ReturnFeedback>
     </div>
     {data.timer.mode === 'focus' && <button className="mini-return" aria-label="I'm back" title="I'm back — save a return marker" disabled={!data.timer.running} onClick={() => void act('attention.return', { source: 'floating' })}><Icon name="check" size={16} /></button>}
+    {/* After the drag area: Electron applies app-region rects in DOM order, so an earlier no-drag rect is re-covered by a later drag rect and its clicks move the window. */}
+    {data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} mini />}
     <div className="mini-reveal">
       <div className="mini-time" role="timer" aria-label={data.timer.mode === 'idle' ? 'Planned duration' : timerLabel(data.timer)}>{data.timer.phase === 'overtime' ? '+' : ''}{time(data.timer.mode === 'idle' ? data.settings.defaultMinutes * 60000 : displayedTime(data.timer))}</div>
       <div className="mini-controls">
