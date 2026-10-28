@@ -3,8 +3,10 @@ import type { ViewProps } from './App';
 import { goalData, type AgentChange } from '../../shared/types';
 import { Badge, Button, Card } from './ui';
 import { Disclosure } from './components';
+import { eventSourceLabel } from '../../shared/labels';
+import { t, dateLocale } from '../../shared/i18n';
 
-const TARGET_LABELS: Record<AgentChange['target'], string> = { goal: 'Goal', roadmap: 'Roadmap', step: 'Step', task: 'Tasks', action: 'Weekly action', review: 'Review note' };
+const TARGET_LABELS: Record<AgentChange['target'], string> = { get goal() { return t('Goal'); }, get roadmap() { return t('Roadmap'); }, get step() { return t('Step'); }, get task() { return t('Tasks'); }, get action() { return t('Weekly action'); }, get review() { return t('Review note'); } };
 
 function ChangeRow({ data, act, change }: ViewProps & { change: AgentChange }) {
   const [busy, setBusy] = useState(false), [conflict, setConflict] = useState(false), [error, setError] = useState('');
@@ -17,13 +19,13 @@ function ChangeRow({ data, act, change }: ViewProps & { change: AgentChange }) {
     } finally { setBusy(false); }
   };
   return <div className={`goal-history-row agent-change ${change.undoneAt ? 'undone' : ''}`}>
-    <span>{new Date(change.at).toLocaleString('en-US', { timeZone: data.settings.timezone, dateStyle: 'medium', timeStyle: 'short' })} · {change.source}</span>
+    <span>{new Date(change.at).toLocaleString(dateLocale(), { timeZone: data.settings.timezone, dateStyle: 'medium', timeStyle: 'short' })} · {eventSourceLabel(change.source)}</span>
     <strong><Badge tone={change.undoneAt ? 'neutral' : 'accent'}>{TARGET_LABELS[change.target]}</Badge> {change.summary}</strong>
     {change.rationale && <p className="hint">{change.rationale}</p>}
-    {conflict && <p className="alert notice" role="alert">This record changed after the agent’s change. Undo puts back the state from before the agent’s change, so your later edits to it are lost.</p>}
+    {conflict && <p className="alert notice" role="alert">{t('This record changed after the agent’s change. Undo puts back the state from before the agent’s change, so your later edits to it are lost.')}</p>}
     {error && <p className="goal-form-error" role="alert">{error}</p>}
-    {change.undoneAt ? <span className="hint">Undone {new Date(change.undoneAt).toLocaleDateString('en-US', { timeZone: data.settings.timezone, dateStyle: 'medium' })}</span>
-      : <div className="goal-button-row">{conflict ? <><Button size="sm" variant="danger" disabled={busy} onClick={() => void undo(true)}>Undo anyway</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => setConflict(false)}>Keep it</Button></> : <Button size="sm" variant="ghost" disabled={busy} onClick={() => void undo()}>Undo</Button>}</div>}
+    {change.undoneAt ? <span className="hint">{t('Undone {v1}', { v1: new Date(change.undoneAt).toLocaleDateString(dateLocale(), { timeZone: data.settings.timezone, dateStyle: 'medium' }) })}</span>
+      : <div className="goal-button-row">{conflict ? <><Button size="sm" variant="danger" disabled={busy} onClick={() => void undo(true)}>{t('Undo anyway')}</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => setConflict(false)}>{t('Keep it')}</Button></> : <Button size="sm" variant="ghost" disabled={busy} onClick={() => void undo()}>{t('Undo')}</Button>}</div>}
   </div>;
 }
 
@@ -32,9 +34,9 @@ export function AgentActivity({ data, act, goalId }: ViewProps & { goalId?: stri
   const changes = goalData(data).agentChanges.filter(c => !goalId || c.goalId === goalId).sort((a, b) => b.at.localeCompare(a.at));
   if (!changes.length) return null;
   const recent = changes.filter(c => Date.parse(c.at) > Date.now() - 7 * 86400000 && !c.undoneAt);
-  return <Card className="agent-activity" title="Agent activity" icon="spark" actions={<span className="hint">{recent.length === 1 ? '1 change' : `${recent.length} changes`} in the last 7 days</span>}>
-    <p className="hint">Changes that your AI agent made directly. Undo puts back the earlier state; a record that the agent created is archived, not deleted.</p>
+  return <Card className="agent-activity" title={t('Agent activity')} icon="spark" actions={<span className="hint">{t('{v1} in the last 7 days', { v1: recent.length === 1 ? t('1 change') : t('{length} changes', { length: recent.length }) })}</span>}>
+    <p className="hint">{t('Changes that your AI agent made directly. Undo puts back the earlier state; a record that the agent created is archived, not deleted.')}</p>
     {changes.slice(0, 5).map(c => <ChangeRow key={c.id} data={data} act={act} change={c} />)}
-    {changes.length > 5 && <Disclosure title={`Earlier changes (${changes.length - 5})`}>{changes.slice(5, 100).map(c => <ChangeRow key={c.id} data={data} act={act} change={c} />)}</Disclosure>}
+    {changes.length > 5 && <Disclosure title={t('Earlier changes ({v1})', { v1: changes.length - 5 })}>{changes.slice(5, 100).map(c => <ChangeRow key={c.id} data={data} act={act} change={c} />)}</Disclosure>}
   </Card>;
 }

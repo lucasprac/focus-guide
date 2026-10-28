@@ -5,16 +5,17 @@ import floatingBrainSheet from './assets/floating-brain-sheet.png';
 import { Icon, type IconName } from './icons';
 import NeuralVisual from './NeuralVisual';
 import { brainFormation } from '../../shared/timer-display';
+import { t, dateLocale } from '../../shared/i18n';
 
 export { Icon, type IconName };
 export function time(ms: number): string { const seconds = Math.ceil(Math.max(0, ms) / 1000); return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`; }
 export function minutesLabel(minutes: number): string { if (minutes < 1 && minutes > 0) return `${Math.round(minutes * 60)}s`; if (minutes < 60) return `${Math.round(minutes)}m`; const h = Math.floor(minutes / 60), m = Math.round(minutes % 60); return m === 60 ? `${h + 1}h` : `${h}h${m ? ` ${m}m` : ''}`; }
 /* Planned countdown length against recorded time; under a minute of difference reads as on plan. */
 export function planComparison(plannedMinutes: number, differenceMinutes: number): string {
-  const base = `Planned ${minutesLabel(plannedMinutes)} · recorded ${minutesLabel(plannedMinutes + differenceMinutes)}`;
-  return Math.abs(differenceMinutes) < 1 ? `${base} · on plan` : `${base} · ${minutesLabel(Math.abs(differenceMinutes))} ${differenceMinutes > 0 ? 'more' : 'less'} than planned`;
+  const base = t('Planned {minutesLabel} · recorded {minutesLabel2}', { minutesLabel: minutesLabel(plannedMinutes), minutesLabel2: minutesLabel(plannedMinutes + differenceMinutes) });
+  return Math.abs(differenceMinutes) < 1 ? t('{base} · on plan', { base }) : t('{base} · {minutesLabel} {v3} than planned', { base, minutesLabel: minutesLabel(Math.abs(differenceMinutes)), v3: differenceMinutes > 0 ? t('more') : t('less') });
 }
-export function displayDay(day: string, short = false): string { return new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: short ? 'short' : 'long', day: 'numeric', ...(short ? {} : { weekday: 'long' }) }); }
+export function displayDay(day: string, short = false): string { return new Date(`${day}T12:00:00Z`).toLocaleDateString(dateLocale(), { timeZone: 'UTC', month: short ? 'short' : 'long', day: 'numeric', ...(short ? {} : { weekday: 'long' }) }); }
 export function Empty({ title, children }: { title: string; children?: ReactNode }) { return <div className="empty-state"><span className="empty-orbit"><Icon name="spark" size={23} /></span><h3>{title}</h3><p>{children}</p></div>; }
 export const Disclosure = Fold;
 export function useMotionEnabled(animation: boolean) {
@@ -33,8 +34,8 @@ export function useMotionEnabled(animation: boolean) {
   }, []);
   return animation && visible && windowVisible && !reduced;
 }
-export function Rating({ value, onChange, label, low = 'Low', high = 'High' }: { value: number | null; onChange: (value: number | null) => void; label: string; low?: string; high?: string }) {
-  return <fieldset className="rating"><legend>{label}<span className="optional">optional</span></legend><Segments value={value === null ? '' : String(value)} onChange={value => onChange(value ? Number(value) : null)} label={label} className="rating-values" options={[1, 2, 3, 4, 5].map(n => ({ value: String(n), label: String(n), ariaLabel: `${label}: ${n}` }))} /><div className="rating-ends"><span>{low}</span><span>{high}</span></div></fieldset>;
+export function Rating({ value, onChange, label, low = t('Low'), high = t('High') }: { value: number | null; onChange: (value: number | null) => void; label: string; low?: string; high?: string }) {
+  return <fieldset className="rating"><legend>{label}<span className="optional">{t('optional')}</span></legend><Segments value={value === null ? '' : String(value)} onChange={value => onChange(value ? Number(value) : null)} label={label} className="rating-values" options={[1, 2, 3, 4, 5].map(n => ({ value: String(n), label: String(n), ariaLabel: `${label}: ${n}` }))} /><div className="rating-ends"><span>{low}</span><span>{high}</span></div></fieldset>;
 }
 export const Modal = Overlay;
 function random(seed: number): () => number { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
@@ -68,7 +69,7 @@ export function Brain({ progress, running, animation, mini = false, color = 'var
     });
     return () => scope.revert();
   }, [revealed, running, motion]);
-  return <svg className={`brain ${mini ? 'mini-brain' : ''}`} ref={ref} viewBox="0 0 420 310" fill="none" role="img" aria-label={`Brain progress illustration, ${Math.round(progress * 100)} percent of session`} style={{ color } as CSSProperties}>
+  return <svg className={`brain ${mini ? 'mini-brain' : ''}`} ref={ref} viewBox="0 0 420 310" fill="none" role="img" aria-label={t('Brain progress illustration, {v1} percent of session', { v1: Math.round(progress * 100) })} style={{ color } as CSSProperties}>
     <defs><radialGradient id={mini ? 'brainMistMini' : 'brainMist'}><stop stopColor="currentColor" stopOpacity=".09" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></radialGradient></defs>
     <ellipse cx="210" cy="157" rx="180" ry="148" fill={`url(#${mini ? 'brainMistMini' : 'brainMist'})`} />
     <path d={outline} stroke="currentColor" strokeWidth="1.8" opacity=".7" /><path d={folds} stroke="currentColor" strokeWidth="1.1" opacity=".24" />
@@ -86,7 +87,7 @@ export function FloatingBrain({ progress, running, animation }: { progress: numb
   const sprite = (column: number, opacity: number) => <svg x="0" y="0" width="108" height="90" viewBox={`${16 + column * 124} 150 124 116`} opacity={opacity} overflow="hidden" aria-hidden="true">
     <image href={floatingBrainSheet} width="1028" height="1530" />
   </svg>;
-  return <svg className={`floating-brain ${motion && running ? 'drawing' : ''}`} viewBox="0 0 108 90" role="img" data-progress={bounded} data-frame={frame} aria-label={`Brain color, ${Math.round(bounded * 100)} percent filled`}>
+  return <svg className={`floating-brain ${motion && running ? 'drawing' : ''}`} viewBox="0 0 108 90" role="img" data-progress={bounded} data-frame={frame} aria-label={t('Brain color, {v1} percent filled', { v1: Math.round(bounded * 100) })}>
     <g className="brain-sprite" style={{ filter: `saturate(${bounded})` }}>
       {sprite(frame, 1)}
       {frame < 7 && sprite(frame + 1, blend)}
@@ -98,7 +99,7 @@ export function FloatingNetwork({ elapsedMs, progress, running, pause, animation
   const motion = useMotionEnabled(animation);
   const formed = brainFormation(elapsedMs);
   return <NeuralVisual kind="floating" color={pause ? '#5786dc' : '#6d4aff'} theme="light" progress={formed} running={running} moving={motion && running} visible software={software}
-    label={`Brain constellation, ${Math.round(formed * 100)} percent formed`}
+    label={t('Brain constellation, {v1} percent formed', { v1: Math.round(formed * 100) })}
     fallback={<FloatingBrain progress={progress} running={running} animation={animation} />} />;
 }
 export function BarChart({ rows, unit = 'm' }: { rows: Array<{ label: string; value: number; color?: string }>; unit?: string }) {

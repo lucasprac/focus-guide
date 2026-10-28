@@ -4,6 +4,7 @@ import { sortMilestones, type Goal, type GoalMilestone, type MilestoneKind } fro
 import { ROADMAP_CHANGED, rowsRevision } from '../../shared/goal-planning';
 import { MILESTONE_LIMITS, blockShortcut, formatMilestoneMarkdown, listNumber, parseMilestoneMarkdown, reconnectMilestones } from '../../shared/milestone-markdown';
 import { Button, CheckControl, IconButton, Segments, cn } from './ui';
+import { t } from '../../shared/i18n';
 
 /* A light block editor for a goal's milestones. Each row is a to-do, heading, bullet, numbered item or
    text line; only to-dos can be ticked and count as progress. The rows can also be edited as Markdown.
@@ -11,7 +12,7 @@ import { Button, CheckControl, IconButton, Segments, cn } from './ui';
 export interface ChecklistItem { id: string; title: string; kind: MilestoneKind; completed: boolean }
 type Change = { type: 'toggle'; item: ChecklistItem } | { type: 'structure' };
 const newId = () => crypto.randomUUID();
-const KIND_LABELS: Record<MilestoneKind, string> = { todo: 'To-do', heading: 'Heading', bullet: 'Bullet', numbered: 'Numbered', text: 'Text' };
+const KIND_LABELS: Record<MilestoneKind, string> = { get todo() { return t('To-do'); }, get heading() { return t('Heading'); }, get bullet() { return t('Bullet'); }, get numbered() { return t('Numbered'); }, get text() { return t('Text'); } };
 const LIST_KINDS: MilestoneKind[] = ['todo', 'bullet', 'numbered'];
 export function checklistItems(rows: Array<{ id?: string; title: string; kind: MilestoneKind; completed: boolean }>): ChecklistItem[] { return rows.map(r => ({ id: r.id ?? newId(), title: r.title, kind: r.kind, completed: r.kind === 'todo' && r.completed })); }
 const tidy = (title: string) => title.replace(/\s+/g, ' ').trim();
@@ -21,7 +22,7 @@ function reconnect(markdown: string, previous: ChecklistItem[]): ChecklistItem[]
   return reconnectMilestones(parseMilestoneMarkdown(markdown).slice(0, MILESTONE_LIMITS.count), previous, newId);
 }
 
-export function MilestoneChecklist({ items, onChange, onCommit, disabled, removeLabel = 'Remove' }: {
+export function MilestoneChecklist({ items, onChange, onCommit, disabled, removeLabel = t('Remove') }: {
   items: ChecklistItem[]; onChange: (items: ChecklistItem[]) => void; onCommit?: (items: ChecklistItem[], change: Change) => void; disabled?: boolean; removeLabel?: string;
 }) {
   const [draft, setDraft] = useState(''), [markdown, setMarkdown] = useState<string | null>(null), [message, setMessage] = useState(''), [activeId, setActiveId] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export function MilestoneChecklist({ items, onChange, onCommit, disabled, remove
     }
   });
   const commit = (next: ChecklistItem[], change: Change = { type: 'structure' }) => { titlesChanged.current = false; onChange(next); onCommit?.(next, change); };
-  const full = (count: number) => { if (items.length + count <= MILESTONE_LIMITS.count) return false; setMessage(`A checklist holds up to ${MILESTONE_LIMITS.count} rows.`); return true; };
+  const full = (count: number) => { if (items.length + count <= MILESTONE_LIMITS.count) return false; setMessage(t('A checklist holds up to {count} rows.', { count: MILESTONE_LIMITS.count })); return true; };
   const update = (id: string, change: Partial<ChecklistItem>) => items.map(i => i.id === id ? { ...i, ...change } : i);
   const setKind = (item: ChecklistItem, kind: MilestoneKind, caret = 0) => { caretFocus.current = { id: item.id, caret }; commit(update(item.id, { kind, completed: kind === 'todo' && item.completed })); };
   const add = (text: string) => {
@@ -50,7 +51,7 @@ export function MilestoneChecklist({ items, onChange, onCommit, disabled, remove
     if (!rows.length) return;
     if (room <= 0) { full(rows.length); return; }
     commit([...items, ...checklistItems(rows.slice(0, room))]); setDraft('');
-    setMessage(rows.length > room ? `Added ${room}; a checklist holds up to ${MILESTONE_LIMITS.count} rows.` : rows.length > 1 ? `Added ${rows.length} rows.` : '');
+    setMessage(rows.length > room ? t('Added {room}; a checklist holds up to {count} rows.', { room, count: MILESTONE_LIMITS.count }) : rows.length > 1 ? t('Added {length} rows.', { length: rows.length }) : '');
   };
   const move = (index: number, by: number, keepCaret?: number) => {
     const next = [...items], [row] = next.splice(index, 1); next.splice(index + by, 0, row);
@@ -110,37 +111,37 @@ export function MilestoneChecklist({ items, onChange, onCommit, disabled, remove
     if (!added.length) { full(rows.length); return; }
     const next = [...items]; next.splice(replace ? index : index + 1, replace ? 1 : 0, ...added);
     caretFocus.current = { id: added.at(-1)!.id, caret: MILESTONE_LIMITS.title };
-    commit(next); setMessage(added.length < rows.length ? `Added ${added.length}; a checklist holds up to ${MILESTONE_LIMITS.count} rows.` : `Added ${added.length} rows.`);
+    commit(next); setMessage(added.length < rows.length ? t('Added {length}; a checklist holds up to {count} rows.', { length: added.length, count: MILESTONE_LIMITS.count }) : t('Added {length} rows.', { length: added.length }));
   };
 
   const todos = items.filter(i => i.kind === 'todo');
   return <div className="milestone-checklist" onBlur={e => { if (markdown === null && !e.currentTarget.contains(e.relatedTarget as Node | null)) leave(); else if (titlesChanged.current) commit(items); }}>
-    <div className="milestone-toolbar"><span className="hint">{todos.length ? `${todos.filter(i => i.completed).length} of ${todos.length} done` : 'No to-dos yet'}</span>
-      <Button size="sm" variant="ghost" disabled={disabled} aria-pressed={markdown !== null} onClick={() => markdown === null ? setMarkdown(formatMilestoneMarkdown(filledItems(items))) : leaveMarkdown()}>{markdown === null ? 'Edit as Markdown' : onCommit ? 'Apply and show list' : 'Show as list'}</Button>
+    <div className="milestone-toolbar"><span className="hint">{todos.length ? t('{length} of {length2} done', { length: todos.filter(i => i.completed).length, length2: todos.length }) : t('No to-dos yet')}</span>
+      <Button size="sm" variant="ghost" disabled={disabled} aria-pressed={markdown !== null} onClick={() => markdown === null ? setMarkdown(formatMilestoneMarkdown(filledItems(items))) : leaveMarkdown()}>{markdown === null ? t('Edit as Markdown') : onCommit ? t('Apply and show list') : t('Show as list')}</Button>
     </div>
-    {markdown !== null ? <label className="form-label milestone-markdown">Milestones as Markdown<textarea aria-label="Milestones as Markdown" rows={Math.min(12, Math.max(4, items.length + 2))} maxLength={MILESTONE_LIMITS.count * (MILESTONE_LIMITS.title + 8)} value={markdown} disabled={disabled} onChange={e => setMarkdown(e.target.value)} placeholder={'# A section\n- [ ] A first meaningful result\n- [x] Something already done\n- A bullet point\n1. A numbered step\nA plain note'} /><span className="hint">One row per line: “- [ ]” open to-do, “- [x]” done, “#” heading, “-” bullet, “1.” numbered, and plain lines are text. Only to-dos count as progress.{onCommit ? ' Rows you delete here are archived, not erased.' : ''}</span></label>
+    {markdown !== null ? <label className="form-label milestone-markdown">{t('Milestones as Markdown')}<textarea aria-label={t('Milestones as Markdown')} rows={Math.min(12, Math.max(4, items.length + 2))} maxLength={MILESTONE_LIMITS.count * (MILESTONE_LIMITS.title + 8)} value={markdown} disabled={disabled} onChange={e => setMarkdown(e.target.value)} placeholder={t('# A section\n- [ ] A first meaningful result\n- [x] Something already done\n- A bullet point\n1. A numbered step\nA plain note')} /><span className="hint">{t('One row per line: “- [ ]” open to-do, “- [x]” done, “#” heading, “-” bullet, “1.” numbered, and plain lines are text. Only to-dos count as progress.{v1}', { v1: onCommit ? t(' Rows you delete here are archived, not erased.') : '' })}</span></label>
       : <>
-        {!!items.length && <div className="milestone-kinds-row"><span className="hint">{active ? `Row ${items.indexOf(active) + 1} type` : 'Row type'}</span>
-          <Segments className="segmented milestone-kinds" label={active ? `Type of row ${items.indexOf(active) + 1}` : 'Row type: focus a row first'} value={active?.kind ?? ''} onChange={kind => { if (active && kind && !disabled) setKind(active, kind as MilestoneKind, active.title.length); }}
-            options={(Object.keys(KIND_LABELS) as MilestoneKind[]).map(kind => ({ value: kind, label: KIND_LABELS[kind], ariaLabel: `Turn into ${KIND_LABELS[kind].toLowerCase()}` }))} /></div>}
+        {!!items.length && <div className="milestone-kinds-row"><span className="hint">{active ? t('Row {v1} type', { v1: items.indexOf(active) + 1 }) : t('Row type')}</span>
+          <Segments className="segmented milestone-kinds" label={active ? t('Type of row {v1}', { v1: items.indexOf(active) + 1 }) : t('Row type: focus a row first')} value={active?.kind ?? ''} onChange={kind => { if (active && kind && !disabled) setKind(active, kind as MilestoneKind, active.title.length); }}
+            options={(Object.keys(KIND_LABELS) as MilestoneKind[]).map(kind => ({ value: kind, label: KIND_LABELS[kind], ariaLabel: t('Turn into {v1}', { v1: KIND_LABELS[kind].toLowerCase() }) }))} /></div>}
         {!!items.length && <ol className="milestone-list" ref={list}>{items.map((item, index) => <li key={item.id} data-row={item.id} className={cn('milestone-row', `milestone-${item.kind}`, item.completed && 'completed', item.id === activeId && 'active')}>
           <span className="milestone-marker" aria-hidden={item.kind !== 'todo'}>{item.kind === 'todo'
-            ? <CheckControl aria-label={`Done: ${item.title || `row ${index + 1}`}`} disabled={disabled} checked={item.completed} onChange={e => { const changed = { ...item, completed: e.target.checked }; commit(update(item.id, changed), { type: 'toggle', item: changed }); }} />
+            ? <CheckControl aria-label={t('Done: {v1}', { v1: item.title || t('row {v1}', { v1: index + 1 }) })} disabled={disabled} checked={item.completed} onChange={e => { const changed = { ...item, completed: e.target.checked }; commit(update(item.id, changed), { type: 'toggle', item: changed }); }} />
             : item.kind === 'bullet' ? '•' : item.kind === 'numbered' ? `${listNumber(items, index)}.` : null}</span>
-          <input className="milestone-title" aria-label={`Row ${index + 1}, ${KIND_LABELS[item.kind].toLowerCase()}`} aria-describedby={hintId} maxLength={MILESTONE_LIMITS.title} disabled={disabled} value={item.title} placeholder={item.kind === 'heading' ? 'Heading' : item.kind === 'text' ? 'Text' : 'List item'}
+          <input className="milestone-title" aria-label={t('Row {v1}, {v2}', { v1: index + 1, v2: KIND_LABELS[item.kind].toLowerCase() })} aria-describedby={hintId} maxLength={MILESTONE_LIMITS.title} disabled={disabled} value={item.title} placeholder={item.kind === 'heading' ? t('Heading') : item.kind === 'text' ? t('Text') : t('List item')}
             onFocus={() => setActiveId(item.id)} onChange={e => typed(item, e.target.value, e.target.selectionStart)} onKeyDown={e => keyDown(e, item, index)} onPaste={e => paste(e, item, index)} />
           <span className="milestone-row-actions">
-            <IconButton icon="chevron-up" label={`Move up: ${item.title || `row ${index + 1}`}`} tooltip={false} data-move="up" disabled={disabled || index === 0} onClick={() => move(index, -1)} />
-            <IconButton icon="chevron-down" label={`Move down: ${item.title || `row ${index + 1}`}`} tooltip={false} data-move="down" disabled={disabled || index === items.length - 1} onClick={() => move(index, 1)} />
-            <IconButton icon={onCommit ? 'archive' : 'trash'} label={`${removeLabel}: ${item.title || `row ${index + 1}`}`} tooltip={false} disabled={disabled} onClick={() => remove(item.id)} />
+            <IconButton icon="chevron-up" label={t('Move up: {v1}', { v1: item.title || t('row {v1}', { v1: index + 1 }) })} tooltip={false} data-move="up" disabled={disabled || index === 0} onClick={() => move(index, -1)} />
+            <IconButton icon="chevron-down" label={t('Move down: {v1}', { v1: item.title || t('row {v1}', { v1: index + 1 }) })} tooltip={false} data-move="down" disabled={disabled || index === items.length - 1} onClick={() => move(index, 1)} />
+            <IconButton icon={onCommit ? 'archive' : 'trash'} label={`${removeLabel}: ${item.title || t('row {v1}', { v1: index + 1 })}`} tooltip={false} disabled={disabled} onClick={() => remove(item.id)} />
           </span>
         </li>)}</ol>}
-        <div className="milestone-add"><input aria-label="Add a milestone" aria-describedby={hintId} placeholder={items.length ? 'Add another to-do…' : 'Add a first to-do…'} maxLength={MILESTONE_LIMITS.title * 20} disabled={disabled || items.length >= MILESTONE_LIMITS.count} value={draft} onChange={e => { setDraft(e.target.value); setMessage(''); }}
+        <div className="milestone-add"><input aria-label={t('Add a milestone')} aria-describedby={hintId} placeholder={items.length ? t('Add another to-do…') : t('Add a first to-do…')} maxLength={MILESTONE_LIMITS.title * 20} disabled={disabled || items.length >= MILESTONE_LIMITS.count} value={draft} onChange={e => { setDraft(e.target.value); setMessage(''); }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(draft); } }}
           onPaste={e => { const text = e.clipboardData.getData('text'); if (/\r?\n/.test(text.trim())) { e.preventDefault(); add(text); } }} />
-          <Button size="sm" disabled={disabled || !draft.trim()} onClick={() => add(draft)}>Add</Button></div>
+          <Button size="sm" disabled={disabled || !draft.trim()} onClick={() => add(draft)}>{t('Add')}</Button></div>
         <span className="hint" role="status">{message}</span>
-        <span className="hint" id={hintId}>Start a row with # for a heading, - for a bullet, 1. for a numbered item or [ ] for a to-do. Enter adds a row, Backspace at the start turns a row into text, Ctrl+Enter ticks a to-do, Alt+Up or Alt+Down moves a row.</span>
+        <span className="hint" id={hintId}>{t('Start a row with # for a heading, - for a bullet, 1. for a numbered item or [ ] for a to-do. Enter adds a row, Backspace at the start turns a row into text, Ctrl+Enter ticks a to-do, Alt+Up or Alt+Down moves a row.')}</span>
       </>}
   </div>;
 }
@@ -180,8 +181,8 @@ export function GoalMilestones({ goal, milestones, act, busy }: { goal: Goal; mi
   const reload = () => { setConflict(false); setItems(checklistItems(latest.current)); base.current = checklistItems(latest.current); };
   const keepMine = () => { base.current = checklistItems(latest.current); setConflict(false); pending.current = { rows: items, change: { type: 'structure' } }; void run(); };
   return <div onFocus={() => setEditing(true)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setEditing(false); }}>
-    {conflict && <div className="alert notice roadmap-conflict" role="alert"><span>Your AI agent changed this roadmap while you were editing it. Your edits are not saved yet.</span><div className="goal-button-row"><Button size="sm" onClick={reload}>Show the agent’s version</Button><Button size="sm" variant="ghost" onClick={keepMine}>Keep my version</Button></div><span className="hint">Keep my version saves your rows; rows that only the agent added are archived and can be restored. The agent’s change also stays in Agent activity, where you can undo it.</span></div>}
-    <MilestoneChecklist items={items} onChange={setItems} onCommit={save} disabled={busy} removeLabel="Archive milestone" />
+    {conflict && <div className="alert notice roadmap-conflict" role="alert"><span>{t('Your AI agent changed this roadmap while you were editing it. Your edits are not saved yet.')}</span><div className="goal-button-row"><Button size="sm" onClick={reload}>{t('Show the agent’s version')}</Button><Button size="sm" variant="ghost" onClick={keepMine}>{t('Keep my version')}</Button></div><span className="hint">{t('Keep my version saves your rows; rows that only the agent added are archived and can be restored. The agent’s change also stays in Agent activity, where you can undo it.')}</span></div>}
+    <MilestoneChecklist items={items} onChange={setItems} onCommit={save} disabled={busy} removeLabel={t('Archive milestone')} />
     {error && <p className="goal-form-error" role="alert">{error}</p>}
   </div>;
 }

@@ -1,4 +1,5 @@
 import { BRAIN_MILESTONE_MS, BRAIN_MILESTONES } from '../../../../shared/timer-display';
+import { t } from '../../../../shared/i18n';
 
 // The session gauge reads elapsed timer time from the main-process snapshot; it never measures time itself.
 // One turn of the needle is one 10-minute milestone, and the small dial counts turns up to the
@@ -17,6 +18,6 @@ export function gaugeReadout(elapsedMs: number, plannedMs: number | null): strin
   const elapsed = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
   const turn = Math.min(TURNS, Math.floor(elapsed / TURN_MS));
   const minutes = Math.floor(elapsed / 60000);
-  const plan = planTurns(plannedMs) === null ? '' : ` of ${Math.round(plannedMs! / 60000)}`;
-  return `turn ${turn} of ${TURNS} · ${minutes}${plan} min`;
+  const plan = planTurns(plannedMs) === null ? '' : t(' of {v1}', { v1: Math.round(plannedMs! / 60000) });
+  return t('turn {turn} of {TURNS} · {minutes}{plan} min', { turn, TURNS, minutes, plan });
 }
