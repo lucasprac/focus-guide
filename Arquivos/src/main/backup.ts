@@ -171,7 +171,7 @@ export function validateBackup(value: unknown): BackupFile {
   if (sessions.filter(s => s.status !== 'completed').length > 1) throw new Error(t('The backup contains multiple unfinished sessions.'));
   const settingsInput = v.object(data.settings);
   // Appearance fields are optional in older version-1 backups.
-  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', focusVisual: 'brain', attentionProbes: false, language: 'en', ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess', 'focusVisual', 'attentionProbes', 'language']);
+  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', focusVisual: 'brain', attentionProbes: false, language: 'en', collectedAchievements: {}, ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess', 'focusVisual', 'attentionProbes', 'language', 'collectedAchievements']);
   const base: Dataset = { fields,tasks,sessions,events,reviews,categories,settings: v.settings(settingsInput),activity };
   const domain = validateGoalData(Object.fromEntries(GOAL_COLLECTIONS.map(key => [key,data[key]])),base);
   return { ...base,...domain,format: 'focus-guide',schemaVersion: 11,exportedAt: v.timestamp(data.exportedAt) };
@@ -182,10 +182,11 @@ export function readBackup(path: string): BackupFile {
   if (content.byteLength > BACKUP_LIMITS.bytes) throw new Error(capacityMessage());
   return validateBackup(JSON.parse(content.toString('utf8').replace(/^\uFEFF/, '')));
 }
-/* English is the default, so a backup of an English dataset has no language and stays as it was before the setting existed. */
+/* English is the default, so a backup of an English dataset has no language and stays as it was before the setting existed.
+   In the same way, a backup without collected achievements has no collectedAchievements. */
 function backupSettings(settings: Dataset['settings']): Dataset['settings'] {
-  const { language, ...rest } = settings;
-  return language === 'pt-BR' ? settings : rest;
+  const { language, collectedAchievements, ...rest } = settings;
+  return { ...rest, ...(language === 'pt-BR' ? { language } : {}), ...(collectedAchievements && Object.keys(collectedAchievements).length ? { collectedAchievements } : {}) };
 }
 export function makeBackup(data: Dataset): BackupFile {
   return { ...data,settings: backupSettings(data.settings),...goalData(data),format: 'focus-guide',schemaVersion: 11,exportedAt: new Date().toISOString(),

@@ -1,5 +1,6 @@
 import type { AgentAccess, FocusVisual, Settings } from './types';
 import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type Medication, type ProbeAnswer, type WarmUp } from './types';
+import { ACHIEVEMENT_IDS, PALETTE_IDS } from './achievements';
 import { t, isLanguage, type Language } from './i18n';
 
 export function activityMode(value: unknown): ActivityMode {
@@ -81,8 +82,9 @@ export function color(value: unknown): string {
 }
 export function settings(value: unknown): Settings {
   const v = object(value);
-  const palettes = ['cyan', 'violet', 'amber', 'rose'];
-  if (!palettes.includes(String(v.palette))) throw new Error(t('Unknown palette.'));
+  if (!PALETTE_IDS.includes(v.palette as Settings['palette'])) throw new Error(t('Unknown palette.'));
+  // Ids that this version does not know are dropped, so a newer backup still restores.
+  const collected = Object.entries(v.collectedAchievements === undefined ? {} : object(v.collectedAchievements)).filter(([key]) => ACHIEVEMENT_IDS.includes(key));
   const theme = v.theme === undefined ? 'light' : v.theme;
   if (theme !== 'light' && theme !== 'dark') throw new Error(t('Choose light or dark mode.'));
   return {
@@ -97,7 +99,8 @@ export function settings(value: unknown): Settings {
     agentAccess: agentAccess(v.agentAccess ?? 'off'),
     focusVisual: focusVisual(v.focusVisual ?? 'brain'),
     attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, t('Attention check-ins')),
-    language: language(v.language)
+    language: language(v.language),
+    collectedAchievements: Object.fromEntries(collected.map(([key, at]) => [key, timestamp(at)]))
   };
 }
 function language(value: unknown): Language {

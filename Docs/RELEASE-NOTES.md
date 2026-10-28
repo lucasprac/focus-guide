@@ -1,5 +1,16 @@
 # Release notes
 
+## Unreleased (3.2.0) — Neural World in 2D, achievements and new palettes
+
+- **2D overview.** Neural World is now a 2D map on a canvas instead of a 3D scene. You are at the centre, each area is a region around you, and each goal is a cell at the edge of its area with its roadmap as beads. Each finished session is a mote that orbits its goal or area. Pulses carry your time of the last 28 days from you to where you spent it, and a running session streams to its goal. The page no longer loads Three.js.
+- **Explore.** Click a region or a goal to see its details and move to it. Drag to move, Ctrl + scroll to zoom. The side panel shows your totals when nothing is selected.
+- **Replay your journey.** Plays your history in about 9 seconds. Each session flies to its place and the map grows.
+- **Achievements.** 27 achievements in five groups: time, craft, exploration, rhythm and secrets. They come from your records, show their progress, and never expire. Rhythm counts different weeks in any order, not streaks. Earned achievements wait as golden gems on the map until you collect them.
+- **Palettes.** Four new palettes are rewards of achievements: Wild mint (Explorer), Open sea (A season), Ember (Summit) and Aurora (A hundred hours). The hour thresholds of the first four palettes do not change.
+- New command `achievements.collect`. The new optional setting `collectedAchievements` keeps the collection time. A backup has it inside `settings` only when you collected at least one achievement. No schema change; the backup format stays version 11. Version 3.1.2 and earlier reject a backup with collected achievements, and cannot read settings that use a new palette. Choose one of the first four palettes before you go back to an older version.
+- The new texts are in the Brazilian Portuguese catalog. Dates on the page follow the selected language.
+- **Focus by area** and **Palettes & horizons** are replaced by the map, the side panel and the **Palettes** card.
+
 ## Unreleased — Optional Brazilian Portuguese interface; English remains default
 
 - **Language setting.** Settings > **Language** offers **English** (default) and **Português (Brasil)**. The interface, tray, notifications, dialogs, error messages, Insights, the tutorial and the date and number format change when you save your preferences. In English the app is unchanged.

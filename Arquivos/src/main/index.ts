@@ -14,7 +14,8 @@ import { InsightsWorker } from './insights';
 import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
-import { localDay, totalMinutes } from '../shared/analytics';
+import { localDay } from '../shared/analytics';
+import { PALETTES, paletteUnlocked } from '../shared/achievements';
 import type { AppEvent, AppState, BackupFile, Command } from '../shared/types';
 import * as v from '../shared/validation';
 import { t, setLanguage } from '../shared/i18n';
@@ -223,8 +224,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
   if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
   if (command === 'settings.update') {
     const previous = store.getSettings(), next = v.settings(v.withLanguage(input, previous));
-    const hours = totalMinutes(store.all()) / 60;
-    if (next.palette !== previous.palette && hours < ({ cyan: 0, violet: 5, amber: 20, rose: 50 }[next.palette])) throw new Error(t('This palette is not yet available.'));
+    if (next.palette !== previous.palette && !paletteUnlocked(PALETTES.find(p => p.id === next.palette)!, store.all())) throw new Error(t('This palette is not yet available.'));
     // Registration rejection leaves collection untouched; unrelated preferences remain editable.
     if (next.returnShortcut !== previous.returnShortcut) await collector.configureShortcut(next.returnShortcut ?? 'Ctrl+Alt+Space');
     try { const value = await transitions.run(() => service.run(command, input)); bridge?.sync(); return value; }
