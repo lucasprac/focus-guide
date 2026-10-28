@@ -3,8 +3,8 @@ import { goalData, sortMilestones, type GoalStatus } from './goal-types';
 import { goalSummary, roadmapEffort } from './goal-planning';
 import { addDays, localDay } from './analytics';
 
-/* Neural World reads goals only. Each goal is a neuron: focus time sets its size, roadmap steps form its axon and
-   recorded actions of the last 28 days give it sparks. Skipped or unrecorded actions add nothing. */
+/* Neural World reads goals only. Each goal is a cell: focus time sets its size, roadmap steps ring it as beads and
+   recorded actions of the last 28 days are counted. Skipped or unrecorded actions add nothing. */
 export type WorldStatus = Exclude<GoalStatus, 'archived'>;
 export interface WorldStep { id: string; title: string; completed: boolean; next: boolean; effortMinutes: number; estimatedMinutes: number | null; targetDate: string | null }
 export interface WorldGoal {
@@ -15,7 +15,7 @@ export interface WorldGoal {
 export interface WorldArea { id: string; name: string; color: string }
 export interface GoalWorldModel { areas: WorldArea[]; goals: WorldGoal[] }
 
-/* The scene draws this many goals and this many steps per axon at most. The HTML list and the inspector show everything. */
+/* The map draws this many goals and this many roadmap beads per goal at most. The inspector shows every step. */
 export const WORLD_GOAL_LIMIT = 24;
 export const WORLD_STEP_LIMIT = 12;
 const statusOrder: Record<WorldStatus, number> = { active: 0, paused: 1, draft: 2, achieved: 3 };
@@ -45,15 +45,10 @@ export function goalWorldModel(data: Dataset, now = Date.now()): GoalWorldModel 
   return { areas, goals };
 }
 
-/* The visible window of an axon: it always holds the next step, with up to three finished steps before it. */
+/* The visible window of a roadmap: it always holds the next step, with up to three finished steps before it. */
 export function stepWindow(goal: WorldGoal): { start: number; end: number } {
   if (goal.steps.length <= WORLD_STEP_LIMIT) return { start: 0, end: goal.steps.length };
   const next = goal.steps.findIndex(s => s.next), anchor = next < 0 ? goal.steps.length : next;
   const start = Math.max(0, Math.min(anchor - 3, goal.steps.length - WORLD_STEP_LIMIT));
   return { start, end: start + WORLD_STEP_LIMIT };
-}
-
-/* Changes only when something the scene draws changes, so the scene rebuilds its geometry only then. */
-export function worldKey(goals: WorldGoal[]): string {
-  return goals.map(g => [g.id, g.fieldId, g.status, g.color, Math.round(g.totalMinutes), g.done, g.smaller, g.progress ? g.progress.fraction.toFixed(3) : '-', g.steps.map(s => `${s.id}${s.completed ? 1 : 0}`).join(',')].join(':')).join('|');
 }

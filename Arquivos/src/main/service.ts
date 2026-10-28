@@ -3,7 +3,8 @@ import { Store } from './store';
 import { TimerEngine } from './timer';
 import type { ActivitySample, Command, Dataset, FocusSession, Task } from '../shared/types';
 import * as v from '../shared/validation';
-import { addDays, selectedSessions, totalMinutes } from '../shared/analytics';
+import { addDays, selectedSessions } from '../shared/analytics';
+import { ACHIEVEMENT_IDS, PALETTES, evaluateAchievements, paletteUnlocked, paletteUnlockLabel } from '../shared/achievements';
 import { INSIGHT_THRESHOLDS, focusInsights, type InsightOptions } from '../shared/focus-insights';
 import type { ProbeScheduler } from './probes';
 import { GoalService, dateRange } from './goal-service';
@@ -177,10 +178,21 @@ export class FocusService {
       case 'break.start': this.timer.beginBreak(); return;
       case 'break.stop': this.timer.endBreak(); return;
       case 'settings.update': {
-        const settings = v.settings(input); const hours = totalMinutes(this.store.all()) / 60;
-        const needed = { cyan: 0, violet: 5, amber: 20, rose: 50 }[settings.palette];
-        if (settings.palette !== this.store.getSettings().palette && hours < needed) throw new Error(`This palette unlocks after ${needed} recorded hours.`);
-        this.store.setMeta('settings', settings); return;
+        const settings = v.settings(input), previous = this.store.getSettings(), palette = PALETTES.find(p => p.id === settings.palette)!;
+        if (settings.palette !== previous.palette && !paletteUnlocked(palette, this.store.all())) throw new Error(`This palette is locked. ${paletteUnlockLabel(palette)}.`);
+        // Collected achievements change only through achievements.collect, so an older settings draft cannot erase them.
+        this.store.setMeta('settings', { ...settings, collectedAchievements: previous.collectedAchievements ?? {} }); return;
+      }
+      case 'achievements.collect': {
+        if (!Array.isArray(input.ids) || !input.ids.length || input.ids.length > ACHIEVEMENT_IDS.length) throw new Error('Choose achievements to collect.');
+        const settings = this.store.getSettings(), states = evaluateAchievements(this.store.all()), collected = { ...settings.collectedAchievements };
+        for (const value of input.ids) {
+          const state = states.find(a => a.id === value);
+          if (!state) throw new Error('Unknown achievement.');
+          if (!state.unlocked) throw new Error(`“${state.title}” is not earned yet.`);
+          collected[state.id] ??= now;
+        }
+        this.store.setMeta('settings', { ...settings, collectedAchievements: collected }); return;
       }
       case 'review.save': {
         const week = v.text(input.week, 'Week', 10, true);

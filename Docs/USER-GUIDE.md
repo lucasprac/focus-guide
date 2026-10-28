@@ -362,27 +362,46 @@ To open it, select **Open tutorial** in Settings, in the Activity & shortcuts gr
 
 ## Neural World
 
-Neural World shows your goals as a network of neurons. It reads your records only; it changes nothing.
+Neural World is an overview of everything that you have grown. It is a 2D map that moves. It reads your records only. Only **Collect** saves something: the time at which you collected an achievement.
 
-- **Soma.** Each goal is a neuron. Its body grows with the recorded focus time of the goal (finished, included sessions), on a scale that slows down for large totals.
-- **Axon.** The to-do steps of the roadmap sit along the axon in roadmap order. Finished steps are lit. The next step is larger and pulses slowly when animations are on. Later steps are faint. A long roadmap shows 12 steps around the next step; the side panel lists every step.
-- **Sparks.** Each action that you recorded as done in the last 28 days adds a spark around the soma. A smaller version adds a smaller spark. Skipped or unrecorded actions add nothing.
-- **Progress arc.** A goal with a baseline and a target shows an arc for its latest progress value.
-- **Status.** Active goals have full colour. Drafts are translucent with a dashed axon. Paused goals are muted and do not pulse. Achieved goals move to an outer ring. Archived goals do not appear.
-- **Areas.** Goals of the same area stay together and use the area colour. The layout comes from identities, so it does not move when totals change.
-- Open **Palettes & horizons** to select a palette. The palette tints the sky and the light of the world. Palettes unlock at 5, 20 and 50 recorded hours. Your light or dark interface choice is separate.
-- **Focus by area** shows the totals of all areas.
+- **You.** The centre is you. It grows with all your recorded focus time (finished, included sessions), on a scale that slows down for large totals. The ring around it shows your progress to the next time milestone.
+- **Areas.** Each area is a region around you. A region grows with all the time of that area. Its position comes from the order in which you created the area, so the map does not move when totals change.
+- **Goals.** Each goal is a cell at the edge of its area. The cell grows with the focus time of the goal. The to-do steps of the roadmap are beads around the cell: finished steps are full, the next step pulses, later steps are open. A goal with a baseline and a target shows an inner arc for its latest progress value. Drafts are translucent and dashed. Paused goals are muted. Achieved goals have a golden ring. Archived goals do not appear. The map shows 24 goals at most.
+- **Sessions.** Each finished session is a mote. It orbits its goal, or its area when the session has no goal. The most recent motes are brighter. The map shows the last 16 motes of each goal and the last 28 of each area.
+- **Pulses.** Pulses of light go from you to where you spent time in the last 28 days. More recent time gives more pulses. During a running focus session, a stream goes to its goal or area, and the header shows **Focusing now**.
+- **Replay.** **Replay** (or **Replay your journey** in the side panel) plays your history in about 9 seconds, from the first session to today. Each session flies to its place and the map grows. The date shows at the top left.
 - Days off do not erase progress. There are no penalties for a broken streak.
 
-### Explore the network
+### Explore the map
 
-- To select a goal, click its neuron or its button below the scene. The world turns and the camera moves to that goal. **Overview**, **Esc** or **Home** go back.
-- Click a synapse, or a step in the side panel, to select that step.
-- The side panel shows the goal's status, area, focus time, the last 28 days, recorded actions, progress and roadmap. **Focus on next step** (or **Focus on this step** for a selected open step) prepares a session for the goal and the step and opens Focus. Only active goals can start a session. **Open goal** opens the goal workspace.
-- To turn the scene, drag it, use the rotate and tilt buttons, or give the scene focus and use the arrow keys. **+** and **−** zoom.
-- **Pause orbit** stops the automatic rotation. Rotation also pauses while the pointer is on the scene, the scene has focus, or a goal is in view. Rotation obeys Gentle animations, system reduced motion and window visibility.
-- **Show achieved goals** hides or shows the outer ring. The scene shows 24 goals at most; the list below it shows every goal.
+- Drag to move. Hold **Ctrl** and scroll, or use **+** and **−**, to zoom. Plain scrolling scrolls the page.
+- Point to the centre, a region, a goal or a gem to see its name and time.
+- Click a region or a goal to select it; the map moves to it. The side panel shows its details. With nothing selected, the side panel shows your totals and the next time milestone.
+- For a goal, **Focus on next step** prepares a session for the goal and its next step and opens Focus. Only active goals can start a session. **Open goal** opens the goal workspace.
+- Give the map focus to use the keyboard: the arrow keys move, **+** and **−** zoom, **Esc** and **Home** go back to the overview.
+- The list below the map has a button for each area and goal.
+- Animations obey Gentle animations, system reduced motion and window visibility. Without animation the map is still and **Replay** is off.
 - View controls do not change recorded time.
+
+### Achievements
+
+Achievements come from your records. Nothing expires, and nothing is lost if you take a break.
+
+- **Time:** your first session, then 1, 10, 25, 50, 100 and 250 hours, and one session of 90 minutes or more.
+- **Craft:** your first goal, a roadmap with 3 steps, 10 sessions linked to a goal, more than 3 completed tasks of one goal, 5 and 25 finished roadmap steps, and an achieved goal.
+- **Exploration:** focus in 3 areas, both a countdown and a stopwatch session, 10 written intentions, 10 focus ratings, and 3 saved reviews.
+- **Rhythm:** focus in 4, 12 and 26 different weeks, in any order.
+- **Secrets:** they stay hidden until a record earns them.
+- Each visible achievement shows its progress. **Almost there** shows the three closest ones.
+- An earned achievement waits as a golden gem around you on the map. Click the gem, **Collect** or **Collect all** to collect it. The date when you earned it comes from your records.
+
+### Palettes
+
+A palette tints the sky of the map. Your light or dark interface choice is separate. Field colours in editors and charts do not change.
+
+- **First light**, **Afterglow**, **Golden hour** and **Rose horizon** unlock at 0, 5, 20 and 50 recorded hours.
+- **Wild mint**, **Open sea**, **Ember** and **Aurora** are rewards of the achievements Explorer, A season, Summit and A hundred hours.
+- If an unlock condition stops being true (for example, you remove time), the palette goes back to First light.
 
 The **Year overview** in Calendar contains the annual heatmap and the day comparisons. Patterns keeps the field charts and weekday charts visible. **Session distributions** and **Possible associations** show more charts and their limits.
 

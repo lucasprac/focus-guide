@@ -52,7 +52,9 @@ export interface SessionEvent {
 export interface Settings {
   weeklyCapacityMinutes?: number;
   timezone: string; defaultMinutes: number; animation: boolean; sound: boolean;
-  palette: 'cyan' | 'violet' | 'amber' | 'rose'; weeklyGoalMinutes: number;
+  palette: 'cyan' | 'violet' | 'amber' | 'rose' | 'mint' | 'ocean' | 'ember' | 'aurora'; weeklyGoalMinutes: number;
+  /* Achievement id → the time you collected it. Only achievements.collect changes it. */
+  collectedAchievements?: Record<string, string>;
   theme: 'light' | 'dark'; sidebarCollapsed: boolean;
   autoOvertime: boolean;
   collectActivity?: boolean; returnShortcut?: string; activityModes?: Record<string, ActivityMode>;
@@ -90,7 +92,7 @@ export type Command =
   | 'session.start' | 'session.pause' | 'session.resume' | 'session.finish'
   | 'session.review' | 'session.edit' | 'session.exclude' | 'session.delete'
   | 'interruption.record' | 'thought.record' | 'break.start' | 'break.stop'
-  | 'settings.update' | 'review.save'
+  | 'settings.update' | 'review.save' | 'achievements.collect'
   | 'attention.return' | 'attention.remove' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
   | 'probe.answer' | 'insights.read'
   | 'window.float' | 'window.main' | 'window.hide'

@@ -37,18 +37,18 @@ The floating timer shows a constellation of neurons in the shape of a brain (`Ne
 
 ### Neural World
 
-Neural World shows goals as a network of neurons (`GoalWorldScene.ts`). `shared/goal-world.ts` builds the model from records, and `goal-world-layout.ts` places it. The layout has no Three.js import, so the SVG fallback uses the same positions.
+Neural World is a 2D overview on one canvas (`WorldCanvas.ts`). `world-map.ts` builds the map from records with `shared/goal-world.ts`, and `shared/achievements.ts` gives the achievements and palettes. The page does not use Three.js.
 
-- **Neuron.** The soma radius follows the goal's total recorded time on a log scale, from 0.08 to 0.22 world units. The to-do steps of the roadmap are synapses along the axon, in roadmap order. The axon is lit up to the last finished step. The next step pulses when motion is on. Done and smaller actions of the last 28 days add sparks around the soma; skipped and unrecorded actions add nothing. A goal with a baseline and a target has a progress arc.
-- **Status.** Active: full colour. Draft: translucent soma, dashed axon. Paused: muted, no pulse. Achieved: on an outer ring, without an axon. Archived: not drawn.
-- **Layout.** Each area has a sector. Goals in an area sort by identity, and the goal identity seeds its dendrites, height and axon curl. The layout does not change when time totals change. Long roadmaps show a window of 12 steps around the next step and pack the synapses closer.
-- **Colour.** The area colour identifies a goal. The palette tints the sky, the area nebulae and the guides. With a goal in view, the other goals are muted.
-- **Camera.** Selecting a goal turns the world so that its axon points right, pivots the world around the neuron and moves the camera in over about 0.6 s. Reduced motion and disabled animations jump to the end state. **Esc**, **Home** and **Overview** return to the overview.
-- **HTML.** The selected goal, its roadmap, time, actions and progress stay readable in the side panel. A label follows the selected soma; the scene writes its position through a ref, without a React render. Every goal has a button below the scene.
-- **Truth.** The page reads records only. The scene does not measure time. **Focus on next step** uses the existing goal session preparation.
-- You can explore in several equivalent ways: drag, arrow keys, zoom buttons, + and −, Home, Esc, the goal buttons and the step list.
-- Rotation pauses while you interact with the scene and while a goal is in view.
-- The scene requests no external images, models or fonts.
+- **Layout.** You are at the centre (0, 0). Areas sit on a circle around you, in creation order. Goals sit on a fan at the outer edge of their area: 7 on the first arc, the rest on a second arc. Positions come from identities and creation order, never from totals. The canvas fits the extent of the map at any aspect ratio.
+- **Sizes.** The core, the areas and the goals grow with recorded time on a log scale that saturates (500 h, 300 h and 100 h).
+- **Life.** Each finished session is a mote that orbits its goal, or its area without a goal (16 per goal and 28 per area at most). Motes of the last 7 days are brighter. Pulses go from the core to an area or goal at a rate that follows its time in the last 28 days. A running focus session streams pulses to its target. The core, the regions and the next roadmap step breathe slowly.
+- **Status.** Draft: translucent, dashed. Paused: muted. Achieved: golden ring. Archived: not drawn.
+- **Replay.** Replay plays every included session in time order over 9 s. Sizes come from the sessions up to the replay time, and areas and goals appear when they are created or get their first session.
+- **Achievements.** Earned achievements that are not collected orbit the core as golden gems. A click on a gem plays a burst and collects it.
+- **Colour.** Area colours identify areas, goals and motes. The palette tints the sky, the core and the progress ring. With a selection, other areas and goals are muted.
+- **Camera.** Drag pans. Ctrl or ⌘ with the wheel zooms around the pointer; plain wheel scrolls the page. A selection eases the camera to it over about 0.4 s. Reduced motion and disabled animations jump to the end state.
+- **HTML.** The side panel, the area and goal list, the tooltip and the replay date are HTML. The canvas is `aria-hidden`; every target also has a button.
+- **Truth.** The page reads records only. The canvas does not measure time.
 
 ## UX decisions
 
@@ -86,13 +86,13 @@ In software rendering, or when its scene fails, the floating window shows its tr
 
 ## Lifecycle and budgets
 
-- **Frame rate.** Focus renders 30 frames per second at most. The world orbit uses the existing bounded view updates at 25 FPS. The pixel ratio is 1.5 at most.
+- **Frame rate.** Focus and Neural World render 30 frames per second at most. The WebGL pixel ratio is 1.5 at most; the Neural World canvas uses 2 at most.
 - **Hidden views.** Scene frames stop in these cases: a hidden route, a hidden or minimized native window, or a hidden document.
 - **Reduced motion.** Reduced motion and disabled animations give a still scene. Controls that you use on purpose continue to operate. Visual updates from the timer can render a frame when the displayed state changes.
 - **Resize and cleanup.** `ResizeObserver` controls the projection aspect and the canvas size. Cleanup cancels frames, stops observation, removes listeners, and disposes unique geometries, materials and renderer resources.
 - **Focus budget.** The brain uses 5 draw calls (4 surface meshes with one shared material, and one point cloud) and about 94,000 triangles. The canvas is small (at most 400 × 250 CSS pixels), so this count is safe for low-power GPUs. The geometry is built once when the scene mounts. This takes about 170 ms on the development computer. Building and merging the hemisphere sphere is the slowest step, so both hemispheres share one sphere. The camera distance fits the brain to the canvas at every aspect ratio.
 - **Floating budget.** The brain constellation uses 2 draw calls (one merged line mesh and one instanced mesh for the neurons) and about 29,000 triangles. The geometry is built once. It renders 20 frames per second at most, because it stays on screen while you work. A return marker animates the scene in place. It does not remount the scene.
-- **World budget.** Somas, synapses and pick targets use instancing. Halos, sparks, nebulae and the sky are one point cloud with a small shader. The scene draws 24 goals at most and must stay within 35 draw calls and 50,000 triangles; the preview data uses 8 draw calls and about 5,800 triangles. Geometry is rebuilt only when a drawn value changes (`worldKey`); selection and theme only rewrite colours. The scene needs no post-processing to be readable.
+- **World budget.** The Neural World canvas draws 24 goals, 16 motes per goal, 28 motes per area, 8 gems and 160 pulses at most. Without animation it draws only when its input changes.
 - **Test data.** Development and test tools can read these canvas attributes: `data-scene`, `data-frames`, `data-draw-calls`, `data-triangles` and `data-geometries`. The stage shows the camera yaw, pitch and zoom. Reset view and disabled motion give deterministic captures.
 
 ## Verification
@@ -290,8 +290,7 @@ The check-in is a prompt, not a dialog. It never takes keyboard focus, and it ne
 
 ## Page migration: Neural World
 
-- World controls and palette cards keep their legacy styles. They use the active palette color (`--world-color`), not the action accent. Goal buttons, the side panel and roadmap steps use the area colour (`--area-color`).
-- View controls use explicit icons: chevron left, right, up and down, and a minus icon for zoom out. Before, legacy `nth-child` rotations turned one chevron into four directions. `transform-none` cancels these rotations.
+- World controls, palette cards and achievement progress use the active palette color (`--world-color`), not the action accent. Goal and area buttons, the side panel and roadmap steps use the area colour (`--area-color`). Earned medals are gold.
 - Labels use sentence case. Constellation controls, field buttons, palette cards and field-progress rows use caption text (13px).
 
 ## Legacy CSS cleanup

@@ -265,14 +265,6 @@ select { padding-right: 24px; }
 .world-hours { font-size: 47px; font-weight: 250; color: var(--accent); text-align: right; line-height: 1; }
 .world-hours small { display: block; font-size: 12px; font-weight: 400; letter-spacing: 1px; color: var(--muted); margin-top: 11px; }
 .neural-world-panel { padding: 20px 25px; background: var(--panel); }
-.world-caption { display: flex; justify-content: space-between; }
-.world-map { width: 100%; height: auto; display: block; max-height: 415px; margin: 10px 0; }
-.world-field-name { fill: var(--muted); font: 12px 'Segoe UI', sans-serif; }
-.world-bottom { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; }
-.world-bottom span { font-size: 12px; color: var(--muted); }
-.world-progress-section { margin: 29px 0 25px; }
-.world-progress-section .section-title { margin-bottom: 12px; }
-.world-progress-section h2 { font-size: 14px; }
 .horizon-progress { height: 4px; background: var(--soft); border-radius: 6px; overflow: hidden; margin-bottom: 11px; }
 .horizon-progress>span { display: block; height: 100%; background: var(--accent); }
 .palette-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 25px; }
@@ -288,11 +280,6 @@ select { padding-right: 24px; }
 .palette-card-heading strong { font-size: 12px; font-weight: 500; }
 .palette-card-heading span { font-size: 12px; color: var(--muted); }
 .palette-card>p { color: var(--muted); font-size: 12px; margin-top: 8px; }
-.field-progress-row { display: flex; align-items: center; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
-.field-progress-row:last-child { border: 0; }
-.field-progress-row strong { font-weight: 400; }
-.field-progress-row small { margin-left: 10px; color: var(--muted); }
-.field-progress-row>span:last-child { margin-left: auto; color: var(--muted); }
 .settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .settings-grid .form-label { margin: 20px 0; }
 .settings-grid .section-title { margin-bottom: 10px; }
@@ -509,7 +496,6 @@ button:active:not(:disabled) { filter: brightness(.94); }
   background: radial-gradient(ellipse at 45% 50%, var(--atmosphere-purple), transparent 70%), var(--panel);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
 }
-.app-shell .world-map { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 14%, transparent)); }
 .app-shell .palette-card { border-radius: 16px; background: var(--panel); }
 .app-shell .palette-card.selected { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
 .app-shell .toggle-row { padding: 14px; background: var(--surface-raised); border-radius: 12px; margin: 14px 0; }
@@ -594,8 +580,6 @@ button:active:not(:disabled) { filter: brightness(.94); }
   .app-shell .stats-grid, .app-shell .palette-grid, .app-shell .recent-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .app-shell .task-session-settings, .app-shell .organizer-add, .app-shell .task-filters { grid-template-columns: minmax(0, 1fr); }
   .app-shell .filter-toolbar { flex-wrap: wrap; }
-  .app-shell .world-map { min-width: 0; }
-  .app-shell .world-caption, .app-shell .world-bottom { flex-wrap: wrap; gap: 8px; }
   .app-shell .demo-banner { padding-inline: 18px; }
 }
 /* Return feedback has its own transform layer, independent of the sprite's breathing. */
@@ -690,31 +674,21 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .app-shell .sidebar.collapsed .brand > div { display: none; }
 .app-shell .sidebar.collapsed .sidebar-toggle { display: flex; }
 .app-shell .world-page .neural-world-panel { background: radial-gradient(ellipse at 45% 50%, color-mix(in srgb, var(--world-color) 10%, transparent), transparent 70%), var(--panel); border-color: color-mix(in srgb, var(--world-color) 30%, var(--line)); }
-.app-shell .world-page .world-map { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--world-color) 14%, transparent)); }
 .app-shell .world-page .world-hours { color: var(--world-color); }
 .app-shell .world-page .horizon-progress > span { background: var(--world-color); }
 .app-shell .world-page .palette-card.selected { border-color: var(--world-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--world-color) 15%, transparent); }
 /* A projected 3D scene uses the same palette and readable theme tokens. */
-.constellation { margin-top: 20px; }
 .constellation-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px; }
 .constellation-meta > span:first-child { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 12px; }
 .constellation-meta i { width: 6px; height: 6px; border-radius: 50%; background: var(--world-color); box-shadow: 0 0 10px var(--world-color); }
 .constellation-meta small { color: var(--muted); font-size: 12px; }
 .constellation-meta > .hint { max-width: 50%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.constellation-stage { position: relative; border-radius: 18px; cursor: grab; touch-action: pan-y; outline-offset: -3px; }
-.constellation-stage.is-dragging { cursor: grabbing; }
-.constellation-stage:focus-visible { outline: 2px solid var(--accent); }
-.app-shell .world-page .constellation-map { color: var(--world-color); max-height: 470px; margin: 0; user-select: none; }
-.constellation-map .world-field-name { fill: var(--text); font-size: 13px; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
 .constellation-empty { position: absolute; bottom: 15%; left: 12px; right: 12px; text-align: center; color: var(--muted); font-size: 13px; pointer-events: none; }
 .constellation-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0 16px; border-bottom: 1px solid var(--line); }
 .constellation-toolbar > .hint { font-size: 12px; }
 .constellation-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .constellation-controls button { min-width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); }
 .constellation-controls button:hover:not(:disabled) { background: var(--soft); border-color: var(--line); color: var(--text); }
-.constellation-controls button:nth-child(1) svg { transform: rotate(180deg); }
-.constellation-controls button:nth-child(3) svg { transform: rotate(-90deg); }
-.constellation-controls button:nth-child(4) svg { transform: rotate(90deg); }
 .constellation-controls .constellation-text-control { padding: 0 10px; gap: 6px; font-size: 12px; border-color: var(--line); }
 .constellation-fields { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0 18px; }
 .constellation-fields button { display: flex; align-items: center; gap: 9px; max-width: 100%; min-height: 36px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-size: 12px; }
@@ -729,18 +703,7 @@ button:active:not(:disabled) { filter: brightness(.94); }
   .constellation-controls button { min-width: 40px; height: 40px; }
   .constellation-toolbar { gap: 8px; }
 }
-/* Neural World: the goal network, its inspector and the goal list. Area colors mark goals; the palette tints the sky. */
-.goal-world-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 20px; align-items: start; }
-.goal-world-scene { min-width: 0; }
-.goal-world-stage { height: clamp(340px, 54vh, 540px); overflow: hidden; margin-top: 12px; }
-.goal-world-stage .neural-visual { position: absolute; inset: 0; }
-.app-shell .world-page .goal-world-map { color: var(--world-color); width: 100%; height: 100%; max-height: none; margin: 0; user-select: none; }
-.goal-world-map .world-field-name { fill: var(--text); font-size: 13px; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
-.goal-world-label { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
-.goal-world-label > span { display: block; transform: translate(-50%, calc(-100% - 22px)); max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 88%, transparent); color: var(--text); font-size: 12px; }
-.goal-world-inspector { display: grid; gap: 14px; padding: 18px; border-color: color-mix(in srgb, var(--area-color) 35%, var(--line)); }
-.goal-world-inspector h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
-.goal-world-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+/* Neural World: the 2D overview, its inspector, the area list, achievements and palettes. Area colors mark areas and goals; the palette tints the sky. */
 .goal-world-area { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); }
 .goal-world-area > i { width: 8px; height: 8px; border-radius: 50%; background: var(--area-color); box-shadow: 0 0 8px color-mix(in srgb, var(--area-color) 60%, transparent); }
 .goal-world-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
@@ -754,8 +717,6 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .goal-world-roadmap .section-title { margin-bottom: 6px; }
 .goal-world-roadmap ol { display: grid; gap: 2px; max-height: 260px; overflow: auto; margin: 0; padding: 0; list-style: none; }
 .goal-world-step { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); text-align: left; }
-.goal-world-step:hover { background: var(--soft); }
-.goal-world-step[aria-pressed="true"] { border-color: color-mix(in srgb, var(--area-color) 55%, var(--line)); background: color-mix(in srgb, var(--area-color) 9%, var(--panel)); }
 .goal-world-step.is-done, .goal-world-step.is-next { color: var(--text); }
 .goal-world-step-mark { display: grid; place-items: center; width: 14px; height: 14px; border: 1.5px solid color-mix(in srgb, var(--area-color) 70%, var(--muted)); border-radius: 50%; color: var(--panel); }
 .goal-world-step.is-done .goal-world-step-mark { background: var(--area-color); border-color: var(--area-color); }
@@ -770,13 +731,77 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .goal-world-list-area .constellation-field-mark { background: var(--area-color); }
 .goal-world-list-area .constellation-fields button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--area-color) 65%, var(--control-line)); background: color-mix(in srgb, var(--area-color) 10%, var(--panel)); }
 .goal-world-list-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); }
-.goal-world-list-footer .goal-toggle { margin-left: 0; }
+.world-overview-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 20px; align-items: start; }
+.world-overview-scene { min-width: 0; }
+.world-stage { position: relative; height: clamp(360px, 58vh, 600px); margin-top: 12px; border-radius: 18px; overflow: hidden; outline-offset: -3px; }
+.world-stage:focus-visible { outline: 2px solid var(--world-color); }
+.world-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
+.world-canvas.is-dragging { cursor: grabbing; }
+.world-hud { position: absolute; left: 14px; top: 12px; color: var(--text); font-size: 20px; font-weight: 300; pointer-events: none; }
+.world-tooltip { position: absolute; left: 0; top: 0; display: grid; gap: 1px; max-width: 240px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--panel) 92%, transparent); box-shadow: var(--shadow-panel); pointer-events: none; translate: -50% calc(-100% - 10px); }
+.world-tooltip[hidden] { display: none; }
+.world-tooltip strong { overflow: hidden; color: var(--text); font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.world-tooltip span { color: var(--muted); }
+.world-live { display: inline-flex; align-items: center; gap: 7px; color: var(--text); }
+.world-live > i { width: 7px; height: 7px; border-radius: 50%; animation: world-live 1.6s ease-in-out infinite; }
+@keyframes world-live { 50% { opacity: .35; transform: scale(.8); } }
+.world-inspector { display: grid; gap: 14px; padding: 18px; border-color: color-mix(in srgb, var(--area-color) 35%, var(--line)); }
+.world-inspector h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.world-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.world-core-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.world-inspector-goals { display: grid; gap: 6px; }
+.world-inspector-goals button, .world-list-area { display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); text-align: left; }
+.world-inspector-goals button > span:nth-child(2) { flex: 1; overflow-wrap: anywhere; }
+.world-inspector-goals button .constellation-field-mark { background: var(--area-color); }
+.world-inspector-goals small, .world-list-area small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.world-inspector-goals button:hover, .world-list-area:hover { border-color: var(--control-line); }
+.world-list-area { justify-self: start; border-color: transparent; background: transparent; padding-left: 0; }
+.world-list-area > i { width: 8px; height: 8px; border-radius: 50%; background: var(--area-color); box-shadow: 0 0 8px color-mix(in srgb, var(--area-color) 60%, transparent); }
+.world-list-area small { margin-left: 4px; }
+.world-list-area[aria-pressed="true"] { border-color: color-mix(in srgb, var(--area-color) 65%, var(--control-line)); padding-left: 10px; }
+.app-shell .world-page > * + * { margin-top: 20px; }
+/* Achievements: medals fill with progress; earned ones glow gold until collected. */
+.achievements-intro { margin: -6px 0 16px; }
+.achievements-close { margin-bottom: 18px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--world-color) 35%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--world-color) 6%, var(--panel)); }
+.achievements-close h3 { margin: 0 0 8px; color: var(--text); }
+.achievements-close ul { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0; padding: 0; list-style: none; }
+.achievements-close li { display: flex; align-items: center; gap: 10px; }
+.achievements-close li > div { display: grid; }
+.achievements-close strong { color: var(--text); font-weight: 500; }
+.achievements-close span { color: var(--muted); }
+.achievement-group + .achievement-group { margin-top: 18px; }
+.achievement-group .section-title { margin-bottom: 8px; }
+.achievement-group h3 { color: var(--text); }
+.achievement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.achievement-tile { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); transition: border-color var(--motion-control), box-shadow var(--motion-control); }
+.achievement-tile.is-earned { border-color: color-mix(in srgb, #d9a93f 40%, var(--line)); }
+.achievement-tile.is-hidden { border-style: dashed; background: transparent; }
+.achievement-tile.is-fresh { animation: achievement-collect 1.2s ease-out; }
+@keyframes achievement-collect { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, #e8c46a 70%, transparent); transform: scale(1); } 30% { transform: scale(1.03); } 100% { box-shadow: 0 0 0 18px transparent; transform: scale(1); } }
+.achievement-body { display: grid; gap: 4px; min-width: 0; }
+.achievement-body strong { color: var(--text); font-weight: 500; }
+.achievement-body p { margin: 0; color: var(--muted); }
+.achievement-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; color: var(--muted); }
+.achievement-progress .horizon-progress { margin: 0; }
+.achievement-date { color: var(--muted); }
+.achievement-reward { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.achievement-reward > i { width: 8px; height: 8px; border-radius: 50%; background: var(--reward-color); }
+.achievement-medal { position: relative; display: grid; place-items: center; flex-shrink: 0; border-radius: 50%; color: var(--muted); background: var(--background); }
+.achievement-medal > svg { position: absolute; inset: 0; }
+.achievement-medal-track { fill: none; stroke: var(--line); stroke-width: 3; }
+.achievement-medal-fill { fill: none; stroke: var(--world-color); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 600ms ease; }
+.achievement-medal.is-earned { color: #8a6416; background: radial-gradient(circle at 35% 30%, #fff6d8, #f0cf7c 60%, #d9a93f); }
+.achievement-medal.is-earned .achievement-medal-fill { stroke: #c8952d; }
+.achievement-medal.is-ready { box-shadow: 0 0 0 0 color-mix(in srgb, #e8c46a 60%, transparent); animation: achievement-ready 2.2s ease-in-out infinite; }
+@keyframes achievement-ready { 50% { box-shadow: 0 0 0 7px transparent; } }
+:root[data-theme="dark"] .achievement-medal.is-earned { color: #5a3e08; }
+@media (prefers-reduced-motion: reduce) { .achievement-medal.is-ready, .achievement-tile.is-fresh, .world-live > i { animation: none; } }
 @container workspace (max-width: 900px) {
-  .app-shell .goal-world-main { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .world-overview-main { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 700px) {
-  .goal-world-stage { height: 340px; }
   .goal-world-stats { grid-template-columns: minmax(0, 1fr); }
+  .world-stage { height: 360px; }
 }
 .app-shell .fold-content[data-state="open"] { overflow: visible; }
 .app-shell .disclosure + .disclosure { margin-top: 20px; }
@@ -956,15 +981,10 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .neural-fallback > svg { width: 100%; height: 100%; }
 .brain-orbit .neural-visual { max-width: 400px; }
 .app-shell .world-page .world-hours { color: var(--text); }
-.app-shell .constellation { margin-top: 12px; }
 .app-shell .constellation-toolbar { margin-top: 10px; padding-block: 10px; gap: 8px; }
 .app-shell .constellation-controls button { min-width: 40px; height: 40px; color: var(--text); }
-.app-shell .constellation-stage { height: clamp(230px, 37vh, 440px); margin-top: 8px; }
-.app-shell .constellation-map { max-height: none; }
 .app-shell .constellation-fields { padding-block: 12px; }
 .app-shell .constellation-fields button { min-height: 40px; }
-.app-shell .world-bottom { gap: 12px; flex-wrap: wrap; }
-.app-shell .world-caption .hint { color: var(--muted); }
 .app-shell .tasks-workspace { grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr); align-items: start; }
 .task-sidebar { display: grid; gap: 16px; min-width: 0; }
 .app-shell .task-sidebar .session-task-panel { margin: 0; }
@@ -1006,9 +1026,7 @@ button:active:not(:disabled) { filter: brightness(.94); }
   .app-shell .organizer-add.goal-task-add > .disclosure { grid-column: auto; }
   .app-shell .topbar { height: auto; }
   .app-shell .calendar-layout { min-width: 0; }
-  .app-shell .constellation-stage { height: 245px; }
   .app-shell .constellation-meta { flex-wrap: wrap; }
-  .app-shell .world-bottom > * { max-width: 100%; }
 }
 @media (max-height: 740px) {
   .app-shell .quiet-session .brain-orbit { height: 170px; }

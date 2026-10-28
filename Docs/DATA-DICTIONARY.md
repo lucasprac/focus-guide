@@ -159,7 +159,8 @@ The JSON properties `id`, `sessionId`, `kind`, `startedAt`, `endedAt`, `duration
 | `settings.animation` | Enables optional animated drawing and pulses. The system reduced-motion setting has priority. |
 | `settings.focusVisual` | `brain` or `instrument`. Selects the 3D brain or the session gauge on the Focus page. Optional; the default is `brain`. It changes only the appearance. |
 | `settings.sound` | When `true`, the app requests the Windows completion notification sound. Windows can suppress it. |
-| `settings.palette` | `cyan`, `violet`, `amber` or `rose`. Each extra palette needs 5, 20 or 50 finished, included hours, in that order. |
+| `settings.palette` | `cyan`, `violet`, `amber`, `rose`, `mint`, `ocean`, `ember` or `aurora`. `violet`, `amber` and `rose` need 5, 20 or 50 finished, included hours. `mint`, `ocean`, `ember` and `aurora` need the achievements `explorer`, `weeks-12`, `summit` and `hours-100`. `PALETTES` in `shared/achievements.ts` holds the rules. |
+| `settings.collectedAchievements` | Optional map from an achievement id to the UTC time at which you collected it. Only `achievements.collect` changes it; `settings.update` keeps the saved value. Ids that the app does not know are dropped on validation. Achievements themselves are derived from records and are not stored. |
 | `settings.weeklyGoalMinutes` | Optional weekly time intention, 0–10,080. Zero disables it. |
 | `settings.theme` | `light` or `dark`. When older settings or backups do not have it, the default is `light`. |
 | `settings.sidebarCollapsed` | Tells whether the left navigation is an icon rail. When older settings or backups do not have it, the default is `false`. |
