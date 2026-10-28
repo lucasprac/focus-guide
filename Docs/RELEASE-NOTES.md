@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased (3.2.1) — Clearer day details in Calendar
+
+- **Selected day.** Each session shows a larger title with an aligned time, the intention in normal text colour, and the recorded time and focus rating separated by a dot. All lines start under the title text. Notes have a side rule, and thoughts align with their icon.
+- **Planned actions.** The card title shows a readable date (for example "Oct 12") instead of `2026-10-12`. Each action shows its status as a badge, the goal and timezone on one small line, and cue → action with an arrow icon. A moved action shows its original date in the same format.
+- Renderer and CSS only. No change to data, commands or translations.
+
 ## Unreleased (3.2.0) — Neural World in 2D, achievements and new palettes
 
 - **2D overview.** Neural World is now a 2D map on a canvas instead of a 3D scene. You are at the centre, each area is a region around you, and each goal is a cell at the edge of its area with its roadmap as beads. Each finished session is a mote that orbits its goal or area. Pulses carry your time of the last 28 days from you to where you spent it, and a running session streams to its goal. The page no longer loads Three.js.

@@ -193,19 +193,26 @@ select { padding-right: 24px; }
 .heat-3 { opacity: .8; }
 .timeline-panel { max-height: 561px; overflow-y: auto; }
 .timeline-panel>h2 { margin-top: 12px; line-height: 1.4; }
-.day-totals { display: flex; align-items: baseline; gap: 12px; margin: 18px 0; }
+.day-totals { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 16px 0 20px; }
 .day-totals strong { font-size: 30px; font-weight: 300; color: var(--accent); }
 .day-totals span { font-size: 12px; color: var(--muted); }
-.timeline-session { border-top: 1px solid var(--line); padding: 17px 0; }
+.timeline-session { border-top: 1px solid var(--line); padding: 18px 0; }
 .timeline-session.excluded { opacity: .6; }
-.timeline-session-head { display: flex; align-items: center; gap: 8px; }
-.timeline-session-head strong { font-size: 12px; font-weight: 500; }
-.timeline-session-head>span:last-child { margin-left: auto; font-size: 12px; color: var(--muted); }
-.timeline-session>p { font-size: 12px; color: var(--muted); margin-top: 10px; overflow-wrap: anywhere; }
-.session-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 9px; }
-.session-note { color: var(--muted) !important; font-style: italic; }
-.session-thought { display: flex; gap: 7px; align-items: baseline; }
-.session-thought svg { flex-shrink: 0; }
+/* The body is indented by the dot width plus the gap, so every line starts under the title text. */
+.timeline-session-head { display: flex; align-items: center; gap: 10px; }
+.timeline-session-head .field-dot { width: 8px; height: 8px; }
+.timeline-session-head strong { min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.timeline-session-head time { margin-left: auto; padding-left: 12px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timeline-session-body { display: grid; gap: 10px; margin-top: 6px; padding-left: 18px; }
+.timeline-session-body > .disclosure { margin-top: 4px; }
+.session-intention { font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.session-meta { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.session-stat { font-variant-numeric: tabular-nums; }
+.session-stat + .session-stat::before { content: '·'; margin-right: 8px; }
+.session-note { padding-left: 10px; border-left: 2px solid var(--line); font-size: 12px; line-height: 1.5; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+.session-thought { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.session-thought svg { flex-shrink: 0; margin-top: 2px; }
+.timeline-session-body .history-actions { margin-top: -2px; }
 .history-actions { display: flex; gap: 14px; margin-top: 11px; }
 .history-actions button { background: transparent; border: 0; padding: 3px 0; font-size: 12px; color: var(--muted); }
 .annual-panel { margin-top: 0; }
@@ -922,6 +929,14 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .goal-session-check-in { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--line); }
 .organizer-add.goal-task-add { grid-template-columns: minmax(160px,1fr) repeat(2,minmax(120px,180px)); }
 .calendar-planned { margin-bottom: 24px; }
+.planned-row { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.calendar-planned .hint + .planned-row { margin-top: 10px; }
+.planned-row-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.planned-row-head strong { min-width: 0; font-size: 14px; font-weight: 600; }
+.planned-row-head .badge { flex-shrink: 0; text-transform: capitalize; }
+.planned-row-meta { font-size: 12px; color: var(--muted); }
+.planned-row-plan { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; line-height: 1.5; color: var(--text); }
+.planned-row-plan svg { flex-shrink: 0; color: var(--muted); }
 .day-plan-dot { position: absolute; bottom: 7px; left: 7px; width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; }
 @container workspace (max-width: 900px) {
   .goal-detail-columns { grid-template-columns: minmax(0,1fr); }
