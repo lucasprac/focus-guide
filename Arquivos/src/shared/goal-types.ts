@@ -64,7 +64,7 @@ export const LEGACY_GOAL_COLLECTIONS = ['goals', 'milestones', 'goalActions', 'g
 export const V8_GOAL_COLLECTIONS = [...LEGACY_GOAL_COLLECTIONS, 'agentProposals'] as const;
 export const GOAL_COLLECTIONS = [...V8_GOAL_COLLECTIONS, 'agentChanges'] as const;
 export function goalData(data: Partial<GoalData>): GoalData { return Object.fromEntries(GOAL_COLLECTIONS.map(key => [key, data[key] ?? []])) as unknown as GoalData; }
-export const WHY_TAG_SUGGESTIONS = ['Health', 'Learning', 'Career', 'Finances', 'Relationships', 'Family', 'Wellbeing', 'Creativity', 'Independence', 'Contribution', 'Confidence', 'Enjoyment'];
+export const WHY_TAG_SUGGESTIONS = ['Saúde', 'Aprendizado', 'Carreira', 'Finanças', 'Relacionamentos', 'Família', 'Bem-estar', 'Criatividade', 'Independência', 'Contribuição', 'Confiança', 'Prazer'];
 export const WHY_TAG_LIMITS = { count: 12, length: 40 };
 export function sortMilestones<T extends Pick<GoalMilestone, 'position' | 'createdAt' | 'id'>>(rows: T[]): T[] { return [...rows].sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)); }
 /* Schema 5 added goal reason tags and milestone order. Older records keep their free-text reason

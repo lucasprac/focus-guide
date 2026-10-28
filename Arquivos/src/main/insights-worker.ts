@@ -7,5 +7,5 @@ import { loadStats } from '../shared/insight-stats';
 const ready = loadStats();
 parentPort!.on('message', async ({ id, data, activity, options }) => {
   try { await ready; parentPort!.postMessage({ id, ok: true, value: focusInsights(data, activity, options) }); }
-  catch (error) { parentPort!.postMessage({ id, ok: false, error: error instanceof Error ? error.message : 'The insights could not be computed.' }); }
+  catch (error) { parentPort!.postMessage({ id, ok: false, error: error instanceof Error ? error.message : 'Não foi possível calcular os insights.' }); }
 });

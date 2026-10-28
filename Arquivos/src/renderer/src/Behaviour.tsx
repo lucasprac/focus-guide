@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ActivitySample, FocusSession, ProbeAnswer, SessionEvent } from '../../shared/types';
 import { INSIGHT_THRESHOLDS, PROBE_ANSWER_LABELS } from '../../shared/focus-insights';
 import type { Action, ViewProps } from './App';
+import { eventSourceLabel, interruptionLabel, activityModeLabel } from '../../shared/labels';
 import { Disclosure, Icon, useMotionEnabled, minutesLabel } from './components';
 
 export function ReturnFeedback({ children, sessionId, animation, visible = true, neutral = false }: { children: ReactNode; sessionId: string | null; animation: boolean; visible?: boolean; neutral?: boolean }) {
@@ -25,13 +26,13 @@ export function ReturnFeedback({ children, sessionId, animation, visible = true,
   useEffect(() => { if (ack?.animate) content.current?.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.04)', offset: .45 }, { transform: 'scale(1)' }], { duration: 700, easing: 'ease-in-out' }); }, [ack]);
   return <div className={`return-feedback ${neutral ? 'neutral-feedback' : ''}`}>
     <div ref={content}>{children}</div>
-    {ack && <span className={`return-ack ${ack.animate ? 'pulse-halo' : ''}`} role="status" aria-label="Return saved"><Icon name="check" size={14} /></span>}
+    {ack && <span className={`return-ack ${ack.animate ? 'pulse-halo' : ''}`} role="status" aria-label="Retorno salvo"><Icon name="check" size={14} /></span>}
   </div>;
 }
 
 export function ReturnMarkers({ events, sessionId, act }: { events: SessionEvent[]; sessionId: string; act: Action }) {
   const returns = events.filter(e => e.sessionId === sessionId && e.kind === 'attention-return');
-  return <div className="return-list"><p className="hint">{returns.length} reported {returns.length === 1 ? 'return' : 'returns'}. Marks when you came back; distraction duration is unknown.</p>{returns.map(e => <div key={e.id}><span>I’m back · {minutesLabel((e.activeOffsetMs ?? 0) / 60000)} active · {e.source}</span><button className="text-button" aria-label={`Remove return at ${Math.round((e.activeOffsetMs ?? 0) / 1000)} seconds`} onClick={() => void act('attention.remove', { id: e.id })}>Remove</button></div>)}</div>;
+  return <div className="return-list"><p className="hint">{returns.length} {returns.length === 1 ? 'retorno relatado' : 'retornos relatados'}. Marca quando você voltou; a duração da distração é desconhecida.</p>{returns.map(e => <div key={e.id}><span>Voltei · {minutesLabel((e.activeOffsetMs ?? 0) / 60000)} ativos · {eventSourceLabel(e.source)}</span><button className="text-button" aria-label={`Remover retorno aos ${Math.round((e.activeOffsetMs ?? 0) / 1000)} segundos`} onClick={() => void act('attention.remove', { id: e.id })}>Remover</button></div>)}</div>;
 }
 
 export function BehaviourReview({ session, data, act }: ViewProps & { session: FocusSession }) {
@@ -72,29 +73,29 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
   const at = (offset: number) => `${Math.max(0, Math.min(100, offset / totalMs * 100))}%`, minute = (offset: number) => minutesLabel(offset / 60000), { warmUpMinutes, fatigueMinutes } = INSIGHT_THRESHOLDS.attentionSpan;
   const phaseMs = [Math.min(totalMs, warmUpMinutes * 60000), Math.max(0, Math.min(totalMs, fatigueMinutes * 60000) - warmUpMinutes * 60000), Math.max(0, totalMs - fatigueMinutes * 60000)];
   const probeMark = (answer: string) => answer === 'on-task' ? '●' : answer === 'missed' ? '○' : '◐';
-  const tracks: Array<{ key: 'keys' | 'clicks' | 'scrolls' | 'movementMs' | 'inputMs' | 'switches'; label: string; unit: string }> = [{ key: 'keys', label: 'Keys', unit: 'keys' }, { key: 'clicks', label: 'Clicks', unit: 'clicks' }, { key: 'scrolls', label: 'Scrolls', unit: 'scrolls' }, { key: 'movementMs', label: 'Movement', unit: 'ms in movement intervals' },
-    ...(measured ? [{ key: 'inputMs' as const, label: 'Input', unit: 'ms with input' }, { key: 'switches' as const, label: 'Switches', unit: 'window switches' }] : [])];
-  return <Disclosure title="Behaviour" open={open} onOpenChange={setOpen}><div className="behaviour-review">
-    <p className="hint">Activity mode · {session.activityMode ?? 'Unspecified'}. Computer interaction and reported returns provide context; they do not measure attention.</p>
-    {error ? <p role="alert">{error}</p> : samples === null ? <p role="status">Loading session behaviour…</p> : <>
-      <div className="behaviour-totals"><span><strong>{totals.keys}</strong>key presses</span><span><strong>{totals.clicks}</strong>mouse clicks</span><span><strong>{totals.scrolls}</strong>scroll events</span><span><strong>{(totals.movementMs / 1000).toFixed(1)}s</strong>intervals with mouse movement</span>
-        {measured && totals.inputObservedMs > 0 && <span><strong>{Math.round(Math.min(1, totals.inputMs / totals.inputObservedMs) * 100)}%</strong>of observed time with input</span>}{measured && totals.switchesKnown && <span><strong>{totals.switches}</strong>window switches</span>}</div>
-      <p className="coverage-label">Observed {minutesLabel(observed / 60000)} of {minutesLabel(session.activeMs / 60000)} · {Math.round(observed / totalMs * 100)}% coverage</p>
-      {!session.behaviourVersion && <p className="hint">Historical session · activity collection was unavailable.</p>}
-      <div className="activity-timeline" aria-label="Behaviour timeline in recorded active time">
+  const tracks: Array<{ key: 'keys' | 'clicks' | 'scrolls' | 'movementMs' | 'inputMs' | 'switches'; label: string; unit: string }> = [{ key: 'keys', label: 'Teclas', unit: 'teclas' }, { key: 'clicks', label: 'Cliques', unit: 'cliques' }, { key: 'scrolls', label: 'Rolagens', unit: 'rolagens' }, { key: 'movementMs', label: 'Movimento', unit: 'ms em intervalos de movimento' },
+    ...(measured ? [{ key: 'inputMs' as const, label: 'Entrada', unit: 'ms com entrada' }, { key: 'switches' as const, label: 'Trocas', unit: 'trocas de janela' }] : [])];
+  return <Disclosure title="Comportamento" open={open} onOpenChange={setOpen}><div className="behaviour-review">
+    <p className="hint">Modo de atividade · {activityModeLabel(session.activityMode)}. A interação com o computador e os retornos relatados dão contexto; eles não medem a atenção.</p>
+    {error ? <p role="alert">{error}</p> : samples === null ? <p role="status">Carregando o comportamento da sessão…</p> : <>
+      <div className="behaviour-totals"><span><strong>{totals.keys}</strong>teclas pressionadas</span><span><strong>{totals.clicks}</strong>cliques do mouse</span><span><strong>{totals.scrolls}</strong>eventos de rolagem</span><span><strong>{(totals.movementMs / 1000).toFixed(1)}s</strong>intervalos com movimento do mouse</span>
+        {measured && totals.inputObservedMs > 0 && <span><strong>{Math.round(Math.min(1, totals.inputMs / totals.inputObservedMs) * 100)}%</strong>do tempo observado com entrada</span>}{measured && totals.switchesKnown && <span><strong>{totals.switches}</strong>trocas de janela</span>}</div>
+      <p className="coverage-label">Observado {minutesLabel(observed / 60000)} de {minutesLabel(session.activeMs / 60000)} · {Math.round(observed / totalMs * 100)}% de cobertura</p>
+      {!session.behaviourVersion && <p className="hint">Sessão antiga · a coleta de atividade não estava disponível.</p>}
+      <div className="activity-timeline" aria-label="Linha do tempo do comportamento no tempo ativo registrado">
         {tracks.map(track => {
           const max = Math.max(1, ...bins.map(bin => bin[track.key]));
-          return <div className="activity-track" key={track.key}><span>{track.label}</span><div className="activity-bars">{bins.map(bin => <span key={bin.start} className={bin.observed === 0 ? bin.disabled ? 'disabled-bin' : 'unavailable-bin' : bin.observed < bin.end - bin.start - 1 ? 'partial-bin' : 'recorded-bin'} title={`${Math.floor(bin.start / 60000)}–${Math.ceil(bin.end / 60000)} active min: ${bin.observed === 0 ? bin.disabled ? 'collection disabled' : 'unavailable' : `${bin[track.key]} ${track.unit}; ${Math.round(bin.observed / (bin.end - bin.start) * 100)}% observed`}`}><i style={{ height: `${bin[track.key] / max * 100}%` }} /></span>)}</div></div>;
+          return <div className="activity-track" key={track.key}><span>{track.label}</span><div className="activity-bars">{bins.map(bin => <span key={bin.start} className={bin.observed === 0 ? bin.disabled ? 'disabled-bin' : 'unavailable-bin' : bin.observed < bin.end - bin.start - 1 ? 'partial-bin' : 'recorded-bin'} title={`${Math.floor(bin.start / 60000)}–${Math.ceil(bin.end / 60000)} min ativos: ${bin.observed === 0 ? bin.disabled ? 'coleta desativada' : 'indisponível' : `${bin[track.key]} ${track.unit}; ${Math.round(bin.observed / (bin.end - bin.start) * 100)}% observado`}`}><i style={{ height: `${bin[track.key] / max * 100}%` }} /></span>)}</div></div>;
         })}
         <div className="timeline-events">
-          {events.filter(e => e.kind === 'attention-return').map(e => <span key={e.id} className="timeline-return" style={{ left: at(offsetOf(e)) }} title={`Return at ${minute(offsetOf(e))} active time`}>↩</span>)}
-          {events.filter(e => e.kind === 'interruption').map(e => <span key={e.id} className="timeline-interruption" style={{ left: at(offsetOf(e)) }} title={`Interruption · ${e.category || 'Unspecified'} · ${minute(offsetOf(e))} active time`}>!</span>)}
-          {events.filter(e => e.kind === 'probe').map(e => <span key={e.id} className="timeline-probe" style={{ left: at(offsetOf(e)) }} title={`Check-in · ${e.category === 'missed' ? 'missed' : PROBE_ANSWER_LABELS[e.category as ProbeAnswer] ?? e.category} · ${minute(offsetOf(e))} active time`}>{probeMark(e.category)}</span>)}
-          {pausePoints.map(({ event, offset }) => <span key={event.id} className="timeline-pause" style={{ left: at(offset) }} title={`Pause · ${event.text}`}>Ⅱ</span>)}
+          {events.filter(e => e.kind === 'attention-return').map(e => <span key={e.id} className="timeline-return" style={{ left: at(offsetOf(e)) }} title={`Retorno em ${minute(offsetOf(e))} de tempo ativo`}>↩</span>)}
+          {events.filter(e => e.kind === 'interruption').map(e => <span key={e.id} className="timeline-interruption" style={{ left: at(offsetOf(e)) }} title={`Interrupção · ${interruptionLabel(e.category)} · ${minute(offsetOf(e))} de tempo ativo`}>!</span>)}
+          {events.filter(e => e.kind === 'probe').map(e => <span key={e.id} className="timeline-probe" style={{ left: at(offsetOf(e)) }} title={`Check-in · ${e.category === 'missed' ? 'perdido' : PROBE_ANSWER_LABELS[e.category as ProbeAnswer] ?? e.category} · ${minute(offsetOf(e))} de tempo ativo`}>{probeMark(e.category)}</span>)}
+          {pausePoints.map(({ event, offset }) => <span key={event.id} className="timeline-pause" style={{ left: at(offset) }} title={`Pausa · ${event.text}`}>Ⅱ</span>)}
         </div>
-        <div className="timeline-phases" aria-label="Session phases">{([['Warm-up', 0], ['Sustain', 1], ['Fatigue', 2]] as const).map(([label, i]) => phaseMs[i] > 0 && <span key={label} className={`phase-${i}`} style={{ width: `${phaseMs[i] / totalMs * 100}%` }} title={`${label}: ${i === 0 ? `0–${warmUpMinutes}` : i === 1 ? `${warmUpMinutes}–${fatigueMinutes}` : `${fatigueMinutes}+`} active min`}>{label}</span>)}</div>
-        <div className="timeline-axis"><span>0 active min</span><span>{Math.ceil(session.activeMs / 60000)} active min</span></div>
-        <p className="hint">Solid: recorded (including zero) · striped: partial · pale: disabled · dotted: unavailable. ↩ Return · ! Interruption · ● On the task · ◐ Drifting or elsewhere · ○ Missed check-in · Ⅱ Pause ({pauses.length}). Phases: warm-up 0–{warmUpMinutes}, sustain {warmUpMinutes}–{fatigueMinutes}, fatigue {fatigueMinutes}+ active minutes. Hover a column for values.</p>
+        <div className="timeline-phases" aria-label="Fases da sessão">{([['Aquecimento', 0], ['Sustentação', 1], ['Fadiga', 2]] as const).map(([label, i]) => phaseMs[i] > 0 && <span key={label} className={`phase-${i}`} style={{ width: `${phaseMs[i] / totalMs * 100}%` }} title={`${label}: ${i === 0 ? `0–${warmUpMinutes}` : i === 1 ? `${warmUpMinutes}–${fatigueMinutes}` : `${fatigueMinutes}+`} min ativos`}>{label}</span>)}</div>
+        <div className="timeline-axis"><span>0 min ativos</span><span>{Math.ceil(session.activeMs / 60000)} min ativos</span></div>
+        <p className="hint">Sólido: registrado (incluindo zero) · listrado: parcial · claro: desativado · pontilhado: indisponível. ↩ Retorno · ! Interrupção · ● Na tarefa · ◐ Divagando ou em outro lugar · ○ Check-in perdido · Ⅱ Pausa ({pauses.length}). Fases: aquecimento 0–{warmUpMinutes}, sustentação {warmUpMinutes}–{fatigueMinutes}, fadiga {fatigueMinutes}+ minutos ativos. Passe o mouse sobre uma coluna para ver os valores.</p>
       </div>
     </>}
     <ReturnMarkers events={data.events} sessionId={session.id} act={act} />

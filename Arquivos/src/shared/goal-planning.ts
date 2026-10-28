@@ -76,10 +76,10 @@ export function barrierSuggestions(data: Dataset, goalId: string, now = Date.now
   const domain = goalData(data), result: GoalSuggestion[] = [];
   if (domain.goals.find(g => g.id === goalId)?.status !== 'active') return result;
   const labels = {
-    capability: ['Add a learning step', 'Try a milestone to discover or practice a strategy before asking for the final result.'],
-    opportunity: ['Choose a more accessible cue', 'Try a different routine or weekday that fits the time and space you have.'],
-    motivation: ['Review whether this goal still matters', 'Revisit why you chose this goal; pausing it is an available choice.'],
-    other: ['Try the smaller action', 'Try your smaller version as the normal action for the next week.']
+    capability: ['Adicione uma etapa de aprendizado', 'Experimente uma etapa para descobrir ou praticar uma estratégia antes de exigir o resultado final.'],
+    opportunity: ['Escolha um gatilho mais acessível', 'Experimente outra rotina ou outro dia da semana que caiba no tempo e no espaço que você tem.'],
+    motivation: ['Reveja se esta meta ainda importa', 'Revisite por que você escolheu esta meta; pausá-la é uma opção.'],
+    other: ['Experimente a ação menor', 'Use a sua versão menor como ação normal na próxima semana.']
   };
   for (const action of domain.goalActions.filter(a => a.goalId === goalId && !a.archived)) {
     const today = localDay(now, action.plans.at(-1)!.timezone), from = addDays(today, -13);
@@ -111,4 +111,4 @@ export function rowsRevision(rows: Array<{ id: string; title: string; kind: stri
   for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 0x01000193) >>> 0; }
   return `${text.length}:${hash.toString(16)}`;
 }
-export const ROADMAP_CHANGED = 'The roadmap changed while you were editing it.';
+export const ROADMAP_CHANGED = 'O roteiro mudou enquanto você o editava.';

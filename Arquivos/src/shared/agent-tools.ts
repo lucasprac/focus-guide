@@ -12,7 +12,7 @@ export function isAgentTool(name: unknown): name is AgentTool { return typeof na
 /* Each level includes the levels below it: read < propose < edit. */
 const LEVELS: Record<AgentAccess, number> = { off: 0, read: 1, propose: 2, edit: 3 };
 export function allowsTool(access: AgentAccess, tool: AgentTool): boolean { return access !== 'off' && LEVELS[access] >= LEVELS[AGENT_TOOLS[tool]]; }
-export function accessError(access: AgentAccess): string { return access === 'off' ? 'AI agent access is off. The user can turn it on in Focus Guide settings.' : access === 'read' ? 'Focus Guide allows read-only access. The user can allow more in Focus Guide settings.' : 'Focus Guide allows proposals only. Use the propose tools, or ask the user to allow direct edits in Focus Guide settings.'; }
+export function accessError(access: AgentAccess): string { return access === 'off' ? 'O acesso do agente de IA está desligado. O usuário pode ativá-lo nas configurações do Focus Guide.' : access === 'read' ? 'O Focus Guide permite apenas acesso de leitura. O usuário pode liberar mais nas configurações do Focus Guide.' : 'O Focus Guide permite apenas propostas. Use as ferramentas de proposta ou peça ao usuário que libere edições diretas nas configurações do Focus Guide.'; }
 
 /* The bridge file in the data folder tells a local MCP server where the running app listens. */
 export const AGENT_BRIDGE_FILE = 'agent-bridge.json';

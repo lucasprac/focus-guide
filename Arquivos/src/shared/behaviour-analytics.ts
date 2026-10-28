@@ -5,9 +5,9 @@ import { plannedOccurrences } from './goal-planning';
 
 /* Descriptive summaries of the sessions linked to one goal. The renderer and the local agent bridge
    use the same rules, so both describe the same records. Nothing here scores attention or productivity. */
-export const TIME_BANDS = [{ label: 'Night · 00–06', from: 0, to: 6 }, { label: 'Morning · 06–12', from: 6, to: 12 }, { label: 'Afternoon · 12–18', from: 12, to: 18 }, { label: 'Evening · 18–24', from: 18, to: 24 }] as const;
+export const TIME_BANDS = [{ label: 'Madrugada · 00–06', from: 0, to: 6 }, { label: 'Manhã · 06–12', from: 6, to: 12 }, { label: 'Tarde · 12–18', from: 12, to: 18 }, { label: 'Noite · 18–24', from: 18, to: 24 }] as const;
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-export const BEHAVIOUR_LIMITS_NOTE = 'Descriptive summary of finished, included sessions linked to this goal. Keyboard and mouse counts and reported returns are context, not measures of attention. Associations do not establish causes, and missing reports stay unknown.';
+export const BEHAVIOUR_LIMITS_NOTE = 'Resumo descritivo das sessões concluídas e incluídas vinculadas a esta meta. As contagens de teclado e mouse e os retornos registrados são contexto, não medidas de atenção. Associações não estabelecem causas, e relatos ausentes permanecem desconhecidos.';
 
 export interface ModeActivity { mode: ActivityMode; sessions: number; minutes: number; observedMinutes: number; coverage: number | null; keysPerMinute: number | null; clicksPerMinute: number | null; scrollsPerMinute: number | null; movementShare: number | null }
 export interface CorrelationSummary { n: number; spanDays: number; rho: number | null; eligible: boolean; reason: string }
@@ -56,7 +56,7 @@ export function goalBehaviourProfile(data: Dataset, activity: ActivitySample[], 
     medianSessionMinutes: median(sessions.map(s => s.activeMs / 60000)),
     byWeekday: WEEKDAYS.map(label => ({ label, minutes: sessions.filter(s => parts(s.startedAt, s.timezone).weekday === label).reduce((sum, s) => sum + s.activeMs / 60000, 0) })),
     byTimeBand: TIME_BANDS.map(band => ({ label: band.label, minutes: sessions.filter(s => { const hour = parts(s.startedAt, s.timezone).hour; return hour >= band.from && hour < band.to; }).reduce((sum, s) => sum + s.activeMs / 60000, 0) })),
-    byMode, byMilestone: [...steps].map(([milestoneId, row]) => ({ milestoneId, title: milestoneId ? milestones.find(m => m.id === milestoneId)?.title ?? 'Removed step' : 'No roadmap step', ...row })).sort((a, b) => b.minutes - a.minutes),
+    byMode, byMilestone: [...steps].map(([milestoneId, row]) => ({ milestoneId, title: milestoneId ? milestones.find(m => m.id === milestoneId)?.title ?? 'Etapa removida' : 'Sem etapa do roteiro', ...row })).sort((a, b) => b.minutes - a.minutes),
     interruptions: interruptions.length, interruptionsPerHour: hours > 0 ? interruptions.length / hours : null, interruptionCategories,
     returns: returns.length, returnsPerHour: hours > 0 ? returns.length / hours : null, parkedThoughts: events.filter(e => e.kind === 'thought').length,
     focus: { rated: focus.length, mean: mean(focus), median: median(focus) }, energy: { rated: energy.length, mean: mean(energy) },

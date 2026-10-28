@@ -10,7 +10,7 @@ const MINUTE_MIX: Record<ActivityMode, [number, number, number]> = { 'Writing/co
 // and minutes fall into three interaction states (typing, scrolling, quiet). Every random choice comes from mulberry32(42).
 export function exampleDataset(settings: Dataset['settings']): Dataset {
   const now = new Date().toISOString(), zone = 'America/Fortaleza', today = localDay(Date.now(), zone), random = mulberry32(42);
-  const fields = [{ id: 'example-study', name: 'Learning', color: '#a99af7', archived: false, createdAt: now }, { id: 'example-work', name: 'Deep work', color: '#62d8cd', archived: false, createdAt: now }, { id: 'example-create', name: 'Creative practice', color: '#e4b76a', archived: false, createdAt: now }];
+  const fields = [{ id: 'example-study', name: 'Aprendizado', color: '#a99af7', archived: false, createdAt: now }, { id: 'example-work', name: 'Trabalho profundo', color: '#62d8cd', archived: false, createdAt: now }, { id: 'example-create', name: 'Prática criativa', color: '#e4b76a', archived: false, createdAt: now }];
   const data: Dataset = { fields, categories: [], tasks: [], sessions: [], events: [], settings, reviews: [], activity: [] };
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)], between = (low: number, high: number) => low + random() * (high - low);
   const normal = () => Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random()), few = (p: number) => random() < p ? 1 + Math.floor(random() * 2) : 0;
@@ -27,7 +27,7 @@ export function exampleDataset(settings: Dataset['settings']): Dataset {
     const focus = random() < 0.9 ? Math.max(1, Math.min(5, Math.round(rating))) : null;
     const detractor: Detractor | null = focus === null || random() >= 0.85 ? null : switchy ? (random() < 0.7 ? 'notifications' : pick(['people', 'thoughts'] as const)) : slot === 2 ? pick(['none', 'tiredness', 'thoughts'] as const) : pick(['none', 'none', 'thoughts', 'people', 'task'] as const);
     const startedAt = new Date(started).toISOString(), endedAt = new Date(started + activeMs).toISOString(), at = (offset: number) => new Date(started + offset).toISOString();
-    data.sessions.push({ timingMode: stopwatch ? 'stopwatch' : 'countdown', autoOvertime: false, targetReached: plannedMs !== null && activeMs >= plannedMs, id, fieldId: field.id, primaryTaskId: null, checklistIds: [], intention: 'Example focus session', plannedMs, activeMs, status: 'completed', startedAt, endedAt, timezone: zone,
+    data.sessions.push({ timingMode: stopwatch ? 'stopwatch' : 'countdown', autoOvertime: false, targetReached: plannedMs !== null && activeMs >= plannedMs, id, fieldId: field.id, primaryTaskId: null, checklistIds: [], intention: 'Sessão de foco de exemplo', plannedMs, activeMs, status: 'completed', startedAt, endedAt, timezone: zone,
       energy, focus, note: '', completionReason: plannedMs !== null && activeMs >= plannedMs ? 'timer' : 'early', excluded: false, recovered: false, activityMode: mode, behaviourVersion: 4, detractor, challenge });
     data.events.push({ id: `example-interval-${i}`, sessionId: id, kind: 'active', startedAt, endedAt, durationMs: activeMs, text: '', category: '' });
     // Drift: returns and interruptions; the first comes sooner in the evening and in sessions with more switching.
@@ -36,7 +36,7 @@ export function exampleDataset(settings: Dataset['settings']): Dataset {
       const ms = Math.round(offset), interruption = random() < 0.3;
       data.events.push({ id: `example-${interruption ? 'interruption' : 'return'}-${i}-${n}`, sessionId: id, kind: interruption ? 'interruption' : 'attention-return', startedAt: at(ms), endedAt: at(ms), durationMs: 0, text: '', category: interruption ? pick(['Internal', 'External', 'Environment']) : '', activeOffsetMs: ms, source: interruption ? null : pick(['shortcut', 'floating'] as const) });
     }
-    if (random() < 0.25) { const ms = Math.round(between(0.1, 0.9) * activeMs); data.events.push({ id: `example-thought-${i}`, sessionId: id, kind: 'thought', startedAt: at(ms), endedAt: at(ms), durationMs: 0, text: 'Reply to the message after this session', category: '', activeOffsetMs: ms, source: null }); }
+    if (random() < 0.25) { const ms = Math.round(between(0.1, 0.9) * activeMs); data.events.push({ id: `example-thought-${i}`, sessionId: id, kind: 'thought', startedAt: at(ms), endedAt: at(ms), durationMs: 0, text: 'Responder à mensagem depois desta sessão', category: '', activeOffsetMs: ms, source: null }); }
     // Attention check-ins were on for the last two weeks: the first after 8–20 active minutes, then every 15–35, never in the last 5 minutes of a countdown.
     if (dayIndex >= 16) for (let n = 0, offset = between(8, 20) * 60000; n < 6 && offset < activeMs && (plannedMs === null || offset <= plannedMs - 5 * 60000); n++, offset += between(15, 35) * 60000) {
       const ms = Math.round(offset), missed = random() < 0.1, away = random() < 0.15 + (slot === 2 ? 0.2 : 0) + (switchy ? 0.15 : 0);

@@ -87,7 +87,7 @@ export function correlation(sessions: FocusSession[], key: 'energy' | 'duration'
   const eligible = complete.length >= 20 && spanDays >= 7;
   const rho = eligible ? spearman(points.map(p => p.x), points.map(p => p.y)) : null;
   return { n: complete.length, missing: sessions.length - complete.length, spanDays, rho, eligible, points,
-    reason: !eligible ? 'Collect 20 complete pairs spanning at least 7 days.' : rho === null ? 'No variation in one of these measures yet.' : 'Exploratory association in your recorded sessions.' };
+    reason: !eligible ? 'Reúna 20 pares completos ao longo de pelo menos 7 dias.' : rho === null ? 'Ainda não há variação em uma destas medidas.' : 'Associação exploratória nas suas sessões registradas.' };
 }
 export function selectedSessions(data: Dataset, from: string, to: string, fieldId = '',goalId = ''): FocusSession[] {
   return data.sessions.filter(s => { const day = localDay(s.startedAt, s.timezone); return s.status === 'completed' && !s.excluded && (!fieldId || s.fieldId === fieldId) && (!goalId || s.goalId === goalId) && day >= from && day <= to; });

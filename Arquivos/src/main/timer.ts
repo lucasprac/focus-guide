@@ -17,19 +17,19 @@ export class TimerEngine {
   private lastReturn = -Infinity;
   constructor(private store: Store, private clock: Clock = realClock, private onComplete: (mode: 'focus' | 'break') => void = () => {}) { this.recover(); }
   private event(kind: SessionEvent['kind'], text = '', category = ''): SessionEvent {
-    if (!this.current) throw new Error('Start a session first.');
+    if (!this.current) throw new Error('Inicie uma sessão primeiro.');
     return { id: randomUUID(), sessionId: this.current.id, kind, startedAt: iso(this.clock.utc()), endedAt: null, durationMs: 0, text, category };
   }
   recover(): void {
     const unfinished = this.store.all().sessions.filter(s => s.status !== 'completed');
-    if (unfinished.length > 1) throw new Error('The dataset contains multiple unfinished sessions. Restore a valid backup.');
+    if (unfinished.length > 1) throw new Error('Os dados contêm várias sessões não concluídas. Restaure um backup válido.');
     this.current = unfinished[0] ?? null;
     this.breakTimer = null; this.interval = null;
     if (!this.current) return;
     const wasRunning = this.current.status === 'running';
     this.current = { ...this.current, status: 'paused', recovered: this.current.recovered || wasRunning };
     this.baseMs = this.savedMs = this.current.activeMs;
-    this.pauseReason = wasRunning ? 'Recovered from an interrupted app session' : 'Resume when you are ready';
+    this.pauseReason = wasRunning ? 'Recuperada de uma sessão do app interrompida' : 'Retome quando estiver pronto';
     const extras: SessionEvent[] = [];
     for (const e of this.store.all().events.filter(e => e.sessionId === this.current!.id && e.kind === 'pause' && !e.endedAt)) {
       extras.push({ ...e, endedAt: iso(this.clock.utc()), durationMs: Math.max(0, this.clock.utc() - Date.parse(e.startedAt)) });
@@ -39,7 +39,7 @@ export class TimerEngine {
     this.store.persist(this.current, this.interval, extras);
   }
   start(input: Omit<FocusSession, 'id' | 'activeMs' | 'status' | 'startedAt' | 'endedAt' | 'focus' | 'note' | 'completionReason' | 'excluded' | 'recovered' | 'targetReached'>): void {
-    if (this.current || this.breakTimer) throw new Error('Finish the current session or break first.');
+    if (this.current || this.breakTimer) throw new Error('Conclua primeiro a sessão ou o intervalo atual.');
     const session: FocusSession = { ...input, id: randomUUID(), activeMs: 0, status: 'running', startedAt: iso(this.clock.utc()), endedAt: null, focus: null, note: '', completionReason: null, excluded: false, recovered: false, targetReached: false };
     this.current = session;
     const interval = this.event('active');
@@ -66,9 +66,9 @@ export class TimerEngine {
   }
   private failStorage(): void {
     if (this.current) this.current = { ...this.current, status: 'paused', activeMs: this.savedMs };
-    this.baseMs = this.savedMs; this.interval = null; this.pauseReason = 'Saving failed. Resolve the storage issue before resuming.';
+    this.baseMs = this.savedMs; this.interval = null; this.pauseReason = 'Falha ao salvar. Resolva o problema de armazenamento antes de retomar.';
   }
-  pause(reason = 'Paused by you'): void {
+  pause(reason = 'Pausado por você'): void {
     if (this.breakTimer) { if (this.breakTimer.running) { this.breakTimer.elapsedMs += Math.max(0, this.clock.monotonic() - this.breakTimer.anchor); this.breakTimer.running = false; this.pauseReason = reason; } return; }
     if (!this.current || this.current.status !== 'running') return;
     const elapsedMs = this.elapsed();
@@ -107,7 +107,7 @@ export class TimerEngine {
     return next;
   }
   record(kind: 'interruption' | 'thought', text: string, category = ''): void {
-    if (!this.current) throw new Error('Start a focus session first.');
+    if (!this.current) throw new Error('Inicie uma sessão de foco primeiro.');
     const event = this.event(kind, text, category); event.endedAt = event.startedAt;
     if (this.current.status !== 'running') { event.activeOffsetMs = this.current.activeMs; this.store.putEvent(event); return; }
     this.persistMarker(event);
@@ -123,14 +123,14 @@ export class TimerEngine {
     this.current = next; this.savedMs = activeMs;
   }
   recordProbe(answer: ProbeAnswer | 'missed', offsetMs: number, source: 'floating' | 'main' | null, latencyMs: number | null): SessionEvent {
-    if (!this.current || this.current.status !== 'running') throw new Error('This check-in has expired.');
+    if (!this.current || this.current.status !== 'running') throw new Error('Este check-in expirou.');
     const event = this.event('probe', JSON.stringify({ latencyMs }), answer);
     event.endedAt = event.startedAt; event.source = source;
     this.persistMarker(event, Math.max(0, offsetMs));
     return event;
   }
   recordReturn(source: 'shortcut' | 'floating' | 'main'): SessionEvent | null {
-    if (!this.current || this.current.status !== 'running') throw new Error('Return markers require a running focus session.');
+    if (!this.current || this.current.status !== 'running') throw new Error('Os marcadores de retorno exigem uma sessão de foco em andamento.');
     if (this.clock.monotonic() - this.lastReturn < 1000) return null;
     const activeMs = this.elapsed();
     const event = this.event('attention-return');
@@ -145,12 +145,12 @@ export class TimerEngine {
   }
   addTask(taskId: string): void {
     if (!this.current || this.current.checklistIds.includes(taskId)) return;
-    if (this.current.checklistIds.length >= 100) throw new Error('A session can include up to 100 tasks.');
+    if (this.current.checklistIds.length >= 100) throw new Error('Uma sessão pode incluir até 100 tarefas.');
     const next = { ...this.current, checklistIds: [...this.current.checklistIds, taskId] };
     this.store.putSession(next); this.current = next;
   }
   beginBreak(): void {
-    if (this.current || this.breakTimer) throw new Error('Finish the current timer first.');
+    if (this.current || this.breakTimer) throw new Error('Conclua primeiro o timer atual.');
     this.breakTimer = { elapsedMs: 0, anchor: this.clock.monotonic(), running: true }; this.pauseReason = null;
   }
   endBreak(): void { this.breakTimer = null; this.pauseReason = null; }
@@ -163,7 +163,7 @@ export class TimerEngine {
     this.onComplete('focus'); return true;
   }
   setTasks(checklistIds: string[], primaryTaskId: string | null): void {
-    if (!this.current) throw new Error('Start a session first.');
+    if (!this.current) throw new Error('Inicie uma sessão primeiro.');
     const next = { ...this.current, checklistIds, primaryTaskId };
     this.store.putSession(next); this.current = next;
   }

@@ -25,14 +25,14 @@ export class AgentService {
   private today(now: string) { return localDay(now, this.timezone()); }
   private goal(id: unknown, open = true) {
     const goal = this.records().goals.find(g => g.id === v.id(id));
-    if (!goal) throw new Error('This goal does not exist. Use get_overview to find goal identifiers.');
-    if (open && goal.status === 'archived') throw new Error('This goal is archived. The user can restore it in Focus Guide.');
+    if (!goal) throw new Error('Esta meta não existe. Use get_overview para encontrar os identificadores das metas.');
+    if (open && goal.status === 'archived') throw new Error('Esta meta está arquivada. O usuário pode restaurá-la no Focus Guide.');
     return goal;
   }
   private roadmapSignature(goalId: string): string { return roadmapRevision(this.store.all(), goalId); }
 
   tool(name: unknown, input: Record<string, unknown>, source: string): unknown {
-    if (!isAgentTool(name)) throw new Error(`Unknown tool. Available tools: ${Object.keys(AGENT_TOOLS).join(', ')}.`);
+    if (!isAgentTool(name)) throw new Error(`Ferramenta desconhecida. Ferramentas disponíveis: ${Object.keys(AGENT_TOOLS).join(', ')}.`);
     const access = this.store.getSettings().agentAccess ?? 'off';
     if (!allowsTool(access, name)) throw new Error(accessError(access));
     const now = new Date().toISOString();
@@ -51,7 +51,7 @@ export class AgentService {
         return this.records().agentProposals.filter(p => (!status || p.status === status) && (!goalId || p.goalId === goalId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100);
       }
       case 'list_changes': {
-        const goalId = input.goalId === undefined ? null : v.id(input.goalId), limit = input.limit === undefined ? 50 : v.number(input.limit, 'Limit', 1, 200);
+        const goalId = input.goalId === undefined ? null : v.id(input.goalId), limit = input.limit === undefined ? 50 : v.number(input.limit, 'Limite', 1, 200);
         return this.records().agentChanges.filter(c => !goalId || c.goalId === goalId).sort((a, b) => b.at.localeCompare(a.at)).slice(0, Math.floor(limit))
           .map(c => ({ id: c.id, at: c.at, tool: c.tool, target: c.target, goalId: c.goalId, summary: c.summary, rationale: c.rationale, undoneByUser: c.undoneAt !== null }));
       }
@@ -100,7 +100,7 @@ export class AgentService {
     const today = this.today(now), to = input.to === undefined ? today : goalDate(input.to), from = input.from === undefined ? addDays(to, -89) : goalDate(input.from);
     const goalId = input.goalId === undefined ? undefined : this.goal(input.goalId, false).id;
     const fieldId = input.fieldId === undefined ? undefined : v.id(input.fieldId);
-    if (fieldId !== undefined && !this.store.field(fieldId)) throw new Error('This area does not exist. Use get_overview to find area identifiers.');
+    if (fieldId !== undefined && !this.store.field(fieldId)) throw new Error('Esta área não existe. Use get_overview para encontrar os identificadores das áreas.');
     const insights = this.command('insights.read', { from, to, ...(fieldId ? { fieldId } : {}), ...(goalId ? { goalId } : {}) }) as FocusInsights;
     const trim = (curve: SurvivalCurve): SurvivalCurve => curve.points.length <= POINT_LIMIT ? curve : { ...curve, points: Array.from({ length: POINT_LIMIT }, (_, i) => curve.points[Math.round(i * (curve.points.length - 1) / (POINT_LIMIT - 1))]) };
     const span = insights.attentionSpan;
@@ -111,7 +111,7 @@ export class AgentService {
     const data = this.store.all(), domain = goalData(data), today = this.today(now);
     const goalId = input.goalId === undefined || input.goalId === null ? null : this.goal(input.goalId, false).id;
     const from = input.from === undefined ? addDays(today, -29) : goalDate(input.from), to = input.to === undefined ? today : goalDate(input.to);
-    const limit = input.limit === undefined ? 50 : v.number(input.limit, 'Limit', 1, 200);
+    const limit = input.limit === undefined ? 50 : v.number(input.limit, 'Limite', 1, 200);
     const events = (id: string, kind: string) => data.events.filter(e => e.sessionId === id && e.kind === kind);
     return data.sessions.filter(s => { const day = localDay(s.startedAt, s.timezone); return s.status === 'completed' && (!goalId || s.goalId === goalId) && day >= from && day <= to; })
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, Math.floor(limit))
@@ -123,7 +123,7 @@ export class AgentService {
   private weeklyReview(input: Record<string, unknown>, now: string) {
     const data = this.store.all(), domain = goalData(data), goal = this.goal(input.goalId, false), current = monday(this.today(now));
     const week = input.week === undefined ? current : goalDate(input.week);
-    if (monday(week) !== week) throw new Error('Use the Monday that starts the week, in YYYY-MM-DD form.');
+    if (monday(week) !== week) throw new Error('Use a segunda-feira que inicia a semana, no formato AAAA-MM-DD.');
     const summary = goalSummary(data, goal.id, week, addDays(week, 6)), review = domain.goalReviews.find(r => r.goalId === goal.id && r.week === week);
     return {
       week, goal: goal.title, recordedMinutes: round(summary.minutes),
@@ -132,7 +132,7 @@ export class AgentService {
       roadmap: { done: summary.completedMilestones, total: summary.milestones.length },
       adjustment: review?.adjustment ?? '', previousWeekAdjustment: domain.goalReviews.find(r => r.goalId === goal.id && r.week === addDays(week, -7))?.adjustment ?? '',
       barrierSuggestions: week === current ? barrierSuggestions(data, goal.id, Date.parse(now)).map(s => ({ title: s.title, proposal: s.proposal, barrier: s.barrier, reportedDates: [...new Set(s.records.map(r => r.date))] })) : [],
-      note: 'Missing check-ins are unknown, not failures. Repeated self-reports do not establish a cause.'
+      note: 'Check-ins ausentes são desconhecidos, não falhas. Autorrelatos repetidos não estabelecem uma causa.'
     };
   }
 
@@ -141,42 +141,42 @@ export class AgentService {
   actionDraft(value: unknown, now: string) {
     const r = v.object(value), timezone = this.timezone();
     const plan = goalPlan({ effectiveDate: localDay(now, timezone), timezone, weekdays: r.weekdays, cue: r.cue, normal: r.normal, smaller: r.smaller, obstacle: r.obstacle ?? '', response: r.response ?? '', estimatedMinutes: r.estimatedMinutes ?? null, activityMode: r.activityMode ?? 'Unspecified', enabled: true });
-    return { title: v.text(r.title, 'Action title', 200, true), weekdays: plan.weekdays, cue: plan.cue, normal: plan.normal, smaller: plan.smaller, obstacle: plan.obstacle, response: plan.response, estimatedMinutes: plan.estimatedMinutes, activityMode: plan.activityMode };
+    return { title: v.text(r.title, 'Título da ação', 200, true), weekdays: plan.weekdays, cue: plan.cue, normal: plan.normal, smaller: plan.smaller, obstacle: plan.obstacle, response: plan.response, estimatedMinutes: plan.estimatedMinutes, activityMode: plan.activityMode };
   }
   markdown(value: unknown, required: boolean): string {
-    const text = v.text(value ?? '', 'Roadmap Markdown', MILESTONE_LIMITS.count * (MILESTONE_LIMITS.title + 12), required), rows = parseMilestoneMarkdown(text);
-    if (rows.length > MILESTONE_LIMITS.count) throw new Error(`A roadmap holds up to ${MILESTONE_LIMITS.count} rows.`);
-    if (required && !rows.some(r => r.kind === 'todo')) throw new Error('A roadmap needs at least one to-do step, written as "- [ ] Step".');
+    const text = v.text(value ?? '', 'Markdown do roteiro', MILESTONE_LIMITS.count * (MILESTONE_LIMITS.title + 12), required), rows = parseMilestoneMarkdown(text);
+    if (rows.length > MILESTONE_LIMITS.count) throw new Error(`Um roteiro comporta até ${MILESTONE_LIMITS.count} linhas.`);
+    if (required && !rows.some(r => r.kind === 'todo')) throw new Error('Um roteiro precisa de pelo menos uma etapa de tarefa, escrita como "- [ ] Etapa".');
     return text;
   }
   private payload(kind: ProposalKind, input: Record<string, unknown>, now: string): { goalId: string | null; payload: Record<string, unknown> } {
     if (kind === 'goal.create') {
-      const field = this.store.field(v.id(input.areaId)); if (!field || field.archived) throw new Error('Choose an active area. Use get_overview to find area identifiers.');
+      const field = this.store.field(v.id(input.areaId)); if (!field || field.archived) throw new Error('Escolha uma área ativa. Use get_overview para encontrar os identificadores das áreas.');
       const actions = input.actions === undefined ? [] : input.actions;
-      if (!Array.isArray(actions) || actions.length > 10) throw new Error('Propose up to 10 weekly actions.');
-      return { goalId: null, payload: { areaId: field.id, title: v.text(input.title, 'Goal title', 200, true), outcome: v.text(input.outcome ?? '', 'Outcome', 2000), why: v.text(input.why ?? '', 'Why this matters', 2000), whyTags: whyTags(input.whyTags ?? []), deadline: v.date(input.deadline ?? null), roadmapMarkdown: this.markdown(input.roadmapMarkdown, false), actions: actions.map(a => this.actionDraft(a, now)) } };
+      if (!Array.isArray(actions) || actions.length > 10) throw new Error('Proponha até 10 ações semanais.');
+      return { goalId: null, payload: { areaId: field.id, title: v.text(input.title, 'Título da meta', 200, true), outcome: v.text(input.outcome ?? '', 'Resultado', 2000), why: v.text(input.why ?? '', 'Por que isso importa', 2000), whyTags: whyTags(input.whyTags ?? []), deadline: v.date(input.deadline ?? null), roadmapMarkdown: this.markdown(input.roadmapMarkdown, false), actions: actions.map(a => this.actionDraft(a, now)) } };
     }
     const goal = this.goal(input.goalId);
     if (kind === 'roadmap.replace') return { goalId: goal.id, payload: { goalId: goal.id, markdown: this.markdown(input.markdown, true) } };
     if (kind === 'tasks.add') {
-      if (!Array.isArray(input.tasks) || !input.tasks.length || input.tasks.length > 50) throw new Error('Propose from 1 to 50 tasks.');
-      return { goalId: goal.id, payload: { goalId: goal.id, tasks: input.tasks.map(item => { const t = v.object(item); return { title: v.text(t.title, 'Task title', 200, true), notes: v.text(t.notes ?? '', 'Task notes', 2000), priority: v.priority(t.priority ?? 'normal'), dueDate: v.date(t.dueDate ?? null), step: v.text(t.step ?? '', 'Roadmap step', MILESTONE_LIMITS.title) }; }) } };
+      if (!Array.isArray(input.tasks) || !input.tasks.length || input.tasks.length > 50) throw new Error('Proponha de 1 a 50 tarefas.');
+      return { goalId: goal.id, payload: { goalId: goal.id, tasks: input.tasks.map(item => { const t = v.object(item); return { title: v.text(t.title, 'Título da tarefa', 200, true), notes: v.text(t.notes ?? '', 'Notas da tarefa', 2000), priority: v.priority(t.priority ?? 'normal'), dueDate: v.date(t.dueDate ?? null), step: v.text(t.step ?? '', 'Etapa do roteiro', MILESTONE_LIMITS.title) }; }) } };
     }
     if (kind === 'action.add') return { goalId: goal.id, payload: { goalId: goal.id, action: this.actionDraft(input.action, now) } };
     const week = goalDate(input.week ?? monday(this.today(now)));
-    if (monday(week) !== week || week > monday(this.today(now))) throw new Error('Choose the Monday of the current week or an earlier week.');
-    return { goalId: goal.id, payload: { goalId: goal.id, week, text: v.text(input.text, 'Review note', 2000, true) } };
+    if (monday(week) !== week || week > monday(this.today(now))) throw new Error('Escolha a segunda-feira da semana atual ou de uma semana anterior.');
+    return { goalId: goal.id, payload: { goalId: goal.id, week, text: v.text(input.text, 'Nota de revisão', 2000, true) } };
   }
 
   private propose(kind: ProposalKind, input: Record<string, unknown>, source: string, now: string) {
     const all = this.records().agentProposals;
-    if (all.filter(p => p.status === 'pending' || p.status === 'stale').length >= PROPOSAL_LIMITS.pending) throw new Error(`There are ${PROPOSAL_LIMITS.pending} open proposals. Ask the user to apply or reject some of them first.`);
-    if (all.length >= GOAL_LIMITS.agentProposals) throw new Error('The proposal history is full.');
+    if (all.filter(p => p.status === 'pending' || p.status === 'stale').length >= PROPOSAL_LIMITS.pending) throw new Error(`Há ${PROPOSAL_LIMITS.pending} propostas em aberto. Peça ao usuário que aplique ou rejeite algumas delas primeiro.`);
+    if (all.length >= GOAL_LIMITS.agentProposals) throw new Error('O histórico de propostas está cheio.');
     const { goalId, payload } = this.payload(kind, input, now);
-    const defaults: Record<ProposalKind, string> = { 'goal.create': `New goal: ${payload.title}`, 'roadmap.replace': 'Revised roadmap', 'tasks.add': (payload.tasks as unknown[] | undefined)?.length === 1 ? '1 new task' : `${(payload.tasks as unknown[] | undefined)?.length ?? 0} new tasks`, 'action.add': `Weekly action: ${(payload.action as { title?: string } | undefined)?.title ?? ''}`, 'review.note': `Review note for ${payload.week}` };
-    const proposal = validateGoalRecord('agentProposals', { id: randomUUID(), goalId, kind, summary: v.text(input.summary ?? defaults[kind], 'Summary', PROPOSAL_LIMITS.summary, true), rationale: v.text(input.rationale ?? '', 'Rationale', PROPOSAL_LIMITS.rationale), source: source.slice(0, PROPOSAL_LIMITS.source), payload, basis: kind === 'roadmap.replace' && goalId ? this.roadmapSignature(goalId) : null, status: 'pending', createdAt: now, decidedAt: null }) as AgentProposal;
+    const defaults: Record<ProposalKind, string> = { 'goal.create': `Nova meta: ${payload.title}`, 'roadmap.replace': 'Roteiro revisado', 'tasks.add': (payload.tasks as unknown[] | undefined)?.length === 1 ? '1 nova tarefa' : `${(payload.tasks as unknown[] | undefined)?.length ?? 0} novas tarefas`, 'action.add': `Ação semanal: ${(payload.action as { title?: string } | undefined)?.title ?? ''}`, 'review.note': `Nota de revisão da semana de ${payload.week}` };
+    const proposal = validateGoalRecord('agentProposals', { id: randomUUID(), goalId, kind, summary: v.text(input.summary ?? defaults[kind], 'Resumo', PROPOSAL_LIMITS.summary, true), rationale: v.text(input.rationale ?? '', 'Justificativa', PROPOSAL_LIMITS.rationale), source: source.slice(0, PROPOSAL_LIMITS.source), payload, basis: kind === 'roadmap.replace' && goalId ? this.roadmapSignature(goalId) : null, status: 'pending', createdAt: now, decidedAt: null }) as AgentProposal;
     this.store.putGoalRecord('agentProposals', proposal);
-    return { proposalId: proposal.id, status: proposal.status, message: 'Saved as a proposal. Nothing changed yet. The user reviews it in Focus Guide and applies or rejects it.' };
+    return { proposalId: proposal.id, status: proposal.status, message: 'Salva como proposta. Nada mudou ainda. O usuário a revisa no Focus Guide e a aplica ou rejeita.' };
   }
 
   private apply(proposal: AgentProposal, payload: Record<string, unknown>, now: string): unknown {
@@ -204,7 +204,7 @@ export class AgentService {
       case 'review.note': {
         const existing = records.goalReviews.find(r => r.goalId === payload.goalId && r.week === payload.week);
         const adjustment = existing?.adjustment ? `${existing.adjustment}\n\n${payload.text}` : String(payload.text);
-        if (adjustment.length > 2000) throw new Error('The note does not fit next to the existing weekly adjustment. Edit it to be shorter.');
+        if (adjustment.length > 2000) throw new Error('A nota não cabe junto ao ajuste semanal existente. Edite-a para ficar mais curta.');
         this.command('goal.review.save', { goalId: payload.goalId, week: payload.week, adjustment, previousOutcome: existing?.previousOutcome ?? 'undecided' });
         return { goalId: payload.goalId };
       }
@@ -214,10 +214,10 @@ export class AgentService {
   run(command: Command, input: Record<string, unknown>, now: string): unknown {
     if (command === 'agent.change.undo') return this.editor().undo(input, now);
     const proposal = this.records().agentProposals.find(p => p.id === v.id(input.id));
-    if (!proposal) throw new Error('This proposal no longer exists.');
-    if (proposal.status === 'applied' || proposal.status === 'rejected') throw new Error('This proposal was already decided.');
+    if (!proposal) throw new Error('Esta proposta não existe mais.');
+    if (proposal.status === 'applied' || proposal.status === 'rejected') throw new Error('Esta proposta já foi decidida.');
     if (command === 'agent.proposal.reject') { this.store.putGoalRecord('agentProposals', { ...proposal, status: 'rejected', decidedAt: now }); return; }
-    if (command !== 'agent.proposal.apply') throw new Error('This command is not available.');
+    if (command !== 'agent.proposal.apply') throw new Error('Este comando não está disponível.');
     // The user may edit the proposal before applying it; the edited result is checked like a new proposal and kept as the audit record.
     const { payload } = this.payload(proposal.kind, { ...proposal.payload, ...(input.edits === undefined ? {} : v.object(input.edits)) }, now);
     if (proposal.kind === 'roadmap.replace' && proposal.basis !== this.roadmapSignature(String(payload.goalId)) && input.confirmStale !== true) {

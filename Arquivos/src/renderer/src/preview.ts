@@ -12,30 +12,30 @@ const key = 'focus-guide-isolated-demo-v2';
 function seed(): Dataset {
   const data = exampleDataset({ timezone: 'America/Fortaleza', defaultMinutes: 25, autoOvertime: true, animation: true, sound: false, palette: 'cyan', weeklyGoalMinutes: 0, theme: 'light', sidebarCollapsed: false });
   const now = new Date().toISOString();
-  data.categories = [{ id: 'demo-study', name: 'Study', color: '#8B70DE', archived: false, createdAt: now }, { id: 'demo-personal', name: 'Personal', color: '#356AE6', archived: false, createdAt: now }];
+  data.categories = [{ id: 'demo-study', name: 'Estudo', color: '#8B70DE', archived: false, createdAt: now }, { id: 'demo-personal', name: 'Pessoal', color: '#356AE6', archived: false, createdAt: now }];
   // A synthetic learning goal with a roadmap; the example study sessions are linked to it.
   const goalId = 'demo-linear-algebra', study = data.fields[0].id;
-  data.goals = [{ id: goalId, fieldId: study, title: 'Learn linear algebra', outcome: 'Solve eigenvalue problems and explain each step without notes.', why: '', whyTags: ['Learning', 'Career'], deadline: null, baseline: null, target: null, unit: '', status: 'active', statusHistory: [{ at: now, status: 'active' }], createdAt: now, updatedAt: now }];
-  data.milestones = ([['heading', 'Foundations'], ['todo', 'Vectors and linear combinations', true], ['todo', 'Matrix multiplication'], ['heading', 'Core ideas'], ['todo', 'Determinants'], ['todo', 'Eigenvalues and eigenvectors']] as const).map((row, position) => ({ id: `demo-step-${position}`, goalId, title: row[1], kind: row[0], completed: row.length > 2, archived: false, position, createdAt: now, updatedAt: now, ...milestoneDefaults(), estimatedMinutes: row[0] === 'todo' ? 240 : null }));
+  data.goals = [{ id: goalId, fieldId: study, title: 'Aprender álgebra linear', outcome: 'Resolver problemas de autovalores e explicar cada passo sem consultar anotações.', why: '', whyTags: ['Aprendizado', 'Carreira'], deadline: null, baseline: null, target: null, unit: '', status: 'active', statusHistory: [{ at: now, status: 'active' }], createdAt: now, updatedAt: now }];
+  data.milestones = ([['heading', 'Fundamentos'], ['todo', 'Vetores e combinações lineares', true], ['todo', 'Multiplicação de matrizes'], ['heading', 'Ideias centrais'], ['todo', 'Determinantes'], ['todo', 'Autovalores e autovetores']] as const).map((row, position) => ({ id: `demo-step-${position}`, goalId, title: row[1], kind: row[0], completed: row.length > 2, archived: false, position, createdAt: now, updatedAt: now, ...milestoneDefaults(), estimatedMinutes: row[0] === 'todo' ? 240 : null }));
   // More synthetic goals, one per status, so Neural World shows every kind of neuron.
   const work = data.fields[1].id, create = data.fields[2].id, zone = 'America/Fortaleza', today = localDay(Date.now(), zone);
   const goal = (id: string, fieldId: string, title: string, outcome: string, status: 'active' | 'draft' | 'paused' | 'achieved', measure: [number, number, string] | null = null) => ({ id, fieldId, title, outcome, why: '', whyTags: [], deadline: null, baseline: measure?.[0] ?? null, target: measure?.[1] ?? null, unit: measure?.[2] ?? '', status, statusHistory: [{ at: now, status }], createdAt: now, updatedAt: now });
   data.goals.push(
-    goal('demo-statistics', study, 'Read a statistics textbook', 'Finish all chapters with the exercises.', 'active', [0, 20, 'chapters']),
-    goal('demo-sketch', create, 'Sketch every week', 'Fill one sketchbook with studies from life.', 'active'),
-    goal('demo-portfolio', create, 'Publish a portfolio', 'A small site with ten finished pieces.', 'achieved'),
-    goal('demo-writing', work, 'Write a short guide', 'A practical guide of about 30 pages.', 'draft'),
-    goal('demo-launch', work, 'Prepare a side project', 'A first public version.', 'paused'));
+    goal('demo-statistics', study, 'Ler um livro de estatística', 'Terminar todos os capítulos com os exercícios.', 'active', [0, 20, 'capítulos']),
+    goal('demo-sketch', create, 'Desenhar toda semana', 'Preencher um caderno de desenho com estudos do natural.', 'active'),
+    goal('demo-portfolio', create, 'Publicar um portfólio', 'Um site pequeno com dez peças finalizadas.', 'achieved'),
+    goal('demo-writing', work, 'Escrever um guia curto', 'Um guia prático de cerca de 30 páginas.', 'draft'),
+    goal('demo-launch', work, 'Preparar um projeto paralelo', 'Uma primeira versão pública.', 'paused'));
   const steps: Array<[string, string, boolean]> = [
-    ['demo-statistics', 'Descriptive statistics', true], ['demo-statistics', 'Probability basics', false], ['demo-statistics', 'Sampling distributions', false], ['demo-statistics', 'Hypothesis tests', false],
-    ['demo-sketch', 'Gesture drawing', true], ['demo-sketch', 'Light and shadow', true], ['demo-sketch', 'Perspective', false], ['demo-sketch', 'Portraits', false], ['demo-sketch', 'Urban sketching', false],
-    ['demo-portfolio', 'Choose ten pieces', true], ['demo-portfolio', 'Build the site', true], ['demo-portfolio', 'Publish', true],
-    ['demo-writing', 'Outline the chapters', false], ['demo-writing', 'Write the first chapter', false],
-    ['demo-launch', 'Define the scope', true], ['demo-launch', 'Build the prototype', false], ['demo-launch', 'Invite testers', false]];
+    ['demo-statistics', 'Estatística descritiva', true], ['demo-statistics', 'Noções de probabilidade', false], ['demo-statistics', 'Distribuições amostrais', false], ['demo-statistics', 'Testes de hipótese', false],
+    ['demo-sketch', 'Desenho de gestos', true], ['demo-sketch', 'Luz e sombra', true], ['demo-sketch', 'Perspectiva', false], ['demo-sketch', 'Retratos', false], ['demo-sketch', 'Desenho urbano', false],
+    ['demo-portfolio', 'Escolher dez peças', true], ['demo-portfolio', 'Construir o site', true], ['demo-portfolio', 'Publicar', true],
+    ['demo-writing', 'Esboçar os capítulos', false], ['demo-writing', 'Escrever o primeiro capítulo', false],
+    ['demo-launch', 'Definir o escopo', true], ['demo-launch', 'Construir o protótipo', false], ['demo-launch', 'Convidar testadores', false]];
   data.milestones = [...data.milestones ?? [], ...steps.map(([goalIdOf, title, completed], position) => ({ id: `demo-world-step-${position}`, goalId: goalIdOf, title, kind: 'todo' as const, completed, archived: false, position, createdAt: now, updatedAt: now, ...milestoneDefaults() }))];
   data.goalProgress = [{ id: 'demo-progress-statistics', goalId: 'demo-statistics', date: today, value: 6, note: '', createdAt: now, updatedAt: now }];
-  const plan = { effectiveDate: addDays(today, -30), timezone: zone, weekdays: [0, 1, 2, 3, 4, 5, 6], cue: 'After lunch', normal: 'Draw for 20 minutes', smaller: 'Draw for 5 minutes', obstacle: 'No time', response: 'Draw one line', estimatedMinutes: 20, activityMode: 'Unspecified' as const, enabled: true };
-  data.goalActions = [{ id: 'demo-sketch-action', goalId: 'demo-sketch', title: 'Daily sketch', archived: false, plans: [plan], createdAt: now, updatedAt: now }];
+  const plan = { effectiveDate: addDays(today, -30), timezone: zone, weekdays: [0, 1, 2, 3, 4, 5, 6], cue: 'Depois do almoço', normal: 'Desenhar por 20 minutos', smaller: 'Desenhar por 5 minutos', obstacle: 'Falta de tempo', response: 'Desenhar uma linha', estimatedMinutes: 20, activityMode: 'Unspecified' as const, enabled: true };
+  data.goalActions = [{ id: 'demo-sketch-action', goalId: 'demo-sketch', title: 'Desenho diário', archived: false, plans: [plan], createdAt: now, updatedAt: now }];
   data.goalOccurrences = (['done', 'done', 'smaller', 'done', 'skipped', 'done', 'smaller', 'done'] as const).map((status, i) => {
     const day = addDays(today, -(i + 1) * 2);
     return { id: `demo-sketch-action_${day}`, goalId: 'demo-sketch', actionId: 'demo-sketch-action', originalDate: day, date: day, status, barrier: null, note: '', rescheduleHistory: [], plan, updatedAt: now };
@@ -44,15 +44,15 @@ function seed(): Dataset {
   data.sessions.filter(s => s.fieldId === work).forEach(s => { s.goalId = 'demo-launch'; s.milestoneId = 'demo-world-step-14'; });
   data.sessions.filter(s => s.fieldId === study).forEach((s, i) => { s.goalId = goalId; s.activityMode = (['Reading', 'Writing/coding', 'Video/lecture'] as const)[i % 3]; s.milestoneId = i < 8 ? 'demo-step-1' : 'demo-step-2'; });
   // Synthetic agent proposals. The roadmap proposal has an old basis, so the preview also shows the stale case.
-  const proposal = { source: 'Demo agent', status: 'pending' as const, createdAt: now, decidedAt: null };
+  const proposal = { source: 'Agente de demonstração', status: 'pending' as const, createdAt: now, decidedAt: null };
   data.agentProposals = [
-    { ...proposal, id: 'demo-proposal-roadmap', goalId, kind: 'roadmap.replace', summary: 'Split the core ideas into smaller steps', rationale: 'Sessions for this goal are short and spread over many days, so smaller steps can be checked more often.', basis: 'demo', payload: { goalId, markdown: '# Foundations\n- [x] Vectors and linear combinations\n- [ ] Matrix multiplication\n# Core ideas\n- [ ] Determinants\n- [ ] Cofactor expansion exercises\n- [ ] Eigenvalues and eigenvectors\n- [ ] Diagonalisation practice set' } },
-    { ...proposal, id: 'demo-proposal-tasks', goalId, kind: 'tasks.add', summary: '2 practice tasks', rationale: 'Retrieval practice for the current step.', basis: null, payload: { goalId, tasks: [{ title: 'Solve 10 matrix products without notes', notes: '', priority: 'normal', dueDate: null, step: 'Matrix multiplication' }, { title: 'Explain matrix multiplication in your own words', notes: '', priority: 'low', dueDate: null, step: 'Matrix multiplication' }] } },
-    { ...proposal, id: 'demo-proposal-goal', goalId: null, kind: 'goal.create', summary: 'New goal: Learn probability', rationale: 'Probability builds on the linear algebra goal.', basis: null, payload: { areaId: study, title: 'Learn probability', outcome: 'Solve conditional probability problems with confidence.', why: '', whyTags: ['Learning'], deadline: null, roadmapMarkdown: '# Basics\n- [ ] Counting and combinatorics\n- [ ] Conditional probability\n# Distributions\n- [ ] Discrete distributions', actions: [] } }
+    { ...proposal, id: 'demo-proposal-roadmap', goalId, kind: 'roadmap.replace', summary: 'Dividir as ideias centrais em etapas menores', rationale: 'As sessões desta meta são curtas e espalhadas por muitos dias, então etapas menores podem ser marcadas com mais frequência.', basis: 'demo', payload: { goalId, markdown: '# Fundamentos\n- [x] Vetores e combinações lineares\n- [ ] Multiplicação de matrizes\n# Ideias centrais\n- [ ] Determinantes\n- [ ] Exercícios de expansão por cofatores\n- [ ] Autovalores e autovetores\n- [ ] Lista de exercícios de diagonalização' } },
+    { ...proposal, id: 'demo-proposal-tasks', goalId, kind: 'tasks.add', summary: '2 tarefas de prática', rationale: 'Prática de recuperação para a etapa atual.', basis: null, payload: { goalId, tasks: [{ title: 'Resolver 10 produtos de matrizes sem consultar anotações', notes: '', priority: 'normal', dueDate: null, step: 'Multiplicação de matrizes' }, { title: 'Explicar a multiplicação de matrizes com as suas próprias palavras', notes: '', priority: 'low', dueDate: null, step: 'Multiplicação de matrizes' }] } },
+    { ...proposal, id: 'demo-proposal-goal', goalId: null, kind: 'goal.create', summary: 'Nova meta: Aprender probabilidade', rationale: 'A probabilidade se apoia na meta de álgebra linear.', basis: null, payload: { areaId: study, title: 'Aprender probabilidade', outcome: 'Resolver problemas de probabilidade condicional com confiança.', why: '', whyTags: ['Aprendizado'], deadline: null, roadmapMarkdown: '# Noções básicas\n- [ ] Contagem e combinatória\n- [ ] Probabilidade condicional\n# Distribuições\n- [ ] Distribuições discretas', actions: [] } }
   ];
   // A synthetic direct change: the demo agent added one task, which Undo archives.
-  data.agentChanges = [{ id: 'demo-change-task', goalId, at: now, source: 'Demo agent', tool: 'create_tasks', target: 'task', summary: 'Added 1 task to “Learn linear algebra”', rationale: 'A short practice set for the current step.', before: { 'demo-agent-task': null }, after: { 'demo-agent-task': { title: 'Do 5 practice problems on matrix products', notes: '', priority: 'normal', dueDate: null, milestoneId: 'demo-step-2', completed: false, archived: false } }, undoneAt: null }];
-  data.tasks = [{ id: 'demo-agent-task', title: 'Do 5 practice problems on matrix products', fieldId: study, categoryId: null, notes: '', priority: 'normal', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now, goalId, milestoneId: 'demo-step-2' }, { id: 'demo-paper', title: 'Read one paper', fieldId: study, categoryId: 'demo-study', notes: 'Capture three useful ideas.', priority: 'high', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now, goalId, milestoneId: 'demo-step-2' }, { id: 'demo-outline', title: 'Draft the outline', fieldId: data.fields[1].id, categoryId: null, notes: '', priority: 'normal', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now }];
+  data.agentChanges = [{ id: 'demo-change-task', goalId, at: now, source: 'Agente de demonstração', tool: 'create_tasks', target: 'task', summary: 'Adicionou 1 tarefa a “Aprender álgebra linear”', rationale: 'Uma pequena série de prática para a etapa atual.', before: { 'demo-agent-task': null }, after: { 'demo-agent-task': { title: 'Fazer 5 exercícios de produtos de matrizes', notes: '', priority: 'normal', dueDate: null, milestoneId: 'demo-step-2', completed: false, archived: false } }, undoneAt: null }];
+  data.tasks = [{ id: 'demo-agent-task', title: 'Fazer 5 exercícios de produtos de matrizes', fieldId: study, categoryId: null, notes: '', priority: 'normal', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now, goalId, milestoneId: 'demo-step-2' }, { id: 'demo-paper', title: 'Ler um artigo', fieldId: study, categoryId: 'demo-study', notes: 'Anotar três ideias úteis.', priority: 'high', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now, goalId, milestoneId: 'demo-step-2' }, { id: 'demo-outline', title: 'Rascunhar o esboço', fieldId: data.fields[1].id, categoryId: null, notes: '', priority: 'normal', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now }];
   return data;
 }
 class PreviewStore {
@@ -176,7 +176,7 @@ export function installPreview(): void {
   const store = new PreviewStore();
   // The demo runs the production timer and commands against browser-only synthetic storage.
   const timer = new TimerEngine(store as unknown as Store, { utc: () => Date.now(), monotonic: () => performance.now() }, mode => {
-    emit({ type: 'notice', message: mode === 'break' ? 'Demo break complete.' : timer.current ? 'Timer ended. Overtime is recording in this session.' : 'Demo session saved.' });
+    emit({ type: 'notice', message: mode === 'break' ? 'Intervalo da demonstração concluído.' : timer.current ? 'O timer terminou. O tempo extra está sendo registrado nesta sessão.' : 'Sessão da demonstração salva.' });
   });
   const probes = new ProbeScheduler(Math.random, new URLSearchParams(location.search).get('probes') === 'fast' ? FAST_PROBE_OPTIONS : DEFAULT_PROBE_OPTIONS);
   const service = new FocusService(store as unknown as Store, timer, kind => {
@@ -200,13 +200,13 @@ export function installPreview(): void {
       store.save();
     })();
   };
-  const state = () => ({ graphicsMode: 'auto' as const, ...store.all(), timer: timer.snapshot(), probe: probes.pending, dataPath: 'Isolated browser demo — your Windows data is not connected', collector: { state: store.getSettings().collectActivity && timer.snapshot().running ? 'recording' as const : 'disabled' as const, shortcut: 'unavailable' as const, message: 'Synthetic activity preview · global shortcuts and native collection require Windows.' }, backupStatus: 'Demo changes stay in this browser profile.' });
+  const state = () => ({ graphicsMode: 'auto' as const, ...store.all(), timer: timer.snapshot(), probe: probes.pending, dataPath: 'Demonstração isolada no navegador — seus dados do Windows não estão conectados', collector: { state: store.getSettings().collectActivity && timer.snapshot().running ? 'recording' as const : 'disabled' as const, shortcut: 'unavailable' as const, message: 'Prévia de atividade sintética · os atalhos globais e a coleta nativa exigem o Windows.' }, backupStatus: 'As alterações da demonstração ficam neste perfil do navegador.' });
   window.focusGuide = {
     getState: async () => state(),
     command: async (command, input = {}) => {
       try {
         if (command === 'shortcut.capture') return { ok: true };
-        if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.')) throw new Error('This native feature is available in the Windows app. The demo is isolated from your files.');
+        if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.')) throw new Error('Este recurso nativo está disponível no app para Windows. A demonstração é isolada dos seus arquivos.');
         if (command === 'session.pause' || command === 'session.finish' || command === 'settings.update' || command === 'field.delete' || command === 'goal.delete' || command === 'activity.delete') { timer.checkpoint(); simulate(); }
         const value = service.run(command, input);
         if (command === 'attention.return' && value) { const marker = value as SessionEvent; emit({ type: 'attention-return', sessionId: marker.sessionId, eventId: marker.id, savedAt: marker.startedAt }); }
@@ -224,7 +224,7 @@ export function installPreview(): void {
     } catch (error) { emit({ type: 'error', message: String(error) }); }
   }, 1000);
   const checkpoint = window.setInterval(() => { try { timer.checkpoint(); simulate(); } catch (error) { emit({ type: 'error', message: String(error) }); } }, 5000);
-  const pause = () => { try { timer.pause('Demo paused — resume when ready'); emit({ type: 'state', state: state() }); } catch (error) { emit({ type: 'error', message: String(error) }); } };
+  const pause = () => { try { timer.pause('Demonstração pausada — retome quando quiser'); emit({ type: 'state', state: state() }); } catch (error) { emit({ type: 'error', message: String(error) }); } };
   window.addEventListener('pagehide', () => { pause(); clearInterval(tick); clearInterval(probeTick); clearInterval(checkpoint); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 }

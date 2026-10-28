@@ -6,7 +6,7 @@ export function displayedTime(timer: TimerSnapshot): number {
 // Count-up clocks display completed seconds; countdowns retain their ceil convention.
 export function countedTime(elapsedMs: number): number { return Math.floor(Math.max(0, elapsedMs) / 1000) * 1000; }
 export function timerLabel(timer: TimerSnapshot): string {
-  return timer.phase === 'stopwatch' ? 'Recorded time' : timer.phase === 'overtime' ? 'Overtime' : 'Time remaining';
+  return timer.phase === 'stopwatch' ? 'Tempo registrado' : timer.phase === 'overtime' ? 'Tempo extra' : 'Tempo restante';
 }
 export function visualDuration(timer: TimerSnapshot): number { return timer.plannedMs ?? 60 * 60000; }
 export function visualProgress(timer: TimerSnapshot): number {

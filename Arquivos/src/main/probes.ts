@@ -51,7 +51,7 @@ export class ProbeScheduler {
   /** Clears the pending check-in. The caller saves the answer with the returned offset and latency. */
   answer(id: string): { offsetMs: number; latencyMs: number } {
     const latencyMs = this.clock.monotonic() - this.shownAt;
-    if (!this.current || this.current.id !== id || latencyMs >= this.options.timeoutMs) throw new Error('This check-in has expired.');
+    if (!this.current || this.current.id !== id || latencyMs >= this.options.timeoutMs) throw new Error('Este check-in expirou.');
     this.clear();
     return { offsetMs: this.offsetMs, latencyMs: Math.max(0, Math.round(latencyMs)) };
   }

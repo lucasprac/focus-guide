@@ -10,7 +10,7 @@ interface Span { sessionId: string; epoch: number; start: number; cursor: number
 
 /** Aggregates cross the process boundary; raw input never enters Electron. */
 export class BehaviourCollector {
-  status: CollectorStatus = { state: 'waiting', shortcut: 'unavailable', message: 'Starting local controls.' };
+  status: CollectorStatus = { state: 'waiting', shortcut: 'unavailable', message: 'Iniciando os controles locais.' };
   private child: ChildProcessWithoutNullStreams | null = null;
   private span: Span | null = null;
   private epoch = 0;
@@ -38,7 +38,7 @@ export class BehaviourCollector {
     this.appliedShortcut = ''; this.status = { ...this.status, effectiveShortcut: '' };
     this.ready = false; this.readyReply?.(); this.stopReply?.();
     for (const reply of this.requests.values()) reply(false); this.requests.clear();
-    this.setStatus('unavailable', 'Local input helper unavailable. Timer and floating return control remain usable.', 'unavailable');
+    this.setStatus('unavailable', 'O auxiliar de entrada local está indisponível. O timer e o controle de retorno flutuante continuam utilizáveis.', 'unavailable');
     this.child?.kill(); this.child = null;
   }
   private setStatus(state: CollectorStatus['state'], message: string, hotkey = this.status.shortcut): void {
@@ -52,24 +52,24 @@ export class BehaviourCollector {
     while ((newline = this.buffer.indexOf('\n')) >= 0) {
       const line = this.buffer.slice(0, newline); this.buffer = this.buffer.slice(newline + 1);
       try {
-        if (line.length > 1024) throw new Error('Oversized helper message.');
+        if (line.length > 1024) throw new Error('Mensagem do auxiliar grande demais.');
         const value = object(JSON.parse(line));
         if (value.type === 'ready') { this.ready = true; this.heartbeat = Date.now(); this.readyReply?.(); }
         else if (value.type === 'heartbeat') this.heartbeat = Date.now();
-        else if (value.type === 'hotkey') { if (typeof value.ok !== 'boolean') throw new Error('Invalid shortcut reply.'); this.requests.get(Number(value.request))?.(value.ok); }
+        else if (value.type === 'hotkey') { if (typeof value.ok !== 'boolean') throw new Error('Resposta de atalho inválida.'); this.requests.get(Number(value.request))?.(value.ok); }
         else if (value.type === 'stopped') { this.stopReply?.(); }
         else if (value.type === 'return') this.onReturn();
         else if (value.type === 'started' && value.epoch === this.span?.epoch) {
           this.span!.ready = value.ok === true; this.heartbeat = Date.now();
-          this.setStatus(value.ok === true ? 'recording' : 'unavailable', value.ok === true ? 'Local activity collection is recording.' : 'Input registration failed. Coverage is unavailable.');
+          this.setStatus(value.ok === true ? 'recording' : 'unavailable', value.ok === true ? 'A coleta de atividade local está gravando.' : 'Falha ao registrar a entrada. A cobertura está indisponível.');
         } else if (value.type === 'sample') {
-          const end = number(value.endMs, 'Helper time', 0, Number.MAX_SAFE_INTEGER), duration = number(value.durationMs, 'Helper interval', 1, Number.MAX_SAFE_INTEGER);
-          const epoch = number(value.epoch, 'Helper generation', 1, Number.MAX_SAFE_INTEGER);
+          const end = number(value.endMs, 'Tempo do auxiliar', 0, Number.MAX_SAFE_INTEGER), duration = number(value.durationMs, 'Intervalo do auxiliar', 1, Number.MAX_SAFE_INTEGER);
+          const epoch = number(value.epoch, 'Geração do auxiliar', 1, Number.MAX_SAFE_INTEGER);
           const counts = ['keys', 'clicks', 'scrolls'].map(key => number(value[key], key, 0, 1000000));
           const movementMs = number(value.movementMs, 'Movement', 0, duration);
-          const switches = value.switches === undefined ? null : number(value.switches, 'Window switches', 0, 1000);
-          if (switches !== null && !Number.isSafeInteger(switches)) throw new Error('Invalid window switches.');
-          if (![end, duration, epoch, ...counts].every(Number.isSafeInteger) || end < duration) throw new Error('Invalid aggregate counters.');
+          const switches = value.switches === undefined ? null : number(value.switches, 'Trocas de janela', 0, 1000);
+          if (switches !== null && !Number.isSafeInteger(switches)) throw new Error('Trocas de janela inválidas.');
+          if (![end, duration, epoch, ...counts].every(Number.isSafeInteger) || end < duration) throw new Error('Contadores agregados inválidos.');
           if (epoch !== this.span?.epoch || !this.span.enabled) continue;
           this.heartbeat = Date.now();
           const packet: Packet = { startMs: this.span.start + end - duration, endMs: this.span.start + end, observedMs: duration, keys: counts[0], clicks: counts[1], scrolls: counts[2], movementMs, inputMs: counts.some(count => count > 0) || movementMs > 0 ? duration : 0, switches };
@@ -87,7 +87,7 @@ export class BehaviourCollector {
     const validated = shortcut(value);
     this.status = { ...this.status, requestedShortcut: validated };
     if (!this.ready) await new Promise<void>(resolve => { this.readyReply = resolve; setTimeout(resolve, 1500); });
-    if (!this.ready) { this.status = { ...this.status, shortcut: 'unavailable', effectiveShortcut: '', shortcutError: validated ? 'Global shortcut unavailable. Use the floating timer.' : undefined }; this.onStatus(); if (!validated) return; throw new Error(this.status.shortcutError); }
+    if (!this.ready) { this.status = { ...this.status, shortcut: 'unavailable', effectiveShortcut: '', shortcutError: validated ? 'Atalho global indisponível. Use o timer flutuante.' : undefined }; this.onStatus(); if (!validated) return; throw new Error(this.status.shortcutError); }
     if (validated === this.appliedShortcut && this.status.shortcut === 'ready') return;
     const parts = validated.split('+'), key = parts.pop() ?? '';
     const modifiers = parts.reduce((sum, part) => sum | ({ Alt: 1, Ctrl: 2, Shift: 4, Win: 8 }[part] ?? 0), 0);
@@ -99,7 +99,7 @@ export class BehaviourCollector {
       this.write(`hotkey ${request} ${modifiers} ${code}`);
     });
     if (!ok) {
-      this.status = { ...this.status, shortcut: this.ready ? 'conflict' : 'unavailable', effectiveShortcut: this.appliedShortcut, shortcutError: 'That shortcut is unavailable or already in use. Change it or choose Retry shortcut.' };
+      this.status = { ...this.status, shortcut: this.ready ? 'conflict' : 'unavailable', effectiveShortcut: this.appliedShortcut, shortcutError: 'Esse atalho está indisponível ou já está em uso. Altere-o ou escolha Tentar atalho novamente.' };
       this.onStatus(); throw new Error(this.status.shortcutError);
     }
     this.appliedShortcut = validated;
@@ -112,23 +112,23 @@ export class BehaviourCollector {
     const snapshot = this.timer.snapshot(), enabled = !!this.store.getSettings().collectActivity;
     if (!snapshot.running || snapshot.mode !== 'focus') {
       if (this.span) { this.write('stop'); this.flush(true); }
-      this.setStatus(enabled ? 'waiting' : 'disabled', enabled ? 'Collection waits for a running focus session.' : 'Activity collection is off.'); return;
+      this.setStatus(enabled ? 'waiting' : 'disabled', enabled ? 'A coleta aguarda uma sessão de foco em andamento.' : 'A coleta de atividade está desativada.'); return;
     }
     if (this.span && this.span.sessionId === snapshot.sessionId && this.span.enabled === enabled) {
       this.startCollection(snapshot.elapsedMs);
-      if (enabled && (!this.ready || Date.now() - this.heartbeat > 2500)) this.setStatus('unavailable', 'No collector heartbeat. Missing periods remain unavailable.');
+      if (enabled && (!this.ready || Date.now() - this.heartbeat > 2500)) this.setStatus('unavailable', 'Sem sinal do coletor. Os períodos ausentes permanecem indisponíveis.');
       return;
     }
     if (this.span) { this.write('stop'); this.flush(true); }
     this.span = { sessionId: snapshot.sessionId!, epoch: ++this.epoch, start: snapshot.elapsedMs, cursor: snapshot.elapsedMs, enabled, ready: false, startRequested: false, packets: [] };
     if (enabled && this.ready) this.startCollection(snapshot.elapsedMs);
-    else this.setStatus(enabled ? 'unavailable' : 'disabled', enabled ? 'Local input helper unavailable.' : 'Activity collection is off.');
+    else this.setStatus(enabled ? 'unavailable' : 'disabled', enabled ? 'Auxiliar de entrada local indisponível.' : 'A coleta de atividade está desativada.');
   }
   private startCollection(elapsedMs: number): void {
     if (!this.span?.enabled || this.span.startRequested || !this.ready) return;
     this.span.start = elapsedMs;
     this.span.startRequested = true;
-    this.setStatus('waiting', 'Starting input collection.');
+    this.setStatus('waiting', 'Iniciando a coleta de entrada.');
     this.write(`start ${this.span.epoch}`);
   }
   async stop(): Promise<void> {
@@ -170,7 +170,7 @@ export class BehaviourCollector {
       }
     })(); } catch (error) { span.cursor = previousCursor; throw error; }
     span.packets = span.packets.filter(packet => packet.endMs > durable && !final);
-    if (final) { this.span = null; this.setStatus(this.store.getSettings().collectActivity ? 'waiting' : 'disabled', 'Collection waits for a running focus session.'); }
+    if (final) { this.span = null; this.setStatus(this.store.getSettings().collectActivity ? 'waiting' : 'disabled', 'A coleta aguarda uma sessão de foco em andamento.'); }
   }
   close(): void { this.closed = true; this.write('stop'); this.child?.stdin.end(); this.child?.kill(); this.child = null; }
 }

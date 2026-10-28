@@ -17,6 +17,6 @@ export function gaugeReadout(elapsedMs: number, plannedMs: number | null): strin
   const elapsed = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
   const turn = Math.min(TURNS, Math.floor(elapsed / TURN_MS));
   const minutes = Math.floor(elapsed / 60000);
-  const plan = planTurns(plannedMs) === null ? '' : ` of ${Math.round(plannedMs! / 60000)}`;
-  return `turn ${turn} of ${TURNS} · ${minutes}${plan} min`;
+  const plan = planTurns(plannedMs) === null ? '' : ` de ${Math.round(plannedMs! / 60000)}`;
+  return `volta ${turn} de ${TURNS} · ${minutes}${plan} min`;
 }

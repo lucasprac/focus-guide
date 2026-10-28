@@ -1,5 +1,9 @@
 # Release notes
 
+## Unreleased — Brazilian Portuguese interface
+
+- **The app is now in Brazilian Portuguese (pt-BR).** All visible texts are translated: pages, floating timer, tray, notifications, dialogs, error messages, Insights, the tutorial and the demo data. Dates and numbers use the pt-BR locale. Stored values (activity modes, interruption categories, weekday keys, goal and occurrence statuses, palette ids), IPC command names, MCP tool names, CSV column headers and the backup format stay in English; the interface shows labels for them (`src/shared/labels.ts`). No schema or backup format change.
+
 ## Unreleased (3.1.2) — session preparation answers
 
 - **I'm already warm.** In Focus > **Optional details**, you can answer **Yes**, **Kind of** or **No** before a session.
