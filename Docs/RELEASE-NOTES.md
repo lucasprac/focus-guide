@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased (3.2.2) — Clearer Behaviour card
+
+- **Behaviour card** (Calendar and the session review). The activity mode is a badge above the explanation. The totals are small tiles with the number on top. The marker, phase and axis rows now end where the columns end.
+- **Legend.** The long line of symbols is now two labelled rows, **Columns** (with a sample of each column style) and **Markers** (each symbol with its name), and a short line about the phases. Reported returns are separated by a rule.
+- The pt-BR catalog has the new legend texts. Three texts that only the old legend used are removed. No change to data or commands.
+
 ## Unreleased (3.2.1) — Clearer day details in Calendar
 
 - **Selected day.** Each session shows a larger title with an aligned time, the intention in normal text colour, and the recorded time and focus rating separated by a dot. All lines start under the title text. Notes have a side rule, and thoughts align with their icon.
