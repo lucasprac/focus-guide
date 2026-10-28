@@ -1,8 +1,11 @@
 # Release notes
 
-## Unreleased — Brazilian Portuguese interface
+## Unreleased — Optional Brazilian Portuguese interface; English remains default
 
-- **The app is now in Brazilian Portuguese (pt-BR).** All visible texts are translated: pages, floating timer, tray, notifications, dialogs, error messages, Insights, the tutorial and the demo data. Dates and numbers use the pt-BR locale. Stored values (activity modes, interruption categories, weekday keys, goal and occurrence statuses, palette ids), IPC command names, MCP tool names, CSV column headers and the backup format stay in English; the interface shows labels for them (`src/shared/labels.ts`). No schema or backup format change.
+- **Language setting.** Settings > **Language** offers **English** (default) and **Português (Brasil)**. The interface, tray, notifications, dialogs, error messages, Insights, the tutorial and the date and number format change when you save your preferences. In English the app is unchanged.
+- **How it works.** Texts go through `t(...)` in `src/shared/i18n.ts`; the English text is the key and the Portuguese catalog is `src/shared/locales/pt-BR.ts`. `src/shared/labels.ts` shows labels for values that stay English in the database (activity modes, interruption categories, weekdays, goal and occurrence statuses).
+- **Stays in English.** Stored values, IPC command names, MCP tool names and texts, CSV column headers, backup keys and the demo data of English installs.
+- **No migration.** `settings.language` is optional; when it is absent the language is English. English backups do not contain the field, and backups without it restore as English. Older app versions ignore the key.
 
 ## Unreleased (3.1.2) — session preparation answers
 

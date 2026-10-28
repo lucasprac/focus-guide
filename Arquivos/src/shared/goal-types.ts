@@ -1,4 +1,5 @@
 import type { ActivityMode } from './types';
+import { t } from './i18n';
 
 export type GoalStatus = 'draft' | 'active' | 'paused' | 'achieved' | 'archived';
 export type GoalBarrier = 'capability' | 'opportunity' | 'motivation' | 'other';
@@ -64,7 +65,7 @@ export const LEGACY_GOAL_COLLECTIONS = ['goals', 'milestones', 'goalActions', 'g
 export const V8_GOAL_COLLECTIONS = [...LEGACY_GOAL_COLLECTIONS, 'agentProposals'] as const;
 export const GOAL_COLLECTIONS = [...V8_GOAL_COLLECTIONS, 'agentChanges'] as const;
 export function goalData(data: Partial<GoalData>): GoalData { return Object.fromEntries(GOAL_COLLECTIONS.map(key => [key, data[key] ?? []])) as unknown as GoalData; }
-export const WHY_TAG_SUGGESTIONS = ['Saúde', 'Aprendizado', 'Carreira', 'Finanças', 'Relacionamentos', 'Família', 'Bem-estar', 'Criatividade', 'Independência', 'Contribuição', 'Confiança', 'Prazer'];
+export const whyTagSuggestions = () => [t('Health'), t('Learning'), t('Career'), t('Finances'), t('Relationships'), t('Family'), t('Wellbeing'), t('Creativity'), t('Independence'), t('Contribution'), t('Confidence'), t('Enjoyment')];
 export const WHY_TAG_LIMITS = { count: 12, length: 40 };
 export function sortMilestones<T extends Pick<GoalMilestone, 'position' | 'createdAt' | 'id'>>(rows: T[]): T[] { return [...rows].sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)); }
 /* Schema 5 added goal reason tags and milestone order. Older records keep their free-text reason

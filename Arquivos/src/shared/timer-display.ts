@@ -1,4 +1,5 @@
 import type { TimerSnapshot } from './types';
+import { t } from './i18n';
 
 export function displayedTime(timer: TimerSnapshot): number {
   return timer.phase === 'stopwatch' ? countedTime(timer.elapsedMs) : timer.phase === 'overtime' ? countedTime(timer.overtimeMs) : timer.remainingMs;
@@ -6,7 +7,7 @@ export function displayedTime(timer: TimerSnapshot): number {
 // Count-up clocks display completed seconds; countdowns retain their ceil convention.
 export function countedTime(elapsedMs: number): number { return Math.floor(Math.max(0, elapsedMs) / 1000) * 1000; }
 export function timerLabel(timer: TimerSnapshot): string {
-  return timer.phase === 'stopwatch' ? 'Tempo registrado' : timer.phase === 'overtime' ? 'Tempo extra' : 'Tempo restante';
+  return timer.phase === 'stopwatch' ? t('Recorded time') : timer.phase === 'overtime' ? t('Overtime') : t('Time remaining');
 }
 export function visualDuration(timer: TimerSnapshot): number { return timer.plannedMs ?? 60 * 60000; }
 export function visualProgress(timer: TimerSnapshot): number {

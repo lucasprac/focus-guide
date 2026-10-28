@@ -1,6 +1,7 @@
 import { Children, cloneElement, isValidElement, useId, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { Dialog, AlertDialog, Select, Switch, Checkbox, Collapsible, ToggleGroup, Tooltip, Tabs as RadixTabs } from 'radix-ui';
 import { Icon, type IconName } from './icons';
+import { t } from '../../shared/i18n';
 
 type Change<T> = { target: T };
 interface ChoiceProps {
@@ -100,10 +101,10 @@ export function Overlay({ open, title, children, onClose, wide = false, destruct
     },
     onEscapeKeyDown: (event: KeyboardEvent) => { if (busy) event.preventDefault(); }
   };
-  const closeButton = <button type="button" disabled={busy} className="icon-button modal-close" onClick={onClose} aria-label="Fechar caixa de diálogo"><Icon name="close" size={20} /></button>;
+  const closeButton = <button type="button" disabled={busy} className="icon-button modal-close" onClick={onClose} aria-label={t('Close dialog')}><Icon name="close" size={20} /></button>;
   if (destructive) return <AlertDialog.Root open={open} onOpenChange={next => { if (!next && !busy) onClose(); }}>
     <AlertDialog.Portal><AlertDialog.Overlay className="modal-shade" /><AlertDialog.Content {...contentProps}>
-      {closeButton}<AlertDialog.Title>{title}</AlertDialog.Title><AlertDialog.Description className="sr-only">{description ?? 'Revise as consequências antes de continuar.'}</AlertDialog.Description>{open ? children : lastContent.current}
+      {closeButton}<AlertDialog.Title>{title}</AlertDialog.Title><AlertDialog.Description className="sr-only">{description ?? t('Review the consequences before continuing.')}</AlertDialog.Description>{open ? children : lastContent.current}
     </AlertDialog.Content></AlertDialog.Portal>
   </AlertDialog.Root>;
   return <Dialog.Root open={open} onOpenChange={next => { if (!next && !busy) onClose(); }}>
@@ -188,7 +189,7 @@ export function Field({ label, hint, error, optional = false, children, classNam
   const describedBy = cn(hint ? hintId : null, error ? errorId : null) || undefined;
   const control = isValidElement(children) ? cloneElement(children, { id: (children.props.id as string | undefined) ?? id, 'aria-describedby': describedBy, 'aria-invalid': error ? true : undefined }) : children;
   return <div className={cn('field my-3 grid gap-2', className)}>
-    <label htmlFor={(children.props.id as string | undefined) ?? id} className="text-label font-medium text-ink">{label}{optional && <span className="ml-2 text-caption font-normal text-ink-muted">opcional</span>}</label>
+    <label htmlFor={(children.props.id as string | undefined) ?? id} className="text-label font-medium text-ink">{label}{optional && <span className="ml-2 text-caption font-normal text-ink-muted">{t('optional')}</span>}</label>
     {control}
     {hint && <span id={hintId} className="text-caption text-ink-muted">{hint}</span>}
     {error && <span id={errorId} className="text-caption text-danger">{error}</span>}
@@ -220,9 +221,9 @@ export function EmptyState({ title, children, action, icon = 'spark' }: { title:
 export function useDiscardGuard(dirty: boolean, onClose: () => void) {
   const [asking, setAsking] = useState(false);
   const requestClose = () => { if (dirty) setAsking(true); else onClose(); };
-  const discardDialog = <Overlay open={asking} destructive title="Descartar suas alterações?" description="Suas edições neste formulário não foram salvas." onClose={() => setAsking(false)}>
-    <p className="modal-intro">O que você preencheu neste formulário ainda não foi salvo.</p>
-    <div className="modal-actions"><Button onClick={() => setAsking(false)}>Continuar editando</Button><Button variant="danger" onClick={() => { setAsking(false); onClose(); }}>Descartar</Button></div>
+  const discardDialog = <Overlay open={asking} destructive title={t('Discard your changes?')} description={t('Your edits in this form have not been saved.')} onClose={() => setAsking(false)}>
+    <p className="modal-intro">{t('What you entered in this form has not been saved yet.')}</p>
+    <div className="modal-actions"><Button onClick={() => setAsking(false)}>{t('Keep editing')}</Button><Button variant="danger" onClick={() => { setAsking(false); onClose(); }}>{t('Discard')}</Button></div>
   </Overlay>;
   return { requestClose, discardDialog };
 }
@@ -237,21 +238,21 @@ export function TagPicker({ value, onChange, suggestions, limit, maxLength, labe
   const add = () => {
     const typed = draft.replace(/\s+/g, ' ').trim().slice(0, maxLength); if (!typed) return;
     const tag = suggestions.find(s => same(s, typed)) ?? typed;
-    if (value.some(t => same(t, tag))) { setMessage(`${tag} já foi escolhida.`); return; }
-    if (value.length >= limit) { setMessage(`Escolha até ${limit} marcadores.`); return; }
+    if (value.some(t => same(t, tag))) { setMessage(t('{tag} is already chosen.', { tag })); return; }
+    if (value.length >= limit) { setMessage(t('Choose up to {limit} tags.', { limit })); return; }
     onChange([...value, tag]); setDraft(''); setMessage('');
   };
   const custom = value.filter(t => !suggestions.includes(t));
   return <div className="tag-picker">
     <ToggleGroup.Root type="multiple" aria-label={label} disabled={disabled} className="tag-options" value={value.filter(t => suggestions.includes(t))} onValueChange={next => {
       const added = next.filter(t => !value.includes(t));
-      if (added.length && value.length >= limit) { setMessage(`Escolha até ${limit} marcadores.`); return; }
+      if (added.length && value.length >= limit) { setMessage(t('Choose up to {limit} tags.', { limit })); return; }
       onChange([...value.filter(t => next.includes(t) || !suggestions.includes(t)), ...added]); setMessage('');
     }}>
       {suggestions.map(tag => <ToggleGroup.Item key={tag} value={tag} className="tag-chip">{tag}</ToggleGroup.Item>)}
-      {custom.map(tag => <span key={tag} className="tag-chip custom" data-state="on">{tag}<button type="button" disabled={disabled} aria-label={`Remover marcador: ${tag}`} onClick={() => onChange(value.filter(t => t !== tag))}><Icon name="close" size={14} /></button></span>)}
+      {custom.map(tag => <span key={tag} className="tag-chip custom" data-state="on">{tag}<button type="button" disabled={disabled} aria-label={t('Remove tag: {tag}', { tag })} onClick={() => onChange(value.filter(t => t !== tag))}><Icon name="close" size={14} /></button></span>)}
     </ToggleGroup.Root>
-    <div className="tag-add"><input aria-label="Adicionar seu próprio marcador" placeholder="Adicione o seu…" maxLength={maxLength} disabled={disabled} value={draft} onChange={e => { setDraft(e.target.value); setMessage(''); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} /><Button size="sm" disabled={disabled || !draft.trim()} onClick={add}>Adicionar marcador</Button></div>
-    <span className="hint" role="status">{message || `${value.length} de ${limit} escolhidos`}</span>
+    <div className="tag-add"><input aria-label={t('Add your own tag')} placeholder={t('Add your own…')} maxLength={maxLength} disabled={disabled} value={draft} onChange={e => { setDraft(e.target.value); setMessage(''); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} /><Button size="sm" disabled={disabled || !draft.trim()} onClick={add}>{t('Add tag')}</Button></div>
+    <span className="hint" role="status">{message || t('{length} of {limit} chosen', { length: value.length, limit })}</span>
   </div>;
 }

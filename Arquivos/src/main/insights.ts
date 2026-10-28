@@ -3,6 +3,7 @@ import type { Worker } from 'node:worker_threads';
 import createWorker from './insights-worker?nodeWorker';
 import type { ActivitySample, Dataset } from '../shared/types';
 import type { InsightOptions } from '../shared/focus-insights';
+import { t } from '../shared/i18n';
 
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
 /** Runs insights.read computations on one worker thread, started on first use. A crashed worker fails its pending requests and is replaced on the next one. */
@@ -14,7 +15,7 @@ export class InsightsWorker {
     const worker = this.worker ?? this.start(), id = this.next++;
     return new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); worker.postMessage({ id, data, activity, options }); });
   }
-  stop(): void { const worker = this.worker; this.worker = null; this.fail(new Error('O Focus Guide está fechando.')); void worker?.terminate(); }
+  stop(): void { const worker = this.worker; this.worker = null; this.fail(new Error(t('Focus Guide is closing.'))); void worker?.terminate(); }
   private start(): Worker {
     const worker = createWorker({});
     worker.on('message', ({ id, ok, value, error }: { id: number; ok: boolean; value?: unknown; error?: string }) => {
@@ -23,7 +24,7 @@ export class InsightsWorker {
     });
     const lost = (error: Error) => { if (this.worker !== worker) return; this.worker = null; this.fail(error); };
     worker.on('error', lost);
-    worker.on('exit', code => lost(new Error(`O motor de insights parou (código ${code}). Tente novamente.`)));
+    worker.on('exit', code => lost(new Error(t('The insights engine stopped (code {code}). Try again.', { code }))));
     worker.unref();
     return this.worker = worker;
   }

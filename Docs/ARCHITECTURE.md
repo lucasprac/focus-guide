@@ -1,5 +1,15 @@
 # Architecture — Focus Guide 2.0
 
+## Interface language (unreleased)
+
+The default language is English. Brazilian Portuguese is optional through `settings.language` (`en` or `pt-BR`, absent = `en`; no schema bump, see the [data dictionary](DATA-DICTIONARY.md)).
+
+- `src/shared/i18n.ts` holds `Language`, `setLanguage`, `getLanguage`, `dateLocale`, `t(key, params)` and `tc(context, key, params)`. The key is the English text and also the fallback, so a missing entry shows English. `{name}` is interpolated. A text with `a|b` and a numeric `count` parameter is a plural: `a` when `count === 1`, else `b`. `tc` looks up a context-specific entry first for words that translate differently in different places.
+- `src/shared/locales/pt-BR.ts` is the catalog. `src/shared/labels.ts` returns labels for values stored in English; in English it returns the value unchanged.
+- Each process has its own language state. Main calls `setLanguage` after loading the store and in `state()` after every change, so the tray and dialogs follow. The renderer calls it from `AppState.settings.language` and remounts the shell with `key={language}`. The Insights worker receives `language` in its job options and the Insights cache key includes the language.
+- Module-level texts are functions or getters, because `t()` must run after the language is set. Validation messages are translated in main; `ROADMAP_CHANGED` stays an English sentinel because callers compare it by value.
+- Not translated: IPC and MCP names and texts, backup keys, CSV headers, persisted values.
+
 ## Session preparation answers (schema 11, unreleased)
 
 - A session has the optional `warmUp` (`yes`, `kind-of`, `no`) and `medication` (`yes`, `no`) answers. The renderer sends them with `session.start`. The main process validates them in `src/shared/validation.ts`.

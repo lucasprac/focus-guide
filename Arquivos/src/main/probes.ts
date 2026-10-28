@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FocusSession, PendingProbe, TimerSnapshot } from '../shared/types';
+import { t } from '../shared/i18n';
 
 export interface ProbeOptions { firstMinMs: number; firstMaxMs: number; gapMinMs: number; gapMaxMs: number; timeoutMs: number; endGuardMs: number; maxPerSession: number }
 export const DEFAULT_PROBE_OPTIONS: ProbeOptions = { firstMinMs: 8 * 60000, firstMaxMs: 20 * 60000, gapMinMs: 15 * 60000, gapMaxMs: 35 * 60000, timeoutMs: 45000, endGuardMs: 5 * 60000, maxPerSession: 6 };
@@ -51,7 +52,7 @@ export class ProbeScheduler {
   /** Clears the pending check-in. The caller saves the answer with the returned offset and latency. */
   answer(id: string): { offsetMs: number; latencyMs: number } {
     const latencyMs = this.clock.monotonic() - this.shownAt;
-    if (!this.current || this.current.id !== id || latencyMs >= this.options.timeoutMs) throw new Error('Este check-in expirou.');
+    if (!this.current || this.current.id !== id || latencyMs >= this.options.timeoutMs) throw new Error(t('This check-in has expired.'));
     this.clear();
     return { offsetMs: this.offsetMs, latencyMs: Math.max(0, Math.round(latencyMs)) };
   }

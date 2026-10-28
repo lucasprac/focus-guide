@@ -5,14 +5,15 @@ import { durationSuggestion } from './goal-planning';
 import { goalData } from './goal-types';
 import { activityModeLabel } from './labels';
 import { Z90, collinearity, differenceInterval, kMeans, kaplanMeier, meanInterval, mulberry32, penalizedFit, penalizedSelect, quantile, ridgeFit, ridgeSelect, silhouettes, t90, zUpper } from './insight-stats';
+import { t, type Language } from './i18n';
 
 /* Personal insight engine: processing rules, analyses and suggestions over the selected sessions.
    The main process runs it for `insights.read`; the renderer runs it for the example dataset. It is pure
    and deterministic. Drift = an attention-return or an interruption; probe answers count only as offTaskShare. */
-export const INSIGHTS_LIMITS_NOTE = 'Padrões nos seus próprios registros, com intervalos que mostram a incerteza. Autoavaliações e marcadores descrevem o que você relatou; não são medidas de atenção. Você escolhe quando focar, então associações não estabelecem causas. Relatos ausentes permanecem desconhecidos.';
-export const DETRACTOR_LABELS: Record<Detractor, string> = { none: 'Nada de notável', notifications: 'Celular ou notificações', people: 'Pessoas ou barulho', thoughts: 'Pensamentos dispersos', tiredness: 'Cansaço ou fome', task: 'Tarefa confusa ou difícil demais', other: 'Outra coisa' };
-export const CHALLENGE_LABELS: Record<Challenge, string> = { 'too-easy': 'Fácil demais', right: 'Na medida', 'too-hard': 'Difícil demais' };
-export const PROBE_ANSWER_LABELS: Record<ProbeAnswer, string> = { 'on-task': 'Na tarefa', drifting: 'Divagando', elsewhere: 'Em outro lugar' };
+export const insightsLimitsNote = () => t('Patterns in your own records, with intervals that show their uncertainty. Self-ratings and markers describe what you reported; they are not measures of attention. You choose when to focus, so associations do not establish causes. Missing reports stay unknown.');
+export const DETRACTOR_LABELS: Record<Detractor, string> = { get none() { return t('Nothing notable'); }, get notifications() { return t('Phone or notifications'); }, get people() { return t('People or noise'); }, get thoughts() { return t('Wandering thoughts'); }, get tiredness() { return t('Tiredness or hunger'); }, get task() { return t('Unclear or too hard task'); }, get other() { return t('Something else'); } };
+export const CHALLENGE_LABELS: Record<Challenge, string> = { get 'too-easy'() { return t('Too easy'); }, get right() { return t('About right'); }, get 'too-hard'() { return t('Too hard'); } };
+export const PROBE_ANSWER_LABELS: Record<ProbeAnswer, string> = { get 'on-task'() { return t('On the task'); }, get drifting() { return t('Drifting'); }, get elsewhere() { return t('Somewhere else'); } };
 /* Processing rules, eligibility and suggestion thresholds of the design (sections 6, 7 and 12). focusGap: the smallest mean-focus difference a window, detractor or challenge suggestion reports. */
 export const INSIGHT_THRESHOLDS = {
   longSessionMs: 8 * 3600000, minObservedMs: 30000, returnVersion: 3, inputVersion: 4,
@@ -137,12 +138,26 @@ export interface FocusInsights {
   states: StatesSection; detractors: DetractorsSection; model: FocusModelSection; cycleComparison: CycleComparisonSection;
   recommendations: Recommendation[]; note: string;
 }
-export interface InsightOptions { from: string; to: string; fieldId?: string; goalId?: string; now?: number }
+/* language: the language of the generated texts; the worker thread has its own i18n state and sets it from here. */
+export interface InsightOptions { from: string; to: string; fieldId?: string; goalId?: string; now?: number; language?: Language }
 
 const T = INSIGHT_THRESHOLDS;
 const known = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
-const WORDS: Record<string, [string, string]> = { session: ['sessão', 'sessões'], 'rated session': ['sessão avaliada', 'sessões avaliadas'], 'later session': ['sessão posterior', 'sessões posteriores'], drift: ['divagação', 'divagações'], marker: ['marcador', 'marcadores'], minute: ['minuto', 'minutos'], day: ['dia', 'dias'], hour: ['hora', 'horas'] };
-export const plural = (n: number, word: string) => `${n} ${(WORDS[word] ?? [word, `${word}s`])[n === 1 ? 0 : 1]}`;
+/* The word counted by plural(): "1 session", "2 sessions". Another language translates the singular|plural pair. */
+function pluralWord(word: string, count: number): string {
+  switch (word) {
+    case 'session': return t('session|sessions', { count });
+    case 'rated session': return t('rated session|rated sessions', { count });
+    case 'later session': return t('later session|later sessions', { count });
+    case 'drift': return t('drift|drifts', { count });
+    case 'marker': return t('marker|markers', { count });
+    case 'minute': return t('minute|minutes', { count });
+    case 'day': return t('day|days', { count });
+    case 'hour': return t('hour|hours', { count });
+    default: return count === 1 ? word : `${word}s`;
+  }
+}
+export const plural = (n: number, word: string) => `${n} ${pluralWord(word, n)}`;
 const one = (v: number) => v.toFixed(1), whole = (v: number) => String(Math.round(v)), percent = (v: number) => `${Math.round(v * 100)}%`;
 const spanOf = (days: string[]) => { if (!days.length) return 0; const sorted = [...days].sort(); return Math.round((Date.parse(sorted[sorted.length - 1]) - Date.parse(sorted[0])) / 86400000) + 1; };
 function push<K, V>(map: Map<K, V[]>, key: K, value: V): void { const rows = map.get(key); if (rows) rows.push(value); else map.set(key, [value]); }
@@ -199,13 +214,13 @@ function qualityOf(facts: Facts[], droppedLong: number, droppedMarkers: number):
   let short = 0, unmeasured = 0;
   for (const f of facts) for (const a of f.rows) if (a.observedMs < T.minObservedMs) short++; else if (f.version < T.inputVersion || !known(a.inputMs)) unmeasured++;
   const notes = [
-    droppedLong ? `Sessões com mais de ${T.longSessionMs / 3600000} horas ativas ficam de fora (${plural(droppedLong, 'session')}).` : '',
-    recovered ? `Sessões recuperadas ficam de fora da duração da atenção e do formato da sessão (${plural(recovered, 'session')}).` : '',
-    old ? `Sessões registradas antes de existir o Voltei ficam de fora das taxas de divagação, da duração da atenção e do formato da sessão; suas interrupções ainda contam por categoria (${plural(old, 'session')}).` : '',
-    droppedMarkers ? `Marcadores posteriores ao fim da sessão ficam de fora (${plural(droppedMarkers, 'marker')}).` : '',
-    short ? `Minutos de atividade com menos de ${T.minObservedMs / 1000} s observados ficam de fora dos estados de interação (${plural(short, 'minute')}).` : '',
-    unmeasured ? `Minutos de atividade registrados antes de existir o tempo de entrada ficam de fora dos estados de interação (${plural(unmeasured, 'minute')}).` : '',
-    probeSessions ? `${plural(probeSessions, 'session')} tiveram check-ins de atenção, que também interrompem um pouco.` : ''
+    droppedLong ? t('Sessions longer than {v1} active hours are left out ({plural}).', { v1: T.longSessionMs / 3600000, plural: plural(droppedLong, 'session') }) : '',
+    recovered ? t('Recovered sessions are left out of attention span and session shape ({plural}).', { plural: plural(recovered, 'session') }) : '',
+    old ? t('Sessions recorded before I\'m back existed are left out of drift rates, attention span and session shape; their interruptions still count by category ({plural}).', { plural: plural(old, 'session') }) : '',
+    droppedMarkers ? t('Markers after the end of their session are left out ({plural}).', { plural: plural(droppedMarkers, 'marker') }) : '',
+    short ? t('Activity minutes with less than {v1} s observed are left out of interaction states ({plural}).', { v1: T.minObservedMs / 1000, plural: plural(short, 'minute') }) : '',
+    unmeasured ? t('Activity minutes recorded before input time existed are left out of interaction states ({plural}).', { plural: plural(unmeasured, 'minute') }) : '',
+    probeSessions ? t('{plural} had attention check-ins, which also interrupt a little.', { plural: plural(probeSessions, 'session') }) : ''
   ].filter(Boolean);
   return { sessions: n, activeMinutes: facts.reduce((sum, f) => sum + f.s.activeMs, 0) / 60000, spanDays: spanOf(facts.map(f => f.day)),
     ratedShare: n ? ratingsOf(facts).length / n : null, reflectionShare: n ? facts.filter(f => f.s.detractor != null || f.s.challenge != null).length / n : null,
@@ -225,7 +240,7 @@ function ratesOf(rows: Facts[], minimum: number): { driftPerHour: number | null;
 
 function rhythmSection(facts: Facts[]): RhythmSection {
   const R = T.rhythm, rated = ratingsOf(facts).length;
-  if (rated < R.ratedSessions) return { eligible: false, n: rated, reason: `Avalie pelo menos ${R.ratedSessions} sessões para ver quando você foca melhor (${rated} até agora).`, hours: [], grid: [] };
+  if (rated < R.ratedSessions) return { eligible: false, n: rated, reason: t('Rate at least {ratedSessions} sessions to see when you focus best ({rated} so far).', { ratedSessions: R.ratedSessions, rated }), hours: [], grid: [] };
   const kernel = (a: number, b: number) => { const d = Math.abs(a - b), c = Math.min(d, 24 - d); return Math.exp(-c * c / (2 * R.bandwidthHours ** 2)); };
   const hours = Array.from({ length: 24 }, (_, hour): HourPoint => {
     let w = 0, w2 = 0, wy = 0, wy2 = 0, dw = 0, drifts = 0, exposure = 0, sw = 0, switches = 0, switchHours = 0, pw = 0, offTask = 0, answered = 0;
@@ -248,7 +263,7 @@ function rhythmSection(facts: Facts[]): RhythmSection {
     const cell = facts.filter(f => f.weekday === weekday && f.band === b), ratings = ratingsOf(cell);
     return { weekday, band: band.label, sessions: cell.length, focusMean: ratings.length >= R.cellSessions ? mean(ratings) : null, driftPerHour: ratesOf(cell, R.cellSessions).driftPerHour };
   }));
-  return { eligible: true, n: rated, reason: `Foco percebido por hora de início, suavizado em cerca de ${R.bandwidthHours} horas, com intervalos de 90%. Uma hora aparece quando as sessões próximas pesam pelo menos ${R.hourWeight}; uma célula da grade precisa de ${R.cellSessions} sessões.`, hours, grid };
+  return { eligible: true, n: rated, reason: t('Perceived focus by start hour, smoothed over about {bandwidthHours} hours, with 90% intervals. An hour appears when nearby sessions weigh at least {hourWeight}; a grid cell needs {cellSessions} sessions.', { bandwidthHours: R.bandwidthHours, hourWeight: R.hourWeight, cellSessions: R.cellSessions }), hours, grid };
 }
 
 /* Kaplan–Meier curve of active minutes to an event; `sessions` is the number of sessions the times come from. */
@@ -261,15 +276,15 @@ function survivalOf(label: string, times: Array<{ time: number; event: boolean }
     if (last && key === bucket) Object.assign(last, { survival: p.survival, low: p.low, high: p.high });
     else { points.push({ minute: p.time, survival: p.survival, low: p.low, high: p.high, atRisk: p.atRisk }); bucket = key; }
   }
-  const end = Math.max(...times.map(t => t.time)), last = points[points.length - 1];
-  if (end > last.minute) points.push({ ...last, minute: end, atRisk: times.filter(t => t.time >= end).length });
-  return { label, sessions, events: times.filter(t => t.event).length, median: km.median, medianOpen: !km.points.some(p => p.high <= 0.5), points };
+  const end = Math.max(...times.map(tk => tk.time)), last = points[points.length - 1];
+  if (end > last.minute) points.push({ ...last, minute: end, atRisk: times.filter(tk => tk.time >= end).length });
+  return { label, sessions, events: times.filter(tk => tk.event).length, median: km.median, medianOpen: !km.points.some(p => p.high <= 0.5), points };
 }
 const survivalCurve = (label: string, rows: Facts[]) => survivalOf(label, rows.map(f => ({ time: (f.drifts[0] ?? f.s.activeMs) / 60000, event: f.drifts.length > 0 })), rows.length);
 
 /* Warm-up, sustain and fatigue: drifts and off-task check-ins over the active time each phase covers. A rate needs phaseSessions sessions that reached the phase. */
 function phasesOf(base: Facts[]): PhaseRate[] {
-  const A = T.attentionSpan, cuts = [0, A.warmUpMinutes, A.fatigueMinutes], defs = [{ id: 'warm-up', label: 'Aquecimento' }, { id: 'sustain', label: 'Sustentação' }, { id: 'fatigue', label: 'Fadiga' }] as const;
+  const A = T.attentionSpan, cuts = [0, A.warmUpMinutes, A.fatigueMinutes], defs = [{ id: 'warm-up', label: t('Warm-up') }, { id: 'sustain', label: t('Sustain') }, { id: 'fatigue', label: t('Fatigue') }] as const;
   return defs.map((def, i): PhaseRate => {
     const from = cuts[i] * 60000, to = i < 2 ? cuts[i + 1] * 60000 : Infinity;
     let sessions = 0, exposureMs = 0, drifts = 0, answered = 0, offTask = 0;
@@ -295,15 +310,15 @@ function recoveryTimes(base: Facts[]): Array<{ time: number; event: boolean }> {
 }
 function attentionSpanSection(base: Facts[]): AttentionSpanSection {
   const A = T.attentionSpan, events = base.filter(f => f.drifts.length).length;
-  if (base.length < A.sessions || events < A.events) return { eligible: false, n: base.length, reason: `Precisa de ${A.sessions} sessões registradas com o Voltei e ${A.events} primeiras divagações (${plural(base.length, 'session')}, ${plural(events, 'drift')} até agora).`, overall: null, recovery: null, phases: [], warmUpFriction: false, afterWarmUp: null, byBand: [], byMode: [] };
+  if (base.length < A.sessions || events < A.events) return { eligible: false, n: base.length, reason: t('Needs {sessions} sessions recorded with I\'m back and {events} first drifts ({plural}, {plural2} so far).', { sessions: A.sessions, events: A.events, plural: plural(base.length, 'session'), plural2: plural(events, 'drift') }), overall: null, recovery: null, phases: [], warmUpFriction: false, afterWarmUp: null, byBand: [], byMode: [] };
   const group = (label: string, rows: Facts[]) => rows.length >= A.groupSessions && rows.filter(f => f.drifts.length).length >= A.groupEvents ? [survivalCurve(label, rows)] : [];
   const phases = phasesOf(base), [warm, sustain] = phases, warmUpFriction = warm.driftPerHour !== null && sustain.driftPerHour !== null && warm.drifts >= A.warmupDrifts && warm.driftPerHour >= A.warmupRatio * sustain.driftPerHour;
   const recovery = recoveryTimes(base), recoveryEvents = recovery.filter(r => r.event).length;
   // Past the warm-up, a drift before it is ignored: the clock still runs from the start of the session.
   const lasting = base.filter(f => f.s.activeMs > A.warmUpMinutes * 60000), afterWarmUp = warmUpFriction && lasting.length >= A.groupSessions
-    ? survivalOf('Após o aquecimento', lasting.map(f => { const first = f.drifts.find(d => d >= A.warmUpMinutes * 60000); return { time: (first ?? f.s.activeMs) / 60000, event: first !== undefined }; }), lasting.length) : null;
-  return { eligible: true, n: base.length, reason: `Tempo ativo até o primeiro Voltei ou interrupção. Uma sessão sem nenhum conta até terminar. As curvas de grupo precisam de ${A.groupSessions} sessões e ${A.groupEvents} divagações.`,
-    overall: survivalCurve('Todas as sessões', base), recovery: recoveryEvents >= A.recoveryEvents ? survivalOf('Após um retorno', recovery, base.filter(f => f.drifts.length).length) : null, phases, warmUpFriction,
+    ? survivalOf(t('After the warm-up'), lasting.map(f => { const first = f.drifts.find(d => d >= A.warmUpMinutes * 60000); return { time: (first ?? f.s.activeMs) / 60000, event: first !== undefined }; }), lasting.length) : null;
+  return { eligible: true, n: base.length, reason: t('Active time until the first I\'m back or interruption. A session without one counts until it ends. Group curves need {groupSessions} sessions and {groupEvents} drifts.', { groupSessions: A.groupSessions, groupEvents: A.groupEvents }),
+    overall: survivalCurve(t('All sessions'), base), recovery: recoveryEvents >= A.recoveryEvents ? survivalOf(t('After a return'), recovery, base.filter(f => f.drifts.length).length) : null, phases, warmUpFriction,
     afterWarmUp: afterWarmUp && afterWarmUp.events >= A.groupEvents ? afterWarmUp : null,
     byBand: TIME_BANDS.flatMap((band, b) => group(band.label, base.filter(f => f.band === b))), byMode: ACTIVITY_MODES.flatMap(mode => group(activityModeLabel(mode), base.filter(f => f.mode === mode))) };
 }
@@ -348,25 +363,25 @@ function preDriftOf(base: Facts[]): PreDrift {
     }
   }
   const per = (count: number, ms: number) => ms > 0 ? count / (ms / 60000) : null, share = (count: number, ms: number) => ms > 0 ? Math.min(1, count / ms) : null;
-  if (drifts < S.preDriftEvents) return { eligible: false, drifts, windowMinutes: S.preDriftMinutes, preSwitchesPerMinute: null, baselineSwitchesPerMinute: null, preInputShare: null, baselineInputShare: null, reason: `Precisa de ${S.preDriftEvents} divagações com atividade observada nos ${S.preDriftMinutes} minutos anteriores a elas (${drifts} até agora).` };
+  if (drifts < S.preDriftEvents) return { eligible: false, drifts, windowMinutes: S.preDriftMinutes, preSwitchesPerMinute: null, baselineSwitchesPerMinute: null, preInputShare: null, baselineInputShare: null, reason: t('Needs {preDriftEvents} drifts with activity observed in the {preDriftMinutes} minutes before them ({drifts} so far).', { preDriftEvents: S.preDriftEvents, preDriftMinutes: S.preDriftMinutes, drifts }) };
   return { eligible: true, drifts, windowMinutes: S.preDriftMinutes, preSwitchesPerMinute: per(pre.switches, pre.switchMs), baselineSwitchesPerMinute: per(rest.switches, rest.switchMs), preInputShare: share(pre.input, pre.inputMs), baselineInputShare: share(rest.input, rest.inputMs),
-    reason: `Os ${S.preDriftMinutes} minutos ativos antes de ${plural(drifts, 'drift')} comparados aos demais minutos observados das mesmas sessões.` };
+    reason: t('The {preDriftMinutes} active minutes before {plural} against the other observed minutes of the same sessions.', { preDriftMinutes: S.preDriftMinutes, plural: plural(drifts, 'drift') }) };
 }
 
 function sessionShapeSection(base: Facts[], blocks: Block[]): SessionShapeSection {
   const S = T.sessionShape, withActivity = base.filter(f => f.rows.some(a => a.observedMs >= T.minObservedMs)).length;
-  if (withActivity < S.sessions) return { eligible: false, n: withActivity, reason: `Precisa de ${S.sessions} sessões com a coleta de atividade ligada (${withActivity} até agora).`, points: [], preDrift: preDriftOf([]) };
-  return { eligible: true, n: withActivity, reason: `Blocos de ${S.blockMinutes} minutos ativos, até ${S.maxMinutes} minutos. Um bloco aparece enquanto pelo menos ${S.blockSessions} sessões ainda estiverem em andamento.`,
+  if (withActivity < S.sessions) return { eligible: false, n: withActivity, reason: t('Needs {sessions} sessions with activity collection on ({withActivity} so far).', { sessions: S.sessions, withActivity }), points: [], preDrift: preDriftOf([]) };
+  return { eligible: true, n: withActivity, reason: t('Blocks of {blockMinutes} active minutes, up to {maxMinutes} minutes. A block appears while at least {blockSessions} sessions are still running.', { blockMinutes: S.blockMinutes, maxMinutes: S.maxMinutes, blockSessions: S.blockSessions }),
     points: blocks.filter(b => b.sessions >= S.blockSessions).map(b => ({ minute: b.minute, sessions: b.sessions, inputShare: b.inputObserved > 0 ? b.input / b.inputObserved : null, switchesPerMinute: b.switchObserved > 0 ? b.switches / (b.switchObserved / 60000) : null,
       driftPerHour: b.exposureMinutes > 0 ? b.drifts / (b.exposureMinutes / 60) : null, offTaskShare: b.answered ? b.offTask / b.answered : null })), preDrift: preDriftOf(base) };
 }
 
 function association(points: Array<{ x: number; y: number; day: string }>, what: string): { focusRho: number | null; pairs: number; reason: string } {
   const C = T.correlation, eligible = points.length >= C.pairs && spanOf(points.map(p => p.day)) >= C.spanDays, rho = eligible ? spearman(points.map(p => p.x), points.map(p => p.y)) : null;
-  return { focusRho: rho, pairs: points.length, reason: !eligible ? `Reúna ${C.pairs} sessões avaliadas com ${what} ao longo de pelo menos ${C.spanDays} dias (${points.length} até agora).` : rho === null ? 'Ainda não há variação em uma destas medidas.' : 'Associação exploratória nas suas sessões registradas.' };
+  return { focusRho: rho, pairs: points.length, reason: !eligible ? t('Collect {pairs} rated sessions with {what} over at least {spanDays} days ({length} so far).', { pairs: C.pairs, what, spanDays: C.spanDays, length: points.length }) : rho === null ? t('No variation in one of these measures yet.') : t('Exploratory association in your recorded sessions.') };
 }
 
-const STATE_NAMES = ['Digitação', 'Apontar e clicar', 'Rolagem', 'Movimento do ponteiro', 'Troca de janelas'];
+const stateNames = () => [t('Typing'), t('Pointing and clicking'), t('Scrolling'), t('Moving the pointer'), t('Window switching')];
 /* Also returns the state changes per hour of each session with long enough runs of activity minutes, for the session-factor model. */
 function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<Facts, number> } {
   const S = T.states, minutes: Array<{ f: Facts; a: ActivitySample; v: number[] }> = [];
@@ -375,8 +390,8 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
     minutes.push({ f, a, v: [Math.min(1, a.inputMs / a.observedMs), Math.log1p(a.keys * perMinute), Math.log1p(a.clicks * perMinute), Math.log1p(a.scrolls * perMinute), Math.min(1, a.movementMs / a.observedMs), known(a.switches) ? Math.log1p(a.switches * perMinute) : NaN] });
   }
   const sessions = new Set(minutes.map(m => m.f)).size, changes = new Map<Facts, number>();
-  const unavailable = (reason: string) => ({ section: { eligible: false, n: minutes.length, reason, k: 0, silhouette: null, states: [], byMode: [], fragmentation: { perHourMedian: null, focusRho: null, pairs: 0, reason: 'Precisa primeiro dos estados de interação.' } } satisfies StatesSection, changes });
-  if (minutes.length < S.minutes || sessions < S.sessions) return unavailable(`Precisa de ${S.minutes} minutos de atividade com tempo de entrada em ${S.sessions} sessões (${plural(minutes.length, 'minute')} em ${plural(sessions, 'session')} até agora).`);
+  const unavailable = (reason: string) => ({ section: { eligible: false, n: minutes.length, reason, k: 0, silhouette: null, states: [], byMode: [], fragmentation: { perHourMedian: null, focusRho: null, pairs: 0, reason: t('Needs interaction states first.') } } satisfies StatesSection, changes });
+  if (minutes.length < S.minutes || sessions < S.sessions) return unavailable(t('Needs {minutes} activity minutes with input time from {sessions} sessions ({plural} from {plural2} so far).', { minutes: S.minutes, sessions: S.sessions, plural: plural(minutes.length, 'minute'), plural2: plural(sessions, 'session') }));
   // Window switches join the clustering as a sixth column when most minutes have them; a minute without a count takes the mean.
   const dims = minutes.filter(m => !Number.isNaN(m.v[5])).length >= S.switchCoverage * minutes.length ? 6 : 5, columns = Array.from({ length: dims }, (_, j) => j);
   const present = (j: number) => minutes.filter(m => !Number.isNaN(m.v[j]));
@@ -398,28 +413,28 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
     }
     if (!best) break; fits.push(best);
   }
-  if (!fits.length) return unavailable('Seus minutos de atividade são parecidos demais para separar em estados.');
+  if (!fits.length) return unavailable(t('Your activity minutes are too similar to separate into states.'));
   // The silhouette picks k; on a tie the smaller k stays.
   const scores = silhouettes(sample, fits.map(fit => fit.labels.slice(0, sample.length))), chosen = scores.reduce((best, score, i) => score > scores[best] + 1e-9 ? i : best, 0);
   const best = { centroids: fits[chosen].centroids, score: scores[chosen] }, centroids = best.centroids, labels = z.map(v => { let pick = 0, low = Infinity; centroids.forEach((c, i) => { let d = 0; for (let j = 0; j < v.length; j++) d += (c[j] - v[j]) ** 2; if (d < low) { low = d; pick = i; } }); return pick; });
   const totals = centroids.map(() => ({ count: 0, observed: 0, input: 0, keys: 0, clicks: 0, scrolls: 0, movement: 0, switches: 0, switchObserved: 0, drifts: 0 }));
   minutes.forEach(({ a, f }, i) => {
-    const t = totals[labels[i]]; t.count++; t.observed += a.observedMs; t.input += a.inputMs!; t.keys += a.keys; t.clicks += a.clicks; t.scrolls += a.scrolls; t.movement += a.movementMs;
-    if (known(a.switches)) { t.switches += a.switches; t.switchObserved += a.observedMs; }
-    for (const d of f.drifts) if (d >= a.startMs && d < a.endMs) t.drifts++;
+    const tk = totals[labels[i]]; tk.count++; tk.observed += a.observedMs; tk.input += a.inputMs!; tk.keys += a.keys; tk.clicks += a.clicks; tk.scrolls += a.scrolls; tk.movement += a.movementMs;
+    if (known(a.switches)) { tk.switches += a.switches; tk.switchObserved += a.observedMs; }
+    for (const d of f.drifts) if (d >= a.startMs && d < a.endMs) tk.drifts++;
   });
   const rate = (count: number, ms: number) => count / (ms / 60000);
   // Names follow the design's rule: little input time is Quiet (Silêncio); input with every standardized count at or below the mean is Light interaction (Interação leve);
   // otherwise the largest standardized count above the mean names the state.
-  const named = centroids.map((c, cluster) => ({ c, cluster, t: totals[cluster] })).filter(x => x.t.count).map(({ c, cluster, t }) => {
-    const inputShare = Math.min(1, t.input / t.observed), counts = c.slice(1), top = counts.reduce((a, b, j) => b > counts[a] ? j : a, 0);
-    const name = inputShare < S.quietInputShare ? 'Silêncio' : counts[top] <= 0 ? 'Interação leve' : STATE_NAMES[top];
-    return { cluster, name, share: t.count / minutes.length, driftPerHour: t.observed >= S.driftMinutes * 60000 ? t.drifts / (t.observed / 3600000) : null,
-      centroid: { inputShare, keysPerMinute: rate(t.keys, t.observed), clicksPerMinute: rate(t.clicks, t.observed), scrollsPerMinute: rate(t.scrolls, t.observed), movementShare: Math.min(1, t.movement / t.observed), switchesPerMinute: t.switchObserved > 0 ? rate(t.switches, t.switchObserved) : null } };
+  const named = centroids.map((c, cluster) => ({ c, cluster, tk: totals[cluster] })).filter(x => x.tk.count).map(({ c, cluster, tk }) => {
+    const inputShare = Math.min(1, tk.input / tk.observed), counts = c.slice(1), top = counts.reduce((a, b, j) => b > counts[a] ? j : a, 0);
+    const name = inputShare < S.quietInputShare ? t('Quiet') : counts[top] <= 0 ? t('Light interaction') : stateNames()[top];
+    return { cluster, name, share: tk.count / minutes.length, driftPerHour: tk.observed >= S.driftMinutes * 60000 ? tk.drifts / (tk.observed / 3600000) : null,
+      centroid: { inputShare, keysPerMinute: rate(tk.keys, tk.observed), clicksPerMinute: rate(tk.clicks, tk.observed), scrollsPerMinute: rate(tk.scrolls, tk.observed), movementShare: Math.min(1, tk.movement / tk.observed), switchesPerMinute: tk.switchObserved > 0 ? rate(tk.switches, tk.switchObserved) : null } };
   }).sort((a, b) => a.centroid.inputShare - b.centroid.inputShare || a.cluster - b.cluster);
   const states: InteractionState[] = named.map((x, id) => {
     const same = named.filter(y => y.name === x.name), rank = same.indexOf(x);
-    return { id, label: x.name + (same.length < 2 ? '' : rank === 0 ? ' · leve' : rank === same.length - 1 ? ' · intenso' : same.length === 3 ? ' · médio' : ` · médio ${rank}`), share: x.share, centroid: x.centroid, driftPerHour: x.driftPerHour };
+    return { id, label: x.name + (same.length < 2 ? '' : rank === 0 ? t(' · light') : rank === same.length - 1 ? t(' · heavy') : same.length === 3 ? t(' · medium') : t(' · medium {rank}', { rank })), share: x.share, centroid: x.centroid, driftPerHour: x.driftPerHour };
   });
   const idOf = new Map(named.map((x, id) => [x.cluster, id])), modeCounts = new Map<ActivityMode, number[]>(), sequences = new Map<Facts, Array<{ start: number; end: number; id: number }>>();
   minutes.forEach((m, i) => {
@@ -432,22 +447,22 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
     for (let i = 1; i < rows.length; i++) if (rows[i].start - rows[i - 1].end <= 1000) { pairs++; if (rows[i].id !== rows[i - 1].id) count++; }
     if (pairs >= S.fragmentationPairs) { rates.push({ f, perHour: count / pairs * 60 }); changes.set(f, count / pairs * 60); }
   }
-  return { changes, section: { eligible: true, n: minutes.length, reason: 'Minutos de atividade agrupados pelo modo como você usou o teclado e o mouse. O número de estados é o que melhor separa os minutos.', k: states.length, silhouette: best.score, states,
+  return { changes, section: { eligible: true, n: minutes.length, reason: t('Activity minutes grouped by how you used the keyboard and mouse. The number of states is the one that separates the minutes best.'), k: states.length, silhouette: best.score, states,
     byMode: ACTIVITY_MODES.flatMap(mode => { const counts = modeCounts.get(mode); if (!counts) return []; const total = counts.reduce((sum, c) => sum + c, 0); return [{ mode, minutes: total, shares: counts.map(c => c / total) }]; }),
-    fragmentation: { perHourMedian: median(rates.map(r => r.perHour)), ...association(rates.filter(r => r.f.s.focus !== null).map(r => ({ x: r.perHour, y: r.f.s.focus!, day: r.f.day })), 'estados de interação') } } };
+    fragmentation: { perHourMedian: median(rates.map(r => r.perHour)), ...association(rates.filter(r => r.f.s.focus !== null).map(r => ({ x: r.perHour, y: r.f.s.focus!, day: r.f.day })), t('interaction states')) } } };
 }
 
 function detractorsSection(facts: Facts[]): DetractorsSection {
   const D = T.detractors, n = facts.length, ratedMean = (rows: Facts[]) => { const ratings = ratingsOf(rows); return ratings.length >= D.meanSessions ? mean(ratings) : null; };
-  if (n < D.sessions) return { eligible: false, n, reason: `Precisa de ${D.sessions} sessões (${n} até agora).`, reported: [], interruptions: [], byBand: [], switching: { perHourMedian: null, focusRho: null, pairs: 0, reason: `Precisa primeiro de ${D.sessions} sessões.` }, challenge: [] };
+  if (n < D.sessions) return { eligible: false, n, reason: t('Needs {sessions} sessions ({n} so far).', { sessions: D.sessions, n }), reported: [], interruptions: [], byBand: [], switching: { perHourMedian: null, focusRho: null, pairs: 0, reason: t('Needs {sessions} sessions first.', { sessions: D.sessions }) }, challenge: [] };
   const hours = facts.reduce((sum, f) => sum + f.hours, 0), categories = new Map<string, number>();
   for (const f of facts) for (const c of f.interruptions) categories.set(c, (categories.get(c) ?? 0) + 1);
   const switching = facts.filter(f => f.switchObservedMs > 0), perHour = (f: Facts) => f.switches / (f.switchObservedMs / 3600000);
-  return { eligible: true, n, reason: `O que você relatou após as sessões, com o foco médio quando ${D.meanSessions} sessões avaliadas compartilham uma resposta. As taxas usam o tempo ativo, ou o tempo observado no caso das trocas de janela.`,
+  return { eligible: true, n, reason: t('What you reported after sessions, with mean focus once {meanSessions} rated sessions share an answer. Rates use active time, or observed time for window switches.', { meanSessions: D.meanSessions }),
     reported: DETRACTORS.map(detractor => { const rows = facts.filter(f => f.s.detractor === detractor); return { detractor, sessions: rows.length, focusMean: ratedMean(rows) }; }).filter(r => r.sessions).sort((a, b) => b.sessions - a.sessions),
     interruptions: [...categories].map(([category, count]) => ({ category, count, perHour: hours > 0 ? count / hours : null })).sort((a, b) => b.count - a.count || a.category.localeCompare(b.category)),
     byBand: TIME_BANDS.map((band, b) => ({ band: band.label, ...ratesOf(facts.filter(f => f.band === b), D.meanSessions) })),
-    switching: { perHourMedian: median(switching.map(perHour)), ...association(switching.filter(f => f.s.focus !== null).map(f => ({ x: perHour(f), y: f.s.focus!, day: f.day })), 'contagens de trocas de janela') },
+    switching: { perHourMedian: median(switching.map(perHour)), ...association(switching.filter(f => f.s.focus !== null).map(f => ({ x: perHour(f), y: f.s.focus!, day: f.day })), t('window switch counts')) },
     challenge: CHALLENGES.map(challenge => { const rows = facts.filter(f => f.s.challenge === challenge); return { challenge, sessions: rows.length, focusMean: ratedMean(rows) }; }).filter(r => r.sessions) };
 }
 
@@ -455,17 +470,17 @@ function detractorsSection(facts: Facts[]): DetractorsSection {
 interface DayContext { sessions: number; minutes: number; gapHours: number }
 interface Column { name: string; kind: 'sd' | 'binary' | 'contrast'; label: (sd: number) => string; value: (f: Facts, day: DayContext) => number }
 const BASE_COLUMNS: Column[] = [
-  { name: 'hourSin', kind: 'contrast', label: () => 'Começar perto das 06:00 em vez das 18:00', value: f => Math.sin(2 * Math.PI * f.hour / 24) },
-  { name: 'hourCos', kind: 'contrast', label: () => 'Começar perto da meia-noite em vez do meio-dia', value: f => Math.cos(2 * Math.PI * f.hour / 24) },
-  { name: 'weekend', kind: 'binary', label: () => 'Fim de semana em vez de dia útil', value: f => f.weekday === 'Sat' || f.weekday === 'Sun' ? 1 : 0 },
-  { name: 'plannedMinutes', kind: 'sd', label: sd => `Duração planejada maior (+1 DP ≈ ${whole(sd)} min)`, value: f => f.s.plannedMs === null ? NaN : f.s.plannedMs / 60000 },
-  { name: 'stopwatch', kind: 'binary', label: () => 'Cronômetro em vez de uma contagem regressiva planejada', value: f => f.s.plannedMs === null ? 1 : 0 },
-  { name: 'energy', kind: 'sd', label: sd => `Energia inicial mais alta (+1 DP ≈ ${one(sd)})`, value: f => f.s.energy ?? NaN },
-  { name: 'energyMissing', kind: 'binary', label: () => 'Energia inicial não registrada', value: f => f.s.energy === null ? 1 : 0 },
-  { name: 'earlierSessions', kind: 'sd', label: sd => `Mais sessões antes no mesmo dia (+1 DP ≈ ${one(sd)})`, value: (_, c) => c.sessions },
-  { name: 'earlierMinutes', kind: 'sd', label: sd => `Mais tempo de foco antes no mesmo dia (+1 DP ≈ ${whole(sd)} min)`, value: (_, c) => c.minutes },
-  { name: 'hoursSincePrevious', kind: 'sd', label: () => 'Intervalo maior desde a sessão anterior (+1 DP, escala logarítmica)', value: (_, c) => Math.log1p(c.gapHours) },
-  { name: 'goal', kind: 'binary', label: () => 'Vinculada a uma meta', value: f => f.s.goalId ? 1 : 0 }
+  { name: 'hourSin', kind: 'contrast', label: () => t('Starting near 06:00 rather than 18:00'), value: f => Math.sin(2 * Math.PI * f.hour / 24) },
+  { name: 'hourCos', kind: 'contrast', label: () => t('Starting near midnight rather than midday'), value: f => Math.cos(2 * Math.PI * f.hour / 24) },
+  { name: 'weekend', kind: 'binary', label: () => t('Weekend rather than weekday'), value: f => f.weekday === 'Sat' || f.weekday === 'Sun' ? 1 : 0 },
+  { name: 'plannedMinutes', kind: 'sd', label: sd => t('Longer planned length (+1 SD ≈ {whole} min)', { whole: whole(sd) }), value: f => f.s.plannedMs === null ? NaN : f.s.plannedMs / 60000 },
+  { name: 'stopwatch', kind: 'binary', label: () => t('Stopwatch rather than a planned countdown'), value: f => f.s.plannedMs === null ? 1 : 0 },
+  { name: 'energy', kind: 'sd', label: sd => t('Higher starting energy (+1 SD ≈ {one})', { one: one(sd) }), value: f => f.s.energy ?? NaN },
+  { name: 'energyMissing', kind: 'binary', label: () => t('Starting energy not recorded'), value: f => f.s.energy === null ? 1 : 0 },
+  { name: 'earlierSessions', kind: 'sd', label: sd => t('More sessions earlier that day (+1 SD ≈ {one})', { one: one(sd) }), value: (_, c) => c.sessions },
+  { name: 'earlierMinutes', kind: 'sd', label: sd => t('More focus time earlier that day (+1 SD ≈ {whole} min)', { whole: whole(sd) }), value: (_, c) => c.minutes },
+  { name: 'hoursSincePrevious', kind: 'sd', label: () => t('Longer gap since the previous session (+1 SD, log scale)'), value: (_, c) => Math.log1p(c.gapHours) },
+  { name: 'goal', kind: 'binary', label: () => t('Linked to a goal'), value: f => f.s.goalId ? 1 : 0 }
 ];
 /* The day context of each rated session counts every finished, included session, also those outside the filters. */
 function dayContexts(data: Dataset, facts: Facts[], rated: Facts[]): DayContext[] {
@@ -484,8 +499,8 @@ function dayContexts(data: Dataset, facts: Facts[], rated: Facts[]): DayContext[
 function modeColumns(rated: Facts[], count: number): Column[] {
   const counts = new Map<ActivityMode, number>(); for (let i = 0; i < count; i++) counts.set(rated[i].mode, (counts.get(rated[i].mode) ?? 0) + 1);
   const modes = ACTIVITY_MODES.filter(m => (counts.get(m) ?? 0) >= T.model.modeSessions); if (modes.length < 2) return [];
-  const reference = modes.reduce((best, m) => counts.get(m)! > counts.get(best)! ? m : best), against = counts.size > modes.length ? `${activityModeLabel(reference)} e outros modos` : activityModeLabel(reference);
-  return modes.filter(m => m !== reference).map((mode): Column => ({ name: `mode:${mode}`, kind: 'binary', label: () => `${activityModeLabel(mode)} em vez de ${against}`, value: f => f.mode === mode ? 1 : 0 }));
+  const reference = modes.reduce((best, m) => counts.get(m)! > counts.get(best)! ? m : best), against = counts.size > modes.length ? t('{activityModeLabel} and other modes', { activityModeLabel: activityModeLabel(reference) }) : activityModeLabel(reference);
+  return modes.filter(m => m !== reference).map((mode): Column => ({ name: `mode:${mode}`, kind: 'binary', label: () => t('{activityModeLabel} rather than {against}', { activityModeLabel: activityModeLabel(mode), against }), value: f => f.mode === mode ? 1 : 0 }));
 }
 /* Standardizes with the first `count` rows only. A missing value takes the training mean (0 after scaling); a constant column becomes 0. */
 function scalerOf(rows: number[][], count: number): { sds: number[]; apply: (row: number[]) => number[] } {
@@ -499,13 +514,13 @@ function scalerOf(rows: number[][], count: number): { sds: number[]; apply: (row
 /* What happened during and after a session, for the explanatory view. A missing value stays missing and takes the training mean. */
 function factorColumns(changes: Map<Facts, number>): Column[] {
   return [
-    { name: 'driftPerHour', kind: 'sd', label: sd => `Mais divagações por hora ativa (+1 DP ≈ ${one(sd)})`, value: f => f.version >= T.returnVersion && f.s.activeMs >= 300000 ? f.drifts.length / f.hours : NaN },
-    { name: 'switchesPerHour', kind: 'sd', label: sd => `Mais trocas de janela por hora (+1 DP ≈ ${whole(sd)})`, value: f => f.switchObservedMs > 0 ? f.switches / (f.switchObservedMs / 3600000) : NaN },
-    { name: 'inputShare', kind: 'sd', label: sd => `Mais tempo com entrada de teclado ou mouse (+1 DP ≈ ${percent(sd)} do tempo)`, value: f => f.inputObservedMs > 0 ? f.inputMs / f.inputObservedMs : NaN },
-    { name: 'fragmentation', kind: 'sd', label: sd => `Mais mudanças entre estados de interação (+1 DP ≈ ${whole(sd)} por hora)`, value: f => changes.get(f) ?? NaN },
-    { name: 'challenge:too-hard', kind: 'binary', label: () => 'Pareceu difícil demais em vez de na medida ou fácil demais', value: f => f.s.challenge == null ? NaN : f.s.challenge === 'too-hard' ? 1 : 0 },
-    { name: 'challenge:too-easy', kind: 'binary', label: () => 'Pareceu fácil demais em vez de na medida ou difícil demais', value: f => f.s.challenge == null ? NaN : f.s.challenge === 'too-easy' ? 1 : 0 },
-    { name: 'detractor', kind: 'binary', label: () => 'Algo atrapalhou em vez de nada de notável', value: f => f.s.detractor == null ? NaN : f.s.detractor === 'none' ? 0 : 1 }
+    { name: 'driftPerHour', kind: 'sd', label: sd => t('More drifts per active hour (+1 SD ≈ {one})', { one: one(sd) }), value: f => f.version >= T.returnVersion && f.s.activeMs >= 300000 ? f.drifts.length / f.hours : NaN },
+    { name: 'switchesPerHour', kind: 'sd', label: sd => t('More window switches per hour (+1 SD ≈ {whole})', { whole: whole(sd) }), value: f => f.switchObservedMs > 0 ? f.switches / (f.switchObservedMs / 3600000) : NaN },
+    { name: 'inputShare', kind: 'sd', label: sd => t('More time with keyboard or mouse input (+1 SD ≈ {percent} of the time)', { percent: percent(sd) }), value: f => f.inputObservedMs > 0 ? f.inputMs / f.inputObservedMs : NaN },
+    { name: 'fragmentation', kind: 'sd', label: sd => t('More changes between interaction states (+1 SD ≈ {whole} per hour)', { whole: whole(sd) }), value: f => changes.get(f) ?? NaN },
+    { name: 'challenge:too-hard', kind: 'binary', label: () => t('Felt too hard rather than about right or too easy'), value: f => f.s.challenge == null ? NaN : f.s.challenge === 'too-hard' ? 1 : 0 },
+    { name: 'challenge:too-easy', kind: 'binary', label: () => t('Felt too easy rather than about right or too hard'), value: f => f.s.challenge == null ? NaN : f.s.challenge === 'too-easy' ? 1 : 0 },
+    { name: 'detractor', kind: 'binary', label: () => t('Something got in the way rather than nothing notable'), value: f => f.s.detractor == null ? NaN : f.s.detractor === 'none' ? 0 : 1 }
   ];
 }
 const clock = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
@@ -515,7 +530,7 @@ const overlapOf = (sets: Array<Set<string>>): number | null => {
   for (let i = 1; i < sets.length; i++) { const a = sets[i - 1], b = sets[i], union = new Set([...a, ...b]); let both = 0; for (const name of a) if (b.has(name)) both++; sum += union.size ? both / union.size : 1; }
   return sum / (sets.length - 1);
 };
-const ESTIMATOR_LABELS: Record<ModelEstimator, string> = { ridge: 'Ridge', lasso: 'Lasso', 'elastic-net': 'Rede elástica' };
+const ESTIMATOR_LABELS: Record<ModelEstimator, string> = { ridge: 'Ridge', lasso: 'Lasso', get 'elastic-net'() { return t('Elastic net'); } };
 function unavailableModel(n: number, reason: string): ModelView {
   return { eligible: false, n, reason, useful: false, trainedOn: 0, tested: 0, lambda: null, mae: null, baselineMae: null, features: [], estimator: null, candidates: [], diagnostics: null, zeroed: [], decision: '' };
 }
@@ -531,36 +546,36 @@ function estimateModel(rated: Facts[], y: number[], contexts: DayContext[], base
   // Rolling origin: each test session is predicted by models that saw only the sessions before it. The baseline is their mean rating.
   const error: Record<ModelEstimator, number> = { ridge: 0, lasso: 0, 'elastic-net': 0 }, kept: Record<'lasso' | 'elastic-net', Array<Set<string>>> = { lasso: [], 'elastic-net': [] };
   let baseline = 0;
-  for (let t = n - tests; t < n; t++) {
-    const { columns, rows } = design(t), scale = scalerOf(rows, t), train = rows.slice(0, t).map(scale.apply), target = y.slice(0, t), row = scale.apply(rows[t]);
-    const fits = { ridge: ridgeSelect(train, target, lambdas(t)), lasso: penalizedSelect(train, target, 1), 'elastic-net': penalizedSelect(train, target, alpha) };
-    for (const id of ['ridge', 'lasso', 'elastic-net'] as const) error[id] += Math.abs(predict(fits[id], row) - y[t]);
+  for (let tk = n - tests; tk < n; tk++) {
+    const { columns, rows } = design(tk), scale = scalerOf(rows, tk), train = rows.slice(0, tk).map(scale.apply), target = y.slice(0, tk), row = scale.apply(rows[tk]);
+    const fits = { ridge: ridgeSelect(train, target, lambdas(tk)), lasso: penalizedSelect(train, target, 1), 'elastic-net': penalizedSelect(train, target, alpha) };
+    for (const id of ['ridge', 'lasso', 'elastic-net'] as const) error[id] += Math.abs(predict(fits[id], row) - y[tk]);
     for (const id of ['lasso', 'elastic-net'] as const) kept[id].push(new Set(columns.filter((_, j) => scale.sds[j] > 1e-9 && Math.abs(fits[id].coefficients[j]) > M.selectedAbove).map(c => c.name)));
-    baseline += Math.abs(mean(y.slice(0, t))! - y[t]);
+    baseline += Math.abs(mean(y.slice(0, tk))! - y[tk]);
   }
   const mae: Record<ModelEstimator, number> = { ridge: error.ridge / tests, lasso: error.lasso / tests, 'elastic-net': error['elastic-net'] / tests }, baselineMae = baseline / tests;
   const stability = { lasso: overlapOf(kept.lasso), 'elastic-net': overlapOf(kept['elastic-net']) };
   const { columns, rows } = design(n), scale = scalerOf(rows, n), x = rows.map(scale.apply), live = columns.map((_, j) => scale.sds[j] > 1e-9);
   const { correlation, vif } = collinearity(x), pairs: ModelDiagnostics['pairs'] = [];
   // The label without its scale note, and the two hour terms as one feature.
-  const shortName = (c: Column) => c.name.startsWith('hour') && c.kind === 'contrast' ? 'Hora de início' : c.label(0).replace(/ \(.*\)$/, '');
+  const shortName = (c: Column) => c.name.startsWith('hour') && c.kind === 'contrast' ? t('Start hour') : c.label(0).replace(/ \(.*\)$/, '');
   columns.forEach((a, j) => { if (!live[j]) return; for (let k = j + 1; k < columns.length; k++) { const r = correlation[j][k]; if (live[k] && r !== null && Math.abs(r) >= M.collinearR && shortName(a) !== shortName(columns[k])) pairs.push({ a: shortName(a), b: shortName(columns[k]), r }); } });
   pairs.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
   const maxVif = vif.reduce<number | null>((best, v) => v !== null && (best === null || v > best) ? v : best, null), maxCorrelation = pairs.length ? Math.abs(pairs[0].r) : correlation.flat().reduce<number | null>((best, r, i) => r !== null && Math.floor(i / columns.length) !== i % columns.length && (best === null || Math.abs(r) > best) ? Math.abs(r) : best, null);
   const collinear = (maxVif !== null && maxVif > M.collinearVif) || (maxCorrelation !== null && maxCorrelation >= M.collinearR);
   const lassoFirst = mae.lasso < mae.ridge - 1e-9, netDecides = collinear && stability.lasso !== null && stability.lasso < M.stableOverlap && (stability['elastic-net'] ?? 0) > stability.lasso && mae['elastic-net'] <= Math.min(mae.ridge, mae.lasso) + 1e-9;
   const estimator: ModelEstimator = netDecides ? 'elastic-net' : lassoFirst ? 'lasso' : 'ridge', fixed = (id: ModelEstimator) => `${mae[id].toFixed(2)}`;
-  const decision = netDecides ? `Alguns fatores se sobrepõem fortemente (maior inflação de variância ${maxVif === null ? '—' : one(maxVif)}) e a escolha de fatores do lasso mudou entre janelas (sobreposição ${percent(stability.lasso!)}), então a rede elástica define os efeitos (erro ${fixed('elastic-net')} contra ${fixed('ridge')} da ridge e ${fixed('lasso')} do lasso).`
-    : lassoFirst ? `O lasso previu melhor que a ridge (erro ${fixed('lasso')} contra ${fixed('ridge')}), então ele define os efeitos; os fatores que ele zera não mostram associação clara.`
-      : `A ridge previu pelo menos tão bem quanto o lasso (erro ${fixed('ridge')} contra ${fixed('lasso')}), então ela define os efeitos; o lasso apenas marca quais fatores mantém.`;
+  const decision = netDecides ? t('Some features overlap strongly (largest variance inflation {v1}) and the lasso\'s choice of features changed between windows (overlap {percent}), so the elastic net sets the effects (error {fixed} vs {fixed2} for ridge and {fixed3} for the lasso).', { v1: maxVif === null ? '—' : one(maxVif), percent: percent(stability.lasso!), fixed: fixed('elastic-net'), fixed2: fixed('ridge'), fixed3: fixed('lasso') })
+    : lassoFirst ? t('The lasso predicted better than ridge (error {fixed} vs {fixed2}), so it sets the effects; features it sets to zero show no clear association.', { fixed: fixed('lasso'), fixed2: fixed('ridge') })
+      : t('Ridge predicted at least as well as the lasso (error {fixed} vs {fixed2}), so it sets the effects; the lasso only marks which features it keeps.', { fixed: fixed('ridge'), fixed2: fixed('lasso') });
   const candidates: ModelCandidate[] = (['ridge', 'lasso', 'elastic-net'] as const).map(id => ({ id, label: ESTIMATOR_LABELS[id], mae: mae[id], stability: id === 'ridge' ? null : stability[id] }));
   const diagnostics: ModelDiagnostics = { maxVif, maxCorrelation, collinear, pairs: pairs.slice(0, 5) };
   const useful = !gated || (baselineMae > 0 && mae[estimator] <= (1 - M.usefulGain) * baselineMae);
-  const comparison = `${mae[estimator].toFixed(2)} contra ${baselineMae.toFixed(2)} pontos de erro em ${tests} sessões posteriores`;
+  const comparison = t('{v1} vs {v2} points of error over {tests} later sessions', { v1: mae[estimator].toFixed(2), v2: baselineMae.toFixed(2), tests });
   const ridgeFinal = ridgeSelect(x, y, lambdas(n)), lassoFinal = penalizedSelect(x, y, 1), netFinal = penalizedSelect(x, y, alpha);
   const chosen = estimator === 'ridge' ? ridgeFinal : estimator === 'lasso' ? lassoFinal : netFinal;
   const result = { eligible: true, n, useful, trainedOn: n, tested: tests, lambda: chosen.lambda, mae: mae[estimator], baselineMae, estimator, candidates, diagnostics, decision };
-  if (!useful) return { ...result, reason: `O modelo não prevê sua próxima avaliação claramente melhor que a sua avaliação média (${comparison}), então nenhuma associação é mostrada.`, features: [], zeroed: [] };
+  if (!useful) return { ...result, reason: t('The model does not predict your next rating clearly better than your average rating ({comparison}), so no associations are shown.', { comparison }), features: [], zeroed: [] };
   const effects = (beta: number[]) => beta.map((b, j) => scale.sds[j] <= 1e-9 ? 0 : columns[j].kind === 'sd' ? b : b / scale.sds[j] * (columns[j].kind === 'contrast' ? 2 : 1));
   const sinAt = columns.findIndex(c => c.name === 'hourSin'), cosAt = columns.findIndex(c => c.name === 'hourCos'), merged = sinAt >= 0 && cosAt >= 0 && live[sinAt] && live[cosAt];
   const peak = (effect: number[]) => Math.hypot(effect[sinAt], effect[cosAt]);
@@ -581,20 +596,20 @@ function estimateModel(rated: Facts[], y: number[], contexts: DayContext[], base
   const features: ModelFeature[] = columns.flatMap((_, j) => live[j] && !(merged && (j === sinAt || j === cosAt)) ? [feature(j)] : []);
   if (merged) {
     const sorted = [...amplitudes].sort((a, b) => a - b), hour = Math.round((Math.atan2(estimate[sinAt], estimate[cosAt]) / (2 * Math.PI) * 24 + 24) % 24) % 24;
-    features.push({ name: 'peakHour', label: `Começar perto das ${clock(hour)} em vez das ${clock((hour + 12) % 24)}`, effect: { estimate: peak(estimate), low: quantile(sorted, 0.05), high: quantile(sorted, 0.95) },
+    features.push({ name: 'peakHour', label: t('Starting near {clock} rather than {clock2}', { clock: clock(hour), clock2: clock((hour + 12) % 24) }), effect: { estimate: peak(estimate), low: quantile(sorted, 0.05), high: quantile(sorted, 0.95) },
       selected: Math.abs(lassoFinal.coefficients[sinAt]) > M.selectedAbove || Math.abs(lassoFinal.coefficients[cosAt]) > M.selectedAbove, selectionShare: windowShare(name => name === 'hourSin' || name === 'hourCos'), bootstrapShare: peakCount / M.bootstrap, vif: Math.max(vif[sinAt] ?? 1, vif[cosAt] ?? 1) });
   }
   features.sort((a, b) => Math.abs(b.effect.estimate) - Math.abs(a.effect.estimate) || a.name.localeCompare(b.name));
-  return { ...result, reason: `${intro} (${comparison}). Os efeitos são associações, não causas.`, features, zeroed: features.filter(f => !f.selected).map(f => f.label) };
+  return { ...result, reason: t('{intro} ({comparison}). The effects are associations, not causes.', { intro, comparison }), features, zeroed: features.filter(f => !f.selected).map(f => f.label) };
 }
 function modelSection(data: Dataset, facts: Facts[], changes: Map<Facts, number>): FocusModelSection {
   const M = T.model, rated = facts.filter(f => f.s.focus !== null), n = rated.length, spanDays = spanOf(rated.map(f => f.day)), tests = Math.min(M.maxTestPoints, n - M.minTrainSessions);
-  if (n < M.ratedSessions || spanDays < M.spanDays || tests < M.testPoints) { const view = unavailableModel(n, `Precisa de ${M.ratedSessions} sessões avaliadas ao longo de ${M.spanDays} dias (${plural(n, 'rated session')} em ${plural(spanDays, 'day')} até agora).`); return { ...view, sessionFactors: view }; }
+  if (n < M.ratedSessions || spanDays < M.spanDays || tests < M.testPoints) { const view = unavailableModel(n, t('Needs {ratedSessions} rated sessions over {spanDays} days ({plural} over {plural2} so far).', { ratedSessions: M.ratedSessions, spanDays: M.spanDays, plural: plural(n, 'rated session'), plural2: plural(spanDays, 'day') })); return { ...view, sessionFactors: view }; }
   const contexts = dayContexts(data, facts, rated), y = rated.map(f => f.s.focus!);
-  const before = estimateModel(rated, y, contexts, BASE_COLUMNS, true, true, 'Prevê sua próxima avaliação melhor do que a sua avaliação média');
+  const before = estimateModel(rated, y, contexts, BASE_COLUMNS, true, true, t('Predicts your next rating better than your average rating did'));
   const factors = factorColumns(changes).filter(c => rated.filter(f => !Number.isNaN(c.value(f, contexts[0]))).length >= M.factorValues);
-  const during = factors.length ? estimateModel(rated, y, contexts, factors, false, false, 'Descreve as avaliações que você deu a partir do que aconteceu durante e depois de cada sessão, mantendo os outros fatores fixos. Explica sessões que já aconteceram e não prevê, porque esses fatos não são conhecidos de antemão')
-    : unavailableModel(n, `Precisa de ${M.factorValues} sessões avaliadas com marcadores de divagação, contagens de atividade ou respostas de reflexão (nenhum dos fatores da sessão tem isso ainda).`);
+  const during = factors.length ? estimateModel(rated, y, contexts, factors, false, false, t('Describes the ratings you gave from what happened during and after each session, with the other factors held fixed. It explains sessions that already happened and does not predict, because those facts are not known in advance'))
+    : unavailableModel(n, t('Needs {factorValues} rated sessions with drift markers, activity counts or reflection answers (none of the session factors has that yet).', { factorValues: M.factorValues }));
   return { ...before, sessionFactors: during };
 }
 
@@ -619,9 +634,9 @@ function cohortRate(rows: Facts[], from: number, to: number): { drifts: number; 
   return { drifts, exposure: exposureMs / 3600000, perHour: exposureMs > 0 ? drifts / (exposureMs / 3600000) : 0 };
 }
 const DETRACTOR_ACTIONS: Record<Exclude<Detractor, 'none'>, string> = {
-  notifications: 'Experimente o modo Não Perturbe ou deixe o celular em outro cômodo durante a sessão.', people: 'Experimente fones de ouvido, um lugar mais silencioso ou um horário de foco combinado com as pessoas ao seu redor.',
-  thoughts: 'Quando um pensamento puxar a sua atenção, use Guarde este pensamento e volte à tarefa.', tiredness: 'Experimente água, um lanche ou um descanso curto antes de começar, ou um primeiro bloco mais curto.',
-  task: 'Antes de começar, anote o primeiro passo pequeno para deixar a tarefa clara.', other: 'Adicione uma nota curta depois dessas sessões para descobrir o que elas têm em comum.'
+  get notifications() { return t('Try Do Not Disturb, or leave the phone in another room during the session.'); }, get people() { return t('Try headphones, a quieter place, or a focus time agreed with the people around you.'); },
+  get thoughts() { return t('When a thought pulls at you, use Park this thought and return to the task.'); }, get tiredness() { return t('Try water, a snack or a short rest before you start, or a shorter first block.'); },
+  get task() { return t('Before you start, write down the first small step so the task is clear.'); }, get other() { return t('Add a short note after these sessions to find what they have in common.'); }
 };
 function recommendationsOf(facts: Facts[], quality: DataQuality, rhythm: RhythmSection, span: AttentionSpanSection, base: Facts[], detractors: DetractorsSection): Recommendation[] {
   const S = T.suggestions, out: Recommendation[] = [], overall = mean(ratingsOf(facts)), lower = (values: number[], reference: number[]) => differenceInterval(values, reference).high < 0 ? 'moderate' as const : 'tentative' as const;
@@ -629,24 +644,25 @@ function recommendationsOf(facts: Facts[], quality: DataQuality, rhythm: RhythmS
     const best = TIME_BANDS.map((band, b) => ({ band, values: ratingsOf(facts.filter(f => f.band === b)) })).filter(x => x.values.length >= S.windowSessions).map(x => ({ ...x, interval: meanInterval(x.values) }))
       .filter(x => x.interval.estimate >= overall + S.focusGap - 1e-9).sort((a, b) => b.interval.estimate - a.interval.estimate)[0];
     if (best) {
-      const [name, range] = best.band.label.split(' · ');
-      out.push({ id: `window-${name.toLowerCase()}`, kind: 'window', title: `Suas sessões mais bem avaliadas começam ${({ Madrugada: 'de madrugada', Manhã: 'pela manhã', Tarde: 'à tarde', Noite: 'à noite' } as Record<string, string>)[name] ?? name.toLowerCase()} (${range})`, detail: 'Quando puder, coloque o trabalho mais exigente nessa janela. Você escolhe quando focar, então isto é uma associação, não uma causa.',
-        evidence: `Foco médio ${one(best.interval.estimate)} contra ${one(overall)} no geral, ${plural(best.values.length, 'session')} (intervalo de 90% ${one(best.interval.low)}–${one(best.interval.high)}).`, strength: best.interval.low > overall ? 'moderate' : 'tentative' });
+      const slot = TIME_BANDS.indexOf(best.band), range = best.band.label.split(' · ')[1];
+      const when = [t('Your best-rated sessions start at night ({range})', { range }), t('Your best-rated sessions start in the morning ({range})', { range }), t('Your best-rated sessions start in the afternoon ({range})', { range }), t('Your best-rated sessions start in the evening ({range})', { range })][slot];
+      out.push({ id: `window-${['night', 'morning', 'afternoon', 'evening'][slot]}`, kind: 'window', title: when, detail: t('When you can, place demanding work in this window. You choose when you focus, so this is an association, not a cause.'),
+        evidence: t('Mean focus {one} vs {one2} overall, {plural} (90% interval {one3}–{one4}).', { one: one(best.interval.estimate), one2: one(overall), plural: plural(best.values.length, 'session'), one3: one(best.interval.low), one4: one(best.interval.high) }), strength: best.interval.low > overall ? 'moderate' : 'tentative' });
     }
   }
   const plan = lengthPlan(span), A = T.attentionSpan, warm = span.phases[0], sustain = span.phases[1];
   if (plan) {
-    const range = plan.open ? `a partir de ${whole(plan.median.low)} min` : `${whole(plan.median.low)}–${whole(plan.median.high)} min`, later = span.afterWarmUp?.median;
-    out.push({ id: 'length', kind: 'length', minutes: plan.minutes, title: `Planeje blocos de ${plan.minutes} minutos`,
-      detail: !plan.afterWarmUp ? `Seu tempo mediano antes da primeira divagação é de ${whole(plan.firstMedian)} min (intervalo de 90% ${range}). Comece por aí e ajuste.`
-        : later ? `Seu tempo mediano antes da primeira divagação é de ${whole(plan.firstMedian)} min, mas as divagações se concentram nos primeiros ${A.warmUpMinutes} minutos, então um bloco mais curto não as eliminaria. Contada depois do aquecimento, a mediana é de ${whole(later.estimate)} min (intervalo de 90% ${range}). Comece com ${plan.minutes} min e ajuste.`
-          : `Seu tempo mediano antes da primeira divagação é de ${whole(plan.firstMedian)} min, mas as divagações se concentram nos primeiros ${A.warmUpMinutes} minutos, então um bloco mais curto não as eliminaria. Comece com ${plan.minutes} min e ajuste.`,
-      evidence: `${plural(plan.sessions, 'session')}, ${plan.events} com uma primeira divagação${plan.afterWarmUp && later ? ` após o minuto ${A.warmUpMinutes}` : ''}.`, strength: !plan.open && (!plan.afterWarmUp || later) && plan.median.high - plan.median.low <= plan.median.estimate ? 'moderate' : 'tentative' });
+    const range = plan.open ? t('from {whole} min', { whole: whole(plan.median.low) }) : `${whole(plan.median.low)}–${whole(plan.median.high)} min`, later = span.afterWarmUp?.median;
+    out.push({ id: 'length', kind: 'length', minutes: plan.minutes, title: t('Plan {minutes}-minute blocks', { minutes: plan.minutes }),
+      detail: !plan.afterWarmUp ? t('Your median time before the first drift is {whole} min (90% interval {range}). Start there and adjust.', { whole: whole(plan.firstMedian), range })
+        : later ? t('Your median time before the first drift is {whole} min, but drifts cluster in the first {warmUpMinutes} minutes, so a shorter block would not remove them. Counted after the warm-up, the median is {whole2} min (90% interval {range}). Start at {minutes} min and adjust.', { whole: whole(plan.firstMedian), warmUpMinutes: A.warmUpMinutes, whole2: whole(later.estimate), range, minutes: plan.minutes })
+          : t('Your median time before the first drift is {whole} min, but drifts cluster in the first {warmUpMinutes} minutes, so a shorter block would not remove them. Start at {minutes} min and adjust.', { whole: whole(plan.firstMedian), warmUpMinutes: A.warmUpMinutes, minutes: plan.minutes }),
+      evidence: t('{plural}, {events} with a first drift{v3}.', { plural: plural(plan.sessions, 'session'), events: plan.events, v3: plan.afterWarmUp && later ? t(' after minute {warmUpMinutes}', { warmUpMinutes: A.warmUpMinutes }) : '' }), strength: !plan.open && (!plan.afterWarmUp || later) && plan.median.high - plan.median.low <= plan.median.estimate ? 'moderate' : 'tentative' });
   }
   if (span.eligible && span.warmUpFriction && warm.driftPerHour !== null && sustain.driftPerHour !== null) {
     const ratio = sustain.drifts > 0 ? Math.log(warm.driftPerHour / sustain.driftPerHour) - zUpper(0.05) * Math.sqrt(1 / warm.drifts + 1 / sustain.drifts) : -1;
-    out.push({ id: 'warmup', kind: 'warmup', title: `As divagações se concentram nos primeiros ${A.warmUpMinutes} minutos (atrito de aquecimento)`, detail: 'Antes de iniciar o timer, escreva na sua intenção o primeiro passo concreto, para que os primeiros minutos tenham onde pousar.',
-      evidence: `${one(warm.driftPerHour)} divagações por hora nos minutos ${warm.fromMinute}–${warm.toMinute} contra ${one(sustain.driftPerHour)} nos minutos ${sustain.fromMinute}–${sustain.toMinute}, em ${plural(warm.sessions, 'session')}.`, strength: ratio > 0 ? 'moderate' : 'tentative' });
+    out.push({ id: 'warmup', kind: 'warmup', title: t('Drifts cluster in the first {warmUpMinutes} minutes (warm-up friction)', { warmUpMinutes: A.warmUpMinutes }), detail: t('Before you start the timer, write the first concrete step in your intention, so the first minutes have somewhere to land.'),
+      evidence: t('{one} drifts per hour in minutes {fromMinute}–{toMinute} vs {one2} in minutes {fromMinute2}–{toMinute2}, over {plural}.', { one: one(warm.driftPerHour), fromMinute: warm.fromMinute, toMinute: warm.toMinute, one2: one(sustain.driftPerHour), fromMinute2: sustain.fromMinute, toMinute2: sustain.toMinute, plural: plural(warm.sessions, 'session') }), strength: ratio > 0 ? 'moderate' : 'tentative' });
   }
   if (span.eligible) {
     // Each candidate is judged on the sessions that reached it, so short and long sessions are not mixed: the early rate and the later rate come from the same cohort.
@@ -663,38 +679,38 @@ function recommendationsOf(facts: Facts[], quality: DataQuality, rhythm: RhythmS
       candidates.push({ minute, cohort: cohort.length, before, after, score: 2 * (logLikelihood(lead) + logLikelihood(after) - logLikelihood(pooled)) });
     }
     const best = candidates.reduce<typeof candidates[number] | null>((top, c) => !top || c.score > top.score + 1e-12 ? c : top, null);
-    if (best) out.push({ id: 'break', kind: 'break', minutes: best.minute, title: `A divagação aumenta após cerca de ${best.minute} minutos`, detail: `Experimente uma pausa curta por volta do minuto ${best.minute}, ou encerre seus blocos aí.`,
-      evidence: `${one(best.after.perHour)} divagações por hora após o minuto ${best.minute} contra ${one(best.before.perHour)} nos primeiros ${early} minutos, entre as ${plural(best.cohort, 'session')} que chegaram ao minuto ${best.minute} (de ${base.length}).`,
+    if (best) out.push({ id: 'break', kind: 'break', minutes: best.minute, title: t('Drift rises after about {minute} minutes', { minute: best.minute }), detail: t('Try a short break around minute {minute}, or end your blocks there.', { minute: best.minute }),
+      evidence: t('{one} drifts per hour after minute {minute} vs {one2} in the first {early} minutes, among the {plural} that reached minute {minute2} (of {length}).', { one: one(best.after.perHour), minute: best.minute, one2: one(best.before.perHour), early, plural: plural(best.cohort, 'session'), minute2: best.minute, length: base.length }),
       // The point was chosen among `tried` points, so the rate-ratio bound uses a Bonferroni-corrected 95% one-sided level.
       strength: best.before.drifts > 0 && Math.log(best.after.perHour / best.before.perHour) - zUpper(0.05 / tried) * Math.sqrt(1 / best.after.drifts + 1 / best.before.drifts) > 0 ? 'moderate' : 'tentative' });
   }
   const top = detractors.eligible ? detractors.reported.find(r => r.detractor !== 'none')?.detractor : undefined, calm = ratingsOf(facts.filter(f => f.s.detractor === 'none'));
   if (top && top !== 'none' && calm.length >= S.comparisonSessions) {
     const values = ratingsOf(facts.filter(f => f.s.detractor === top));
-    if (values.length >= S.comparisonSessions && mean(values)! <= mean(calm)! - S.focusGap + 1e-9) out.push({ id: `detractor-${top}`, kind: 'detractor', title: `O que mais atrapalhou: ${DETRACTOR_LABELS[top].toLowerCase()}`, detail: DETRACTOR_ACTIONS[top],
-      evidence: `${DETRACTOR_LABELS[top]}: foco médio ${one(mean(values)!)} em ${plural(values.length, 'rated session')} contra ${one(mean(calm)!)} em ${plural(calm.length, 'rated session')} sem nada de notável.`, strength: lower(values, calm) });
+    if (values.length >= S.comparisonSessions && mean(values)! <= mean(calm)! - S.focusGap + 1e-9) out.push({ id: `detractor-${top}`, kind: 'detractor', title: t('{v1} got in the way most often', { v1: DETRACTOR_LABELS[top] }), detail: DETRACTOR_ACTIONS[top],
+      evidence: t('{v1}: mean focus {one} in {plural} vs {one2} in {plural2} with nothing notable.', { v1: DETRACTOR_LABELS[top], one: one(mean(values)!), plural: plural(values.length, 'rated session'), one2: one(mean(calm)!), plural2: plural(calm.length, 'rated session') }), strength: lower(values, calm) });
   }
   const rho = detractors.switching.focusRho, pairs = detractors.switching.pairs;
   if (detractors.eligible && rho !== null && rho <= S.switchingRho) {
     // Fisher z interval for Spearman's rho (variance 1.06 / (n - 3)).
     const upper = Math.tanh(Math.atanh(Math.max(-0.999999, rho)) + Z90 * Math.sqrt(1.06 / Math.max(1, pairs - 3)));
-    out.push({ id: 'switching', kind: 'switching', title: 'Sessões com mais trocas de janela tendem a ter foco menor', detail: 'Experimente fechar o que a tarefa não precisa, ou manter uma única janela para a tarefa.', evidence: `ρ de Spearman ${rho.toFixed(2)} em ${plural(pairs, 'rated session')}.`, strength: upper < 0 ? 'moderate' : 'tentative' });
+    out.push({ id: 'switching', kind: 'switching', title: t('Sessions with more window switching tend to have lower focus'), detail: t('Try closing what the task does not need, or keep one window for the task.'), evidence: t('Spearman ρ {v1} across {plural}.', { v1: rho.toFixed(2), plural: plural(pairs, 'rated session') }), strength: upper < 0 ? 'moderate' : 'tentative' });
   }
   const right = ratingsOf(facts.filter(f => f.s.challenge === 'right'));
   if (detractors.eligible && right.length >= S.comparisonSessions) {
     const worst = (['too-hard', 'too-easy'] as const).map(challenge => ({ challenge, values: ratingsOf(facts.filter(f => f.s.challenge === challenge)) })).filter(x => x.values.length >= S.comparisonSessions && mean(x.values)! <= mean(right)! - S.focusGap + 1e-9).sort((a, b) => mean(a.values)! - mean(b.values)!)[0];
     if (worst) {
       const hard = worst.challenge === 'too-hard';
-      out.push({ id: `challenge-${worst.challenge}`, kind: 'challenge', title: hard ? 'Sessões que pareceram difíceis demais têm avaliação menor' : 'Sessões que pareceram fáceis demais têm avaliação menor', detail: hard ? 'Experimente começar com um primeiro passo menor.' : 'Experimente acrescentar um pequeno desafio, como um limite de tempo ou um problema mais difícil.',
-        evidence: `${CHALLENGE_LABELS[worst.challenge]}: foco médio ${one(mean(worst.values)!)} em ${plural(worst.values.length, 'rated session')} contra ${one(mean(right)!)} em ${plural(right.length, 'rated session')} que pareceram na medida.`, strength: lower(worst.values, right) });
+      out.push({ id: `challenge-${worst.challenge}`, kind: 'challenge', title: hard ? t('Sessions that felt too hard rate lower') : t('Sessions that felt too easy rate lower'), detail: hard ? t('Try starting with a smaller first step.') : t('Try adding a small challenge, such as a time box or a harder problem.'),
+        evidence: t('{v1}: mean focus {one} in {plural} vs {one2} in {plural2} that felt about right.', { v1: CHALLENGE_LABELS[worst.challenge], one: one(mean(worst.values)!), plural: plural(worst.values.length, 'rated session'), one2: one(mean(right)!), plural2: plural(right.length, 'rated session') }), strength: lower(worst.values, right) });
     }
   }
   if (quality.sessions) {
     const M = T.model, sessions = plural(quality.sessions, 'session');
-    if (quality.ratedShare !== null && quality.ratedShare < S.ratedShare) out.push({ id: 'data-ratings', kind: 'data', title: 'Avalie mais sessões para liberar o modelo de foco', detail: `Avalie o foco percebido quando uma sessão terminar. O modelo de foco precisa de ${M.ratedSessions} sessões avaliadas ao longo de ${M.spanDays} dias.`, evidence: `${percent(quality.ratedShare)} de ${sessions} avaliadas.`, strength: 'tentative' });
-    else if (quality.activityCoverage === null || quality.activityCoverage < S.activityCoverage) out.push({ id: 'data-activity', kind: 'data', title: 'Ative a coleta de atividade para ver os estados de interação', detail: 'As contagens de teclado e mouse descrevem como você trabalha. Elas ficam neste computador e nunca incluem o que você digita.',
-      evidence: quality.activityCoverage === null ? `Nenhuma atividade foi registrada nestas ${sessions}.` : `A atividade cobre ${percent(quality.activityCoverage)} do tempo ativo em ${sessions}.`, strength: 'tentative' });
-    else if (quality.markerSessions / quality.sessions < S.markerShare) out.push({ id: 'data-markers', kind: 'data', title: 'Pressione Voltei quando perceber uma divagação', detail: 'Cada marcador ajuda a estimar quanto tempo a sua atenção costuma durar antes da primeira divagação.', evidence: `${quality.markerSessions} de ${sessions} têm um marcador de divagação.`, strength: 'tentative' });
+    if (quality.ratedShare !== null && quality.ratedShare < S.ratedShare) out.push({ id: 'data-ratings', kind: 'data', title: t('Rate more sessions to unlock the focus model'), detail: t('Rate perceived focus when a session ends. The focus model needs {ratedSessions} rated sessions over {spanDays} days.', { ratedSessions: M.ratedSessions, spanDays: M.spanDays }), evidence: t('{percent} of {sessions} rated.', { percent: percent(quality.ratedShare), sessions }), strength: 'tentative' });
+    else if (quality.activityCoverage === null || quality.activityCoverage < S.activityCoverage) out.push({ id: 'data-activity', kind: 'data', title: t('Turn on activity collection to see interaction states'), detail: t('Keyboard and mouse counts describe how you work. They stay on this computer and never include what you type.'),
+      evidence: quality.activityCoverage === null ? t('No activity was recorded in these {sessions}.', { sessions }) : t('Activity covers {percent} of active time in {sessions}.', { percent: percent(quality.activityCoverage), sessions }), strength: 'tentative' });
+    else if (quality.markerSessions / quality.sessions < S.markerShare) out.push({ id: 'data-markers', kind: 'data', title: t('Press I\'m back when you notice a drift'), detail: t('Each marker helps estimate how long your attention usually lasts before the first drift.'), evidence: t('{markerSessions} of {sessions} have a drift marker.', { markerSessions: quality.markerSessions, sessions }), strength: 'tentative' });
   }
   return out.sort((a, b) => (a.strength === b.strength ? 0 : a.strength === 'moderate' ? -1 : 1) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)).slice(0, S.max);
 }
@@ -715,7 +731,7 @@ function cycleComparisonSection(data: Dataset, activity: ActivitySample[], optio
   const adjustments = { thisWeek: saved(week), previousWeek: saved(addDays(week, -7)) };
   const section = { recent: { from: recentFrom, to: options.to, sessions: recent.length }, baseline: { from: baselineFrom, to: baselineTo, sessions: baseline.length }, adjustments };
   if (recent.length < C.recentSessions || baseline.length < C.baselineSessions) {
-    return { eligible: false, n: recent.length, reason: `Precisa de ${C.recentSessions} sessões nos últimos ${C.recentDays} dias e ${C.baselineSessions} nos ${C.baselineDays} dias anteriores (${recent.length} e ${baseline.length} até agora).`, metrics: [], ...section };
+    return { eligible: false, n: recent.length, reason: t('Needs {recentSessions} sessions in the last {recentDays} days and {baselineSessions} in the {baselineDays} days before them ({length} and {length2} so far).', { recentSessions: C.recentSessions, recentDays: C.recentDays, baselineSessions: C.baselineSessions, baselineDays: C.baselineDays, length: recent.length, length2: baseline.length }), metrics: [], ...section };
   }
   const measure = (rows: Facts[], minimum: number) => {
     const ratings = ratingsOf(rows), rates = ratesOf(rows, minimum), cases = baseOf(rows), curve = cases.length >= minimum && cases.filter(f => f.drifts.length).length >= C.spanEvents ? survivalCurve('', cases) : null;
@@ -726,8 +742,8 @@ function cycleComparisonSection(data: Dataset, activity: ActivitySample[], optio
     const a = now[id], b = before[id], delta = a !== null && b !== null ? a - b : null;
     return { id, label, unit, recent: a, baseline: b, delta, improved: delta === null || Math.abs(delta) < tolerance ? null : (delta > 0) === higherIsBetter };
   };
-  return { eligible: true, n: recent.length, reason: `Sessões dos últimos ${C.recentDays} dias comparadas aos ${C.baselineDays} dias anteriores. Ambas as janelas dependem de quando e do que você escolheu registrar, então uma mudança é uma pista, não uma prova de que o seu ajuste funcionou.`,
-    metrics: [metric('focus', 'Foco percebido', 'pontos', true, 0.05), metric('drift', 'Divagações por hora ativa', 'por hora', false, 0.05), metric('span', 'Tempo mediano até a primeira divagação', 'min', true, 0.5), metric('switches', 'Trocas de janela por hora observada', 'por hora', false, 0.5)], ...section };
+  return { eligible: true, n: recent.length, reason: t('Sessions of the last {recentDays} days against the {baselineDays} days before them. Both windows depend on when and what you chose to record, so a change is a hint, not a proof that your adjustment worked.', { recentDays: C.recentDays, baselineDays: C.baselineDays }),
+    metrics: [metric('focus', t('Perceived focus'), t('points'), true, 0.05), metric('drift', t('Drifts per active hour'), t('per hour'), false, 0.05), metric('span', t('Median time to the first drift'), 'min', true, 0.5), metric('switches', t('Window switches per observed hour'), t('per hour'), false, 0.5)], ...section };
 }
 
 /* `activity` holds the samples of the selected sessions and of the comparison windows; other samples are ignored. Pure and deterministic. */
@@ -737,7 +753,7 @@ export function focusInsights(data: Dataset, activity: ActivitySample[], options
   const quality = qualityOf(facts, selected.length - sessions.length, droppedMarkers), rhythm = rhythmSection(facts), attentionSpan = attentionSpanSection(base), detractors = detractorsSection(facts), states = statesSection(facts);
   return { from: options.from, to: options.to, computedAt: new Date(options.now ?? Date.now()).toISOString(), quality, rhythm, attentionSpan, sessionShape: sessionShapeSection(base, blocks),
     states: states.section, detractors, model: modelSection(data, facts, states.changes), cycleComparison: cycleComparisonSection(data, activity, options),
-    recommendations: recommendationsOf(facts, quality, rhythm, attentionSpan, base, detractors), note: INSIGHTS_LIMITS_NOTE };
+    recommendations: recommendationsOf(facts, quality, rhythm, attentionSpan, base, detractors), note: insightsLimitsNote() };
 }
 
 /* One answer to "how long should I plan?": the time the attention lasted before a drift, counted past the warm-up, in the last duration.days days of the goal and then of the area.
@@ -749,9 +765,9 @@ export function suggestedDuration(data: Dataset, fieldId: string, activityMode: 
     const rows = selectedSessions(data, from, today, scope === 'area' ? fieldId : '', scope === 'goal' ? goalId : '').filter(s => (s.activityMode ?? 'Unspecified') === activityMode);
     const base = baseOf(collect(data, [], chronological(rows)).facts), plan = lengthPlan(attentionSpanSection(base));
     if (plan) return { eligible: true, minutes: Math.max(1, Math.min(1440, plan.minutes)), source: 'attention', scope, n: base.length, spanDays: spanOf(base.map(f => f.day)), from, to: today, sessionIds: base.map(f => f.s.id),
-      evidence: `A atenção se manteve por uma mediana de ${whole(plan.median.estimate)} min antes de uma divagação${plan.afterWarmUp ? `, contada após os primeiros ${T.attentionSpan.warmUpMinutes} minutos` : ''}.` };
+      evidence: t('Attention held for a median of {whole} min before a drift{v2}.', { whole: whole(plan.median.estimate), v2: plan.afterWarmUp ? t(', counted after the first {warmUpMinutes} minutes', { warmUpMinutes: T.attentionSpan.warmUpMinutes }) : '' }) };
   }
   const recorded = durationSuggestion(data, fieldId, activityMode, now, goalId);
   return { eligible: recorded.eligible, minutes: recorded.minutes, source: recorded.eligible ? 'recorded' : null, scope: recorded.scope, n: recorded.n, spanDays: recorded.spanDays, from: recorded.from, to: recorded.to, sessionIds: recorded.sessionIds,
-    evidence: `A duração registrada mediana. Ainda não há marcadores Voltei suficientes para medir quanto tempo a sua atenção dura.` };
+    evidence: t('The median recorded duration. There are not yet enough I\'m back markers to measure how long your attention lasts.') };
 }

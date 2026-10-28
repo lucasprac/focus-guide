@@ -3,8 +3,9 @@ import { Badge, Button, CheckControl, EmptyState, cn } from './ui';
 import { Icon, displayDay, minutesLabel, useMotionEnabled } from './components';
 import NeuralVisual from './NeuralVisual';
 import { layoutWorld, type Vec3, type WorldLayout } from './goal-world-layout';
-import { GOAL_STATUS_LABELS } from '../../shared/labels';
+import { goalStatusLabel } from '../../shared/labels';
 import { WORLD_GOAL_LIMIT, worldKey, type GoalWorldModel, type WorldGoal, type WorldStatus } from '../../shared/goal-world';
+import { t } from '../../shared/i18n';
 
 type View = { yaw: number; pitch: number; zoom: number };
 const initialView: View = { yaw: -.32, pitch: -.38, zoom: 1 };
@@ -44,29 +45,29 @@ function FallbackMap({ layout, view, selectedId, selectedStepId, id }: { layout:
 function Inspector({ goal, areaName, selectedStepId, onSelectStep, onFocus, onOpen }: { goal: WorldGoal; areaName: string; selectedStepId: string | null; onSelectStep: (id: string | null) => void; onFocus: (stepId: string | null) => void; onOpen: () => void }) {
   const next = goal.steps.find(s => s.next), chosen = goal.steps.find(s => s.id === selectedStepId);
   const target = chosen && !chosen.completed ? chosen : next;
-  return <aside className="panel goal-world-inspector" aria-label="Meta selecionada" style={{ '--area-color': goal.color } as CSSProperties}>
-    <div className="goal-world-inspector-head"><Badge tone={statusTone[goal.status]} >{GOAL_STATUS_LABELS[goal.status] ?? goal.status}</Badge><span className="goal-world-area text-caption"><i />{areaName}</span></div>
+  return <aside className="panel goal-world-inspector" aria-label={t('Selected goal')} style={{ '--area-color': goal.color } as CSSProperties}>
+    <div className="goal-world-inspector-head"><Badge tone={statusTone[goal.status]} className="capitalize">{goalStatusLabel(goal.status)}</Badge><span className="goal-world-area text-caption"><i />{areaName}</span></div>
     <h2>{goal.title}</h2>
     {goal.outcome && <p className="text-caption text-ink-muted">{goal.outcome}</p>}
     <dl className="goal-world-stats text-caption">
-      <div><dt>Tempo de foco</dt><dd className="tabular-nums">{minutesLabel(goal.totalMinutes)}</dd></div>
-      <div><dt>Últimos 28 dias</dt><dd className="tabular-nums">{minutesLabel(goal.minutes28)}</dd></div>
-      <div><dt>Ações, 28 dias</dt><dd className="tabular-nums">{goal.done} {goal.done === 1 ? 'feita' : 'feitas'}{goal.smaller ? ` · ${goal.smaller} em versão menor` : ''}</dd></div>
+      <div><dt>{t('Focus time')}</dt><dd className="tabular-nums">{minutesLabel(goal.totalMinutes)}</dd></div>
+      <div><dt>{t('Last 28 days')}</dt><dd className="tabular-nums">{minutesLabel(goal.minutes28)}</dd></div>
+      <div><dt>{t('Actions, 28 days')}</dt><dd className="tabular-nums">{t('{count} done|{count} done', { count: goal.done })}{goal.smaller ? t(' · {smaller} smaller', { smaller: goal.smaller }) : ''}</dd></div>
     </dl>
-    {goal.progress && <div className="goal-world-progress text-caption"><span>Progresso</span><strong className="tabular-nums">{goal.progress.value ?? '—'} / {goal.progress.target}{goal.progress.unit ? ` ${goal.progress.unit}` : ''}</strong><div className="horizon-progress"><span style={{ width: `${goal.progress.fraction * 100}%` }} /></div></div>}
+    {goal.progress && <div className="goal-world-progress text-caption"><span>{t('Progress')}</span><strong className="tabular-nums">{goal.progress.value ?? '—'} / {goal.progress.target}{goal.progress.unit ? ` ${goal.progress.unit}` : ''}</strong><div className="horizon-progress"><span style={{ width: `${goal.progress.fraction * 100}%` }} /></div></div>}
     <div className="goal-world-roadmap">
-      <div className="section-title"><h3 className="text-label">Roteiro</h3><span className="hint">{goal.steps.length ? `${goal.completedSteps}/${goal.steps.length} etapas` : 'Ainda sem etapas'}</span></div>
+      <div className="section-title"><h3 className="text-label">{t('Roadmap')}</h3><span className="hint">{goal.steps.length ? t('{completedSteps}/{length} steps', { completedSteps: goal.completedSteps, length: goal.steps.length }) : t('No steps yet')}</span></div>
       {goal.steps.length > 0 && <ol>{goal.steps.map(step => <li key={step.id}><button type="button" className={cn('goal-world-step text-caption', step.completed && 'is-done', step.next && 'is-next')} aria-pressed={step.id === selectedStepId} onClick={() => onSelectStep(step.id === selectedStepId ? null : step.id)}>
         <span className="goal-world-step-mark" aria-hidden="true">{step.completed && <Icon name="check" size={11} strokeWidth={2.4} />}</span>
-        <span className="goal-world-step-title">{step.title}{step.next && <small> · próxima</small>}</span>
+        <span className="goal-world-step-title">{step.title}{step.next && <small>{' '}{t('· next')}</small>}</span>
         <span className="goal-world-step-meta tabular-nums">{step.effortMinutes > 0 ? minutesLabel(step.effortMinutes) : step.targetDate ? displayDay(step.targetDate, true) : ''}</span>
       </button></li>)}</ol>}
     </div>
     <div className="goal-world-actions">
-      {goal.status === 'active' && <Button variant="primary" icon="focus" onClick={() => onFocus(target?.id ?? null)}>{target ? target === next ? 'Focar na próxima etapa' : 'Focar nesta etapa' : 'Focar nesta meta'}</Button>}
-      <Button icon="arrow" onClick={onOpen}>Abrir meta</Button>
+      {goal.status === 'active' && <Button variant="primary" icon="focus" onClick={() => onFocus(target?.id ?? null)}>{target ? target === next ? t('Focus on next step') : t('Focus on this step') : t('Focus on this goal')}</Button>}
+      <Button icon="arrow" onClick={onOpen}>{t('Open goal')}</Button>
     </div>
-    {goal.status !== 'active' && <p className="hint">{goal.status === 'achieved' ? 'As metas alcançadas ficam no anel externo.' : 'Só metas ativas podem iniciar uma sessão de foco. Ative esta meta em Metas.'}</p>}
+    {goal.status !== 'active' && <p className="hint">{goal.status === 'achieved' ? t('Achieved goals stay in the outer ring.') : t('Only active goals can start a focus session. Activate it in Goals.')}</p>}
   </aside>;
 }
 
@@ -144,26 +145,26 @@ export default function GoalWorld({ model, animation, paletteName, color, theme,
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
-  if (!model.goals.length) return <EmptyState title="Sua rede começa com uma meta." action={<Button variant="primary" icon="plus" onClick={onCreateGoal}>Criar uma meta</Button>}>Cada meta vira um neurônio. O roteiro faz o axônio crescer, e o tempo de foco o fortalece.</EmptyState>;
-  const areaName = (fieldId: string) => model.areas.find(a => a.id === fieldId)?.name ?? 'Área';
+  if (!model.goals.length) return <EmptyState title={t('Your network starts with a goal.')} action={<Button variant="primary" icon="plus" onClick={onCreateGoal}>{t('Create a goal')}</Button>}>{t('Each goal becomes a neuron. Its roadmap grows the axon, and focused time makes it stronger.')}</EmptyState>;
+  const areaName = (fieldId: string) => model.areas.find(a => a.id === fieldId)?.name ?? t('Area');
   return <div className="goal-world">
     <div className="goal-world-main">
       <div className="goal-world-scene">
-        <div className="constellation-meta"><span><i />{paletteName}<small> / {focusTarget ? 'visão da meta' : 'visão geral'}</small></span><span className="hint" role="status">{selected ? `${selected.title} · ${selected.completedSteps}/${selected.steps.length} etapas · ${minutesLabel(selected.totalMinutes)}` : ''}</span></div>
+        <div className="constellation-meta"><span><i />{paletteName}<small> / {focusTarget ? t('goal view') : t('overview')}</small></span><span className="hint" role="status">{selected ? t('{title} · {completedSteps}/{length} steps · {minutesLabel}', { title: selected.title, completedSteps: selected.completedSteps, length: selected.steps.length, minutesLabel: minutesLabel(selected.totalMinutes) }) : ''}</span></div>
         <div className="constellation-toolbar">
-          <p id={`${id}-help`} className="hint">Arraste para explorar · Clique em um neurônio · Setas · + / − · Esc para a visão geral</p>
-          <div className="constellation-controls" aria-label="Controles de visualização do Mundo neural">
-            <button type="button" aria-label="Girar para a esquerda" onClick={() => adjust(-.2)}><Icon name="chevron-left" size={16} className="transform-none" /></button>
-            <button type="button" aria-label="Girar para a direita" onClick={() => adjust(.2)}><Icon name="chevron" size={16} className="transform-none" /></button>
-            <button type="button" aria-label="Inclinar para cima" onClick={() => adjust(0, -.12)}><Icon name="chevron-up" size={16} className="transform-none" /></button>
-            <button type="button" aria-label="Inclinar para baixo" onClick={() => adjust(0, .12)}><Icon name="chevron-down" size={16} className="transform-none" /></button>
-            <button type="button" aria-label="Reduzir zoom" disabled={view.zoom <= .8} onClick={() => adjust(0, 0, -.1)}><Icon name="minus" size={16} /></button>
-            <button type="button" aria-label="Aumentar zoom" disabled={view.zoom >= 1.4} onClick={() => adjust(0, 0, .1)}><Icon name="plus" size={16} /></button>
-            <button type="button" className="constellation-text-control text-caption" disabled={!focusTarget} onClick={overview}>Visão geral</button>
-            <button type="button" className="constellation-text-control text-caption" aria-pressed={rotating && motion} disabled={!motion} onClick={() => setRotating(value => !value)}><Icon name={rotating && motion ? 'pause' : 'play'} size={14} />{!motion ? 'Visão parada' : rotating ? 'Pausar órbita' : 'Retomar órbita'}</button>
+          <p id={`${id}-help`} className="hint">{t('Drag to explore · Click a neuron · Arrow keys · + / − · Esc for overview')}</p>
+          <div className="constellation-controls" aria-label={t('Neural World view controls')}>
+            <button type="button" aria-label={t('Rotate left')} onClick={() => adjust(-.2)}><Icon name="chevron-left" size={16} className="transform-none" /></button>
+            <button type="button" aria-label={t('Rotate right')} onClick={() => adjust(.2)}><Icon name="chevron" size={16} className="transform-none" /></button>
+            <button type="button" aria-label={t('Tilt up')} onClick={() => adjust(0, -.12)}><Icon name="chevron-up" size={16} className="transform-none" /></button>
+            <button type="button" aria-label={t('Tilt down')} onClick={() => adjust(0, .12)}><Icon name="chevron-down" size={16} className="transform-none" /></button>
+            <button type="button" aria-label={t('Zoom out')} disabled={view.zoom <= .8} onClick={() => adjust(0, 0, -.1)}><Icon name="minus" size={16} /></button>
+            <button type="button" aria-label={t('Zoom in')} disabled={view.zoom >= 1.4} onClick={() => adjust(0, 0, .1)}><Icon name="plus" size={16} /></button>
+            <button type="button" className="constellation-text-control text-caption" disabled={!focusTarget} onClick={overview}>{t('Overview')}</button>
+            <button type="button" className="constellation-text-control text-caption" aria-pressed={rotating && motion} disabled={!motion} onClick={() => setRotating(value => !value)}><Icon name={rotating && motion ? 'pause' : 'play'} size={14} />{!motion ? t('Still view') : rotating ? t('Pause orbit') : t('Resume orbit')}</button>
           </div>
         </div>
-        <div className={cn('constellation-stage goal-world-stage', dragging && 'is-dragging')} role="group" tabIndex={0} data-yaw={view.yaw.toFixed(3)} data-pitch={view.pitch.toFixed(3)} data-zoom={view.zoom.toFixed(2)} data-focus-id={focusTarget ?? ''} aria-label="Rede de metas em 3D" aria-describedby={`${id}-help`}
+        <div className={cn('constellation-stage goal-world-stage', dragging && 'is-dragging')} role="group" tabIndex={0} data-yaw={view.yaw.toFixed(3)} data-pitch={view.pitch.toFixed(3)} data-zoom={view.zoom.toFixed(2)} data-focus-id={focusTarget ?? ''} aria-label={t('3D goal network')} aria-describedby={`${id}-help`}
           onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
           onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={() => { drag.current = null; setDragging(false); }} onKeyDown={event => {
             const key = event.key;
@@ -175,22 +176,22 @@ export default function GoalWorld({ model, animation, paletteName, color, theme,
           <NeuralVisual kind="world" color={color} theme={theme} software={software} visible moving={motion} goals={sceneGoals} worldKey={key} selectedId={selected?.id ?? null} selectedStepId={selectedStepId} focusId={focusTarget} view={view} labelRef={label}
             onSelect={(goalId, stepId) => select(goalId, stepId ?? null)} fallback={<FallbackMap layout={layout} view={view} selectedId={selected?.id ?? null} selectedStepId={selectedStepId} id={id} />} />
           <div className="goal-world-label" ref={label} hidden aria-hidden="true"><span>{selected?.title}</span></div>
-          {!visible.length && <p className="constellation-empty">Todas as metas aqui foram alcançadas. Mostre as metas alcançadas para vê-las.</p>}
+          {!visible.length && <p className="constellation-empty">{t('Every goal here is achieved. Show achieved goals to see them.')}</p>}
         </div>
       </div>
       {selected && <Inspector goal={selected} areaName={areaName(selected.fieldId)} selectedStepId={selectedStepId} onSelectStep={stepId => { if (stepId) select(selected.id, stepId); else setSelectedStepId(null); }} onFocus={stepId => onFocus(selected.id, stepId)} onOpen={() => onOpenGoal(selected.id)} />}
     </div>
-    <div className="goal-world-list" aria-label="Metas por área">
+    <div className="goal-world-list" aria-label={t('Goals by area')}>
       {model.areas.map(area => {
         const rows = visible.filter(g => g.fieldId === area.id);
         return rows.length > 0 && <div className="goal-world-list-area" key={area.id} style={{ '--area-color': area.color } as CSSProperties}>
           <span className="goal-world-area text-caption"><i />{area.name}</span>
-          <div className="constellation-fields">{rows.map(g => <button type="button" className="text-caption" key={g.id} data-goal-id={g.id} aria-pressed={selected?.id === g.id} onClick={() => select(g.id)}><span className="constellation-field-mark" /><span>{g.title}</span><small>{g.status === 'active' ? '' : `${(GOAL_STATUS_LABELS[g.status] ?? g.status).toLowerCase()} · `}{g.steps.length ? `${g.completedSteps}/${g.steps.length}` : minutesLabel(g.totalMinutes)}</small></button>)}</div>
+          <div className="constellation-fields">{rows.map(g => <button type="button" className="text-caption" key={g.id} data-goal-id={g.id} aria-pressed={selected?.id === g.id} onClick={() => select(g.id)}><span className="constellation-field-mark" /><span>{g.title}</span><small>{g.status === 'active' ? '' : `${(goalStatusLabel(g.status)).toLowerCase()} · `}{g.steps.length ? `${g.completedSteps}/${g.steps.length}` : minutesLabel(g.totalMinutes)}</small></button>)}</div>
         </div>;
       })}
       <div className="goal-world-list-footer text-caption">
-        <label className="goal-toggle"><CheckControl aria-label="Mostrar metas alcançadas" checked={showAchieved} onChange={e => setShowAchieved(e.target.checked)} />Mostrar metas alcançadas</label>
-        <span className="hint">{visible.length > WORLD_GOAL_LIMIT ? `A cena mostra ${WORLD_GOAL_LIMIT} de ${visible.length} metas. Todas as metas estão nesta lista.` : 'Não há sequência a proteger. Volte no seu ritmo.'}</span>
+        <label className="goal-toggle"><CheckControl aria-label={t('Show achieved goals')} checked={showAchieved} onChange={e => setShowAchieved(e.target.checked)} />{t('Show achieved goals')}</label>
+        <span className="hint">{visible.length > WORLD_GOAL_LIMIT ? t('The scene shows {WORLD_GOAL_LIMIT} of {length} goals. Every goal is in this list.', { WORLD_GOAL_LIMIT, length: visible.length }) : t('There is no streak to protect. Return at your own pace.')}</span>
       </div>
     </div>
   </div>;

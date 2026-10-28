@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { ActivitySample, Dataset, Field, FocusSession, SessionEvent, Settings, Task, TaskCategory, WeeklyReview } from '../shared/types';
 import { settings } from '../shared/validation';
 import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalMilestone, type GoalOccurrence } from '../shared/goal-types';
+import { t } from '../shared/i18n';
 
 export const defaultSettings: Settings = {
   timezone: 'America/Fortaleza', defaultMinutes: 90, animation: true, sound: false, palette: 'cyan', weeklyGoalMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true
@@ -18,7 +19,7 @@ export class Store {
     this.path = join(directory, 'focus-guide.sqlite');
     this.db = new Database(this.path);
     const originalVersion = Number(this.db.pragma('user_version', { simple: true }));
-    if (originalVersion > 11) { this.db.close(); throw new Error('Estes dados foram criados por uma versão mais nova do Focus Guide.'); }
+    if (originalVersion > 11) { this.db.close(); throw new Error(t('This dataset was created by a newer Focus Guide version.')); }
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('synchronous = FULL');
@@ -54,7 +55,7 @@ export class Store {
           CREATE INDEX session_start ON sessions(startedAt);
           PRAGMA user_version = 2;
         `);
-        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error('A migração encontrou vínculos de registros inválidos.');
+        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error(t('Migration found invalid record links.'));
       })(); } finally { this.db.pragma('foreign_keys = ON'); }
     }
     if (originalVersion < 3) {
@@ -92,7 +93,7 @@ export class Store {
           const columns = this.db.pragma(`table_info(${table})`) as Array<{ name: string }>;
           if (!columns.some(c => c.name === column)) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT REFERENCES ${reference}(id);`);
         }
-        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error('A migração encontrou vínculos de metas inválidos.');
+        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error(t('Migration found invalid goal links.'));
         this.db.pragma('user_version = 4');
       })();
     }
@@ -131,7 +132,7 @@ export class Store {
         if (!columns.some(c => c.name === 'milestoneId')) this.db.exec('ALTER TABLE sessions ADD COLUMN milestoneId TEXT REFERENCES milestones(id);');
         this.db.exec('CREATE INDEX IF NOT EXISTS session_goal ON sessions(goalId); CREATE INDEX IF NOT EXISTS session_milestone ON sessions(milestoneId);');
         upgradeGoalRecords({ milestones: this.bodies<GoalMilestone>('milestones') }).milestones.forEach(row => this.putGoalRecord('milestones', row));
-        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error('A migração encontrou vínculos de roteiro inválidos.');
+        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error(t('Migration found invalid roadmap links.'));
         this.db.pragma('user_version = 7');
       })();
     }
@@ -194,7 +195,7 @@ export class Store {
     if (!this.getMeta('settings')) {
       this.db.transaction(() => {
         this.setMeta('settings', defaultSettings);
-        for (const [name, color] of [['Trabalho profundo', '#62d8cd'], ['Aprendizado', '#a99af7'], ['Prática criativa', '#e4b76a']]) {
+        for (const [name, color] of [['Deep work', '#62d8cd'], ['Learning', '#a99af7'], ['Creative practice', '#e4b76a']]) {
           this.putField({ id: randomUUID(), name, color, archived: false, createdAt: new Date().toISOString() });
         }
       })();
@@ -291,7 +292,7 @@ export class Store {
   }
   putActivity(sample: ActivitySample): void {
     const session = this.session(sample.sessionId);
-    if (!session || sample.startMs < 0 || sample.endMs > session.activeMs || sample.endMs <= sample.startMs) throw new Error('A atividade deve caber no tempo durável da sessão.');
+    if (!session || sample.startMs < 0 || sample.endMs > session.activeMs || sample.endMs <= sample.startMs) throw new Error(t('Activity must fit durable session time.'));
     const previous = this.db.prepare('SELECT * FROM activity WHERE sessionId=? ORDER BY endMs DESC LIMIT 1').get(sample.sessionId) as ActivitySample | undefined;
     if (previous && previous.status === sample.status && previous.endMs === sample.startMs && Math.floor(previous.startMs / 60000) === Math.floor(sample.startMs / 60000)) {
       // An unknown (null) measure on either side keeps the merged block unknown; it never turns into a sum of the known part.
