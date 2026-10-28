@@ -92,4 +92,6 @@ export function correlation(sessions: FocusSession[], key: 'energy' | 'duration'
 export function selectedSessions(data: Dataset, from: string, to: string, fieldId = '',goalId = ''): FocusSession[] {
   return data.sessions.filter(s => { const day = localDay(s.startedAt, s.timezone); return s.status === 'completed' && !s.excluded && (!fieldId || s.fieldId === fieldId) && (!goalId || s.goalId === goalId) && day >= from && day <= to; });
 }
+/* Recorded active time minus the planned countdown length: positive means the session ran longer than planned. Null for a stopwatch or an unfinished session. */
+export function planDifferenceMinutes(s: FocusSession): number | null { return s.plannedMs === null || s.status !== 'completed' ? null : (s.activeMs - s.plannedMs) / 60000; }
 export function totalMinutes(data: Dataset): number { return data.sessions.filter(s => s.status === 'completed' && !s.excluded).reduce((sum, s) => sum + s.activeMs / 60000, 0); }

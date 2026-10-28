@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased (3.1.2) — session preparation answers
+
+- **I'm already warm.** In Focus > **Optional details**, you can answer **Yes**, **Kind of** or **No** before a session.
+- **Have you taken medications?** In the same place, you can answer **Yes** or **No**.
+- Both answers are optional and stay `null` when you do not answer.
+- **Planned vs recorded.** Patterns > **Session distributions** has a new chart. It compares the length that you set for a timer session with the recorded active time. The check-in after a timer session also shows the difference.
+- The session CSV adds `warm_up`, `medication` and `plan_difference_minutes`.
+- Schema 11 and backup version 11. The migration saves a `before-schema-v11` snapshot first. Version 3.1.0 and earlier cannot open the database or restore the backup.
+
 ## Unreleased — floating check-in fix
 
 - **Check-in in the floating timer.** The answer buttons of "Attention right now?" in the floating timer now take a click. Before, the brain's drag area covered them, so a click moved the window instead of saving the answer. No schema or backup format change.

@@ -1,5 +1,5 @@
 import type { AgentAccess, FocusVisual, Settings } from './types';
-import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, PROBE_ANSWERS, type ActivityMode, type Challenge, type Detractor, type ProbeAnswer } from './types';
+import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type Medication, type ProbeAnswer, type WarmUp } from './types';
 
 export function activityMode(value: unknown): ActivityMode {
   if (!ACTIVITY_MODES.includes(value as ActivityMode)) throw new Error('Choose a valid activity mode.');
@@ -15,6 +15,16 @@ export function challenge(value: unknown): Challenge | null {
   if (value === null || value === undefined) return null;
   if (!CHALLENGES.includes(value as Challenge)) throw new Error('Choose a valid challenge level.');
   return value as Challenge;
+}
+export function warmUp(value: unknown): WarmUp | null {
+  if (value === null || value === undefined) return null;
+  if (!WARM_UPS.includes(value as WarmUp)) throw new Error('Choose a valid warm-up answer.');
+  return value as WarmUp;
+}
+export function medication(value: unknown): Medication | null {
+  if (value === null || value === undefined) return null;
+  if (!MEDICATION_ANSWERS.includes(value as Medication)) throw new Error('Choose a valid medication answer.');
+  return value as Medication;
 }
 export function probeAnswer(value: unknown): ProbeAnswer {
   if (!PROBE_ANSWERS.includes(value as ProbeAnswer)) throw new Error('Choose a valid check-in answer.');

@@ -32,7 +32,7 @@ export function ProbeAnnouncer({ probe }: { probe?: PendingProbe | null }) {
 }
 
 /** Optional single-choice reflection after a session. Choosing the selected answer again, or Clear, leaves it unanswered (null). */
-function ReflectionChoice<T extends string>({ label, value, values, labels, onChange }: { label: string; value: T | null; values: readonly T[]; labels: Record<T, string>; onChange: (value: T | null) => void }) {
+export function ReflectionChoice<T extends string>({ label, value, values, labels, onChange }: { label: string; value: T | null; values: readonly T[]; labels: Record<T, string>; onChange: (value: T | null) => void }) {
   // The question alone names the group. Clear sits on the question's line, so showing it never moves the choices under the pointer.
   return <div className="reflection-choice">
     <div className="reflection-head"><span className="reflection-label">{label}</span><span className="optional">optional</span>{value !== null && <button type="button" className="reflection-clear" aria-label={`Clear answer: ${label}`} onClick={() => onChange(null)}>Clear</button>}</div>

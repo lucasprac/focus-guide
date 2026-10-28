@@ -18,7 +18,7 @@ export class Store {
     this.path = join(directory, 'focus-guide.sqlite');
     this.db = new Database(this.path);
     const originalVersion = Number(this.db.pragma('user_version', { simple: true }));
-    if (originalVersion > 10) { this.db.close(); throw new Error('This dataset was created by a newer Focus Guide version.'); }
+    if (originalVersion > 11) { this.db.close(); throw new Error('This dataset was created by a newer Focus Guide version.'); }
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('synchronous = FULL');
@@ -179,6 +179,18 @@ export class Store {
         this.db.pragma('user_version = 10');
       })();
     }
+    if (originalVersion < 11) {
+      // Schema 11 adds the optional warm-up and medication answers given before a session. Old rows keep null.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v11-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        this.db.exec(`ALTER TABLE sessions ADD COLUMN warmUp TEXT;
+          ALTER TABLE sessions ADD COLUMN medication TEXT;`);
+        this.db.pragma('user_version = 11');
+      })();
+    }
     if (!this.getMeta('settings')) {
       this.db.transaction(() => {
         this.setMeta('settings', defaultSettings);
@@ -260,9 +272,9 @@ export class Store {
     this.db.prepare('INSERT INTO tasks (id,fieldId,title,completed,archived,createdAt,updatedAt,categoryId,notes,priority,dueDate,goalId,milestoneId) VALUES (@id,@fieldId,@title,@completed,@archived,@createdAt,@updatedAt,@categoryId,@notes,@priority,@dueDate,@goalId,@milestoneId) ON CONFLICT(id) DO UPDATE SET title=excluded.title,completed=excluded.completed,archived=excluded.archived,updatedAt=excluded.updatedAt,categoryId=excluded.categoryId,notes=excluded.notes,priority=excluded.priority,dueDate=excluded.dueDate,goalId=excluded.goalId,milestoneId=excluded.milestoneId').run({ goalId: null, milestoneId: null, ...t, completed: +t.completed, archived: +t.archived });
   }
   putSession(s: FocusSession): void {
-    this.db.prepare(`INSERT INTO sessions (id,fieldId,primaryTaskId,checklistIds,intention,plannedMs,activeMs,status,startedAt,endedAt,timezone,energy,focus,note,completionReason,excluded,recovered,timingMode,autoOvertime,targetReached,activityMode,behaviourVersion,goalId,occurrenceId,milestoneId,detractor,challenge) VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId,@detractor,@challenge)
-      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId,detractor=excluded.detractor,challenge=excluded.challenge`)
-      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, detractor: s.detractor ?? null, challenge: s.challenge ?? null, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
+    this.db.prepare(`INSERT INTO sessions (id,fieldId,primaryTaskId,checklistIds,intention,plannedMs,activeMs,status,startedAt,endedAt,timezone,energy,focus,note,completionReason,excluded,recovered,timingMode,autoOvertime,targetReached,activityMode,behaviourVersion,goalId,occurrenceId,milestoneId,detractor,challenge,warmUp,medication) VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId,@detractor,@challenge,@warmUp,@medication)
+      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId,detractor=excluded.detractor,challenge=excluded.challenge,warmUp=excluded.warmUp,medication=excluded.medication`)
+      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, detractor: s.detractor ?? null, challenge: s.challenge ?? null, warmUp: s.warmUp ?? null, medication: s.medication ?? null, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
   }
   putEvent(e: SessionEvent): void {
     this.db.prepare('INSERT INTO events VALUES (@id,@sessionId,@kind,@startedAt,@endedAt,@durationMs,@text,@category,@activeOffsetMs,@source) ON CONFLICT(id) DO UPDATE SET endedAt=excluded.endedAt,durationMs=excluded.durationMs,text=excluded.text,category=excluded.category').run({ activeOffsetMs: null, source: null, ...e });

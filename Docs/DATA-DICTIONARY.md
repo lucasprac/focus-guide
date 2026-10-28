@@ -483,6 +483,30 @@ A check-in is an event with `kind` `probe`. It has these properties.
 - A backup whose settings have no `focusVisual` key restores again, for example a backup from a version before the session gauge. The missing key gets `brain`. A missing `attentionProbes` gets `false`.
 - Focus Guide 2.0.0 and earlier cannot restore a version 10 backup. They reject the version number and the new settings key `attentionProbes`.
 
+## Session preparation answers (schema 11)
+
+Schema 11 adds two optional answers that you give before a session starts. Old rows keep `null`. `null` means that you gave no answer.
+
+| Field | Meaning |
+|---|---|
+| `warmUp` | The answer to **I'm already warm**. One of `yes`, `kind-of` or `no`. `null` when you gave no answer. |
+| `medication` | The answer to **Have you taken medications?**. One of `yes` or `no`. `null` when you gave no answer. |
+
+- `session.start` accepts `warmUp` and `medication`. `session.edit` does not change them.
+- The migration saves a `before-schema-v11-<timestamp>.sqlite` snapshot with `VACUUM INTO`, except for an empty new database. Then one transaction adds the two columns.
+- The planned-versus-recorded difference is not stored. `planDifferenceMinutes()` in `src/shared/analytics.ts` calculates `(activeMs - plannedMs) / 60000` for a finished timer session. It is `null` for a stopwatch session or a session that is not finished. A positive value means that the session was longer than planned.
+- The AI agent tools do not return `warmUp` or `medication`.
+
+### CSV columns
+
+- Session CSV: `warm_up`, `medication` and `plan_difference_minutes` at the end, after `challenge`. Blank when `null`.
+
+### Backup version 11
+
+- Export writes `schemaVersion` 11. Import accepts versions 1 to 11 and rejects other versions.
+- A version 10 backup becomes version 11 with `null` for `warmUp` and `medication`.
+- Focus Guide 3.1.0 and earlier cannot restore a version 11 backup.
+
 ## Calculation rules for insights
 
 The Insights tab and the agent tool `get_focus_insights` use the engine in `src/shared/focus-insights.ts`. The constants are in `INSIGHT_THRESHOLDS` in the same file. Every interval is a 90% interval. The engine is deterministic. A fixed seed (42) drives the random choices.

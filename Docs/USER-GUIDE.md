@@ -31,6 +31,8 @@ The goal workspace upgrades the database to schemas 7, 8 and 9. Each step saves 
 
 Behaviour insights upgrade the database to schema 10. The app saves a `before-schema-v10` snapshot first. After the upgrade, attention check-ins are **off**. Version 2.0.0 and earlier cannot open a schema 10 database, and they cannot restore a version 10 backup. Before you update, save a full JSON backup with your current version. To go back, you need the snapshot and the older app.
 
+The session preparation answers upgrade the database to schema 11. The app saves a `before-schema-v11` snapshot first. Version 3.1.0 and earlier cannot open a schema 11 database, and they cannot restore a version 11 backup.
+
 ## Learn with goals
 
 The app opens on **Goals**. A goal is the place where you learn something, for example "Learn linear algebra".
@@ -97,6 +99,9 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
 5. Select **Timer** for a countdown. Or, select **Stopwatch** to count up without a planned duration.
 6. Optionally, open **Optional details** to add a goal, an activity mode and your starting energy.
    - Energy uses a scale from 1 to 5. To clear the value, click the selected value again.
+   - **I'm already warm** records if you are already warmed up: **Yes**, **Kind of** or **No**.
+   - **Have you taken medications?** records **Yes** or **No**.
+   - Both answers are optional. To clear an answer, click it again or select **Clear**. You cannot change them after the session starts.
    - If you collapse this section, the app keeps your draft.
 
 The field, timing and intention stay visible together. Preparation from Goals or Tasks shows as a compact linked summary.
@@ -290,6 +295,8 @@ Select dates and a field. Patterns then compares these items:
 Stopwatch time stays in the recorded totals. Patterns does not include it in comparisons with planned duration. These comparisons use finished, included sessions that start in the selected range. They describe what you chose to record.
 
 ### Scatterplots
+
+**Planned vs recorded** (in **Session distributions**) compares the length that you set for a timer session with the active time that the app recorded. It counts the sessions that were shorter than planned, within a minute of the plan, or longer than planned, and shows the median difference. Stopwatch sessions have no plan, so they are not in this chart. The check-in after a timer session also shows the planned and recorded time.
 
 Two scatterplots show starting energy versus your focus rating, and recorded duration versus your focus rating.
 

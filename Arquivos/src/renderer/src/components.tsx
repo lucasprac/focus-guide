@@ -9,6 +9,11 @@ import { brainFormation } from '../../shared/timer-display';
 export { Icon, type IconName };
 export function time(ms: number): string { const seconds = Math.ceil(Math.max(0, ms) / 1000); return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`; }
 export function minutesLabel(minutes: number): string { if (minutes < 1 && minutes > 0) return `${Math.round(minutes * 60)}s`; if (minutes < 60) return `${Math.round(minutes)}m`; const h = Math.floor(minutes / 60), m = Math.round(minutes % 60); return m === 60 ? `${h + 1}h` : `${h}h${m ? ` ${m}m` : ''}`; }
+/* Planned countdown length against recorded time; under a minute of difference reads as on plan. */
+export function planComparison(plannedMinutes: number, differenceMinutes: number): string {
+  const base = `Planned ${minutesLabel(plannedMinutes)} · recorded ${minutesLabel(plannedMinutes + differenceMinutes)}`;
+  return Math.abs(differenceMinutes) < 1 ? `${base} · on plan` : `${base} · ${minutesLabel(Math.abs(differenceMinutes))} ${differenceMinutes > 0 ? 'more' : 'less'} than planned`;
+}
 export function displayDay(day: string, short = false): string { return new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: short ? 'short' : 'long', day: 'numeric', ...(short ? {} : { weekday: 'long' }) }); }
 export function Empty({ title, children }: { title: string; children?: ReactNode }) { return <div className="empty-state"><span className="empty-orbit"><Icon name="spark" size={23} /></span><h3>{title}</h3><p>{children}</p></div>; }
 export const Disclosure = Fold;

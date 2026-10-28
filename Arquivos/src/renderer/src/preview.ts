@@ -181,7 +181,7 @@ export function installPreview(): void {
   const probes = new ProbeScheduler(Math.random, new URLSearchParams(location.search).get('probes') === 'fast' ? FAST_PROBE_OPTIONS : DEFAULT_PROBE_OPTIONS);
   const service = new FocusService(store as unknown as Store, timer, kind => {
     const data = store.all();
-    const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 10,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
+    const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 11,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null,warmUp: s.warmUp ?? null,medication: s.medication ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
     localStorage.setItem(`${key}-before-${kind}-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
   }, probes);
   const simulate = () => {

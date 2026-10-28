@@ -1,5 +1,12 @@
 # Architecture — Focus Guide 2.0
 
+## Session preparation answers (schema 11, unreleased)
+
+- A session has the optional `warmUp` (`yes`, `kind-of`, `no`) and `medication` (`yes`, `no`) answers. The renderer sends them with `session.start`. The main process validates them in `src/shared/validation.ts`.
+- The migration saves a `before-schema-v11-<timestamp>.sqlite` snapshot with `VACUUM INTO`, except for an empty new database. Then one transaction adds two nullable TEXT columns to `sessions`.
+- The planned-versus-recorded comparison is derived from `plannedMs` and `activeMs` by `planDifferenceMinutes()`. It is not stored, so it cannot become different from the recorded time.
+- The previous app rejects a schema 11 database. A rollback needs the matching snapshot.
+
 ## Behaviour insights (schema 10, unreleased)
 
 Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. All data stays on this computer. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
@@ -282,7 +289,7 @@ flowchart LR
 | `src/main/index.ts` | Native windows, tray and power events, local protocol, sender checks, command queue, backup and export dialogs |
 | `src/main/coordination.ts` | Serialized mutations, dialog preparation outside the queue, ownership of collector transitions |
 | `src/main/timer.ts` | Clock, checkpoints, pause, resume and finish, recovery, break clock |
-| `src/main/store.ts` | Prepared SQL statements, schema version 10, migration, persistence, the `revision()` value for the insight cache, and restore transactions |
+| `src/main/store.ts` | Prepared SQL statements, schema version 11, migration, persistence, the `revision()` value for the insight cache, and restore transactions |
 | `src/main/service.ts` | Validated application commands and business rules |
 | `src/main/backup.ts` | Versioned JSON validation, atomic exports, safe CSV cells |
 | `src/main/probes.ts` | Runtime scheduler for attention check-ins. It uses authoritative active time and a monotonic clock for expiry |

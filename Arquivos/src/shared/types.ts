@@ -10,6 +10,11 @@ export const DETRACTORS = ['none', 'notifications', 'people', 'thoughts', 'tired
 export type Detractor = typeof DETRACTORS[number];
 export const CHALLENGES = ['too-easy', 'right', 'too-hard'] as const;
 export type Challenge = typeof CHALLENGES[number];
+/* Optional answers before a session (schema 11); an absent answer stays null. */
+export const WARM_UPS = ['yes', 'kind-of', 'no'] as const;
+export type WarmUp = typeof WARM_UPS[number];
+export const MEDICATION_ANSWERS = ['yes', 'no'] as const;
+export type Medication = typeof MEDICATION_ANSWERS[number];
 /* A probe event stores one of these answers, or 'missed', in its category. */
 export const PROBE_ANSWERS = ['on-task', 'drifting', 'elsewhere'] as const;
 export type ProbeAnswer = typeof PROBE_ANSWERS[number];
@@ -37,6 +42,7 @@ export interface FocusSession {
   energy: number | null; focus: number | null; note: string;
   completionReason: 'timer' | 'early' | null; excluded: boolean; recovered: boolean;
   detractor?: Detractor | null; challenge?: Challenge | null;
+  warmUp?: WarmUp | null; medication?: Medication | null;
 }
 export interface SessionEvent {
   id: string; sessionId: string; kind: EventKind; startedAt: string;
@@ -72,7 +78,7 @@ export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: 
 /* Runtime state of the attention check-in that is on screen now; it never reaches settings, datasets or backups. */
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
 export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null }
-export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 10; exportedAt: string };
+export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 11; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
 export type Command =
   | 'goal.create' | 'goal.update' | 'goal.delete' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide' | 'goal.behaviour'

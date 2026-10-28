@@ -119,11 +119,11 @@ export class FocusService {
         if (timingMode !== 'countdown' && timingMode !== 'stopwatch') throw new Error('Choose Timer or Stopwatch.');
         const activityMode = v.activityMode(input.activityMode ?? this.store.getSettings().activityModes?.[f.id] ?? 'Unspecified');
         const links = goals.sessionLinks(f.id,primaryTaskId,input,now);
-        const intention = v.text(input.intention ?? '', 'Intention', 500), energy = v.rating(input.energy);
+        const intention = v.text(input.intention ?? '', 'Intention', 500), energy = v.rating(input.energy), warmUp = v.warmUp(input.warmUp), medication = v.medication(input.medication);
         const plannedMs = timingMode === 'stopwatch' ? null : v.number(input.durationMinutes,'Duration',1,1440) * 60000;
         try { this.store.db.transaction(() => {
           if (links.occurrence) this.store.putGoalRecord('goalOccurrences',links.occurrence);
-          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null });
+          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication });
           this.store.setMeta('settings',{ ...this.store.getSettings(),activityModes: { ...this.store.getSettings().activityModes,[f.id]: activityMode } });
         })(); } catch (error) { this.timer.recover(); throw error; }
         return this.timer.current!.id;
