@@ -1,4 +1,5 @@
 import type { Dataset, FocusSession } from './types';
+import { t } from './i18n';
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 export function parts(time: number | string, zone: string): { day: string; hour: number; weekday: string } {
@@ -87,7 +88,7 @@ export function correlation(sessions: FocusSession[], key: 'energy' | 'duration'
   const eligible = complete.length >= 20 && spanDays >= 7;
   const rho = eligible ? spearman(points.map(p => p.x), points.map(p => p.y)) : null;
   return { n: complete.length, missing: sessions.length - complete.length, spanDays, rho, eligible, points,
-    reason: !eligible ? 'Collect 20 complete pairs spanning at least 7 days.' : rho === null ? 'No variation in one of these measures yet.' : 'Exploratory association in your recorded sessions.' };
+    reason: !eligible ? t('Collect 20 complete pairs spanning at least 7 days.') : rho === null ? t('No variation in one of these measures yet.') : t('Exploratory association in your recorded sessions.') };
 }
 export function selectedSessions(data: Dataset, from: string, to: string, fieldId = '',goalId = ''): FocusSession[] {
   return data.sessions.filter(s => { const day = localDay(s.startedAt, s.timezone); return s.status === 'completed' && !s.excluded && (!fieldId || s.fieldId === fieldId) && (!goalId || s.goalId === goalId) && day >= from && day <= to; });

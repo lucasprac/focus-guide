@@ -2,10 +2,11 @@ import { useState, type CSSProperties } from 'react';
 import { Button, Card, cn } from './ui';
 import { Icon } from './components';
 import { ACHIEVEMENT_CATEGORIES, PALETTES, type AchievementCategory, type AchievementState } from '../../shared/achievements';
+import { dateLocale, t } from '../../shared/i18n';
 
 const amount = (a: AchievementState, value: number) => a.unit === 'h' ? value.toFixed(value < 10 ? 1 : 0) : String(Math.floor(value));
 export const progressLabel = (a: AchievementState) => `${amount(a, a.current)} / ${a.target}${a.unit === 'h' ? ' h' : ''}`;
-const earnedLabel = (at: string) => new Date(at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+const earnedLabel = (at: string) => new Date(at).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 const categoryIcon: Record<AchievementCategory, 'focus' | 'spark' | 'world' | 'calendar' | 'thought'> = { time: 'focus', craft: 'spark', explore: 'world', rhythm: 'calendar', secret: 'thought' };
 
 /* A medallion: its ring fills with progress, and it lights up when earned. */
@@ -25,13 +26,13 @@ function Tile({ achievement, fresh, onCollect, busy }: { achievement: Achievemen
   return <li className={cn('achievement-tile', achievement.unlocked && 'is-earned', achievement.hidden && 'is-hidden', fresh && 'is-fresh')}>
     <Medal achievement={achievement} />
     <div className="achievement-body">
-      <strong className="text-label">{achievement.hidden ? 'A secret' : achievement.title}</strong>
-      <p className="text-caption">{achievement.hidden ? 'Hidden until you find it. Keep exploring.' : achievement.description}</p>
+      <strong className="text-label">{achievement.hidden ? t('A secret') : achievement.title}</strong>
+      <p className="text-caption">{achievement.hidden ? t('Hidden until you find it. Keep exploring.') : achievement.description}</p>
       {!achievement.hidden && !achievement.unlocked && <div className="achievement-progress"><div className="horizon-progress"><span style={{ width: `${achievement.fraction * 100}%` }} /></div><span className="text-caption tabular-nums">{progressLabel(achievement)}</span></div>}
-      {achievement.unlocked && achievement.unlockedAt && <span className="text-caption achievement-date">Earned {earnedLabel(achievement.unlockedAt)}{achievement.collectedAt ? ' · collected' : ''}</span>}
-      {reward && <span className="achievement-reward text-caption" style={{ '--reward-color': reward.color } as CSSProperties}><i />Unlocks the {reward.name} palette</span>}
+      {achievement.unlocked && achievement.unlockedAt && <span className="text-caption achievement-date">{achievement.collectedAt ? t('Earned {date} · collected', { date: earnedLabel(achievement.unlockedAt) }) : t('Earned {date}', { date: earnedLabel(achievement.unlockedAt) })}</span>}
+      {reward && <span className="achievement-reward text-caption" style={{ '--reward-color': reward.color } as CSSProperties}><i />{t('Unlocks the {name} palette', { name: reward.name })}</span>}
     </div>
-    {achievement.unlocked && !achievement.collectedAt && <Button size="sm" variant="primary" disabled={busy} onClick={onCollect}>Collect</Button>}
+    {achievement.unlocked && !achievement.collectedAt && <Button size="sm" variant="primary" disabled={busy} onClick={onCollect}>{t('Collect')}</Button>}
   </li>;
 }
 
@@ -45,13 +46,13 @@ export default function Achievements({ achievements, onCollect }: { achievements
     setBusy(true);
     try { if (await onCollect(ids)) { setFresh(ids); window.setTimeout(() => setFresh([]), 2400); } } finally { setBusy(false); }
   }
-  return <Card className="achievements" title="Achievements" icon="spark" actions={<>
-    <span className="hint tabular-nums">{earned.length} / {achievements.length} earned</span>
-    {ready.length > 1 && <Button size="sm" variant="primary" disabled={busy} onClick={() => void collect(ready.map(a => a.id))}>Collect all ({ready.length})</Button>}
+  return <Card className="achievements" title={t('Achievements')} icon="spark" actions={<>
+    <span className="hint tabular-nums">{t('{earned} / {total} earned', { earned: earned.length, total: achievements.length })}</span>
+    {ready.length > 1 && <Button size="sm" variant="primary" disabled={busy} onClick={() => void collect(ready.map(a => a.id))}>{t('Collect all ({count})', { count: ready.length })}</Button>}
   </>}>
-    <p className="hint achievements-intro">Achievements come from your records. Nothing expires and nothing is lost if you take a break. Earned ones wait as golden gems around you on the map until you collect them.</p>
+    <p className="hint achievements-intro">{t('Achievements come from your records. Nothing expires and nothing is lost if you take a break. Earned ones wait as golden gems around you on the map until you collect them.')}</p>
     {close.length > 0 && <div className="achievements-close">
-      <h3 className="text-label">Almost there</h3>
+      <h3 className="text-label">{t('Almost there')}</h3>
       <ul>{close.map(a => <li key={a.id}><Medal achievement={a} size={36} /><div><strong className="text-caption">{a.title}</strong><span className="text-caption tabular-nums">{progressLabel(a)}</span></div></li>)}</ul>
     </div>}
     {ACHIEVEMENT_CATEGORIES.map(category => {

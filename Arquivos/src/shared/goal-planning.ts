@@ -1,6 +1,7 @@
 import type { Dataset, ActivityMode } from './types';
 import { goalData, sortMilestones, type Goal, type GoalAction, type GoalActionPlan, type GoalOccurrence, type GoalBarrier } from './goal-types';
 import { addDays, localDay, median, monday } from './analytics';
+import { t } from './i18n';
 
 export function actionPlan(action: GoalAction, day: string): GoalActionPlan | undefined {
   return [...action.plans].reverse().find(plan => plan.effectiveDate <= day);
@@ -76,10 +77,10 @@ export function barrierSuggestions(data: Dataset, goalId: string, now = Date.now
   const domain = goalData(data), result: GoalSuggestion[] = [];
   if (domain.goals.find(g => g.id === goalId)?.status !== 'active') return result;
   const labels = {
-    capability: ['Add a learning step', 'Try a milestone to discover or practice a strategy before asking for the final result.'],
-    opportunity: ['Choose a more accessible cue', 'Try a different routine or weekday that fits the time and space you have.'],
-    motivation: ['Review whether this goal still matters', 'Revisit why you chose this goal; pausing it is an available choice.'],
-    other: ['Try the smaller action', 'Try your smaller version as the normal action for the next week.']
+    capability: [t('Add a learning step'), t('Try a milestone to discover or practice a strategy before asking for the final result.')],
+    opportunity: [t('Choose a more accessible cue'), t('Try a different routine or weekday that fits the time and space you have.')],
+    motivation: [t('Review whether this goal still matters'), t('Revisit why you chose this goal; pausing it is an available choice.')],
+    other: [t('Try the smaller action'), t('Try your smaller version as the normal action for the next week.')]
   };
   for (const action of domain.goalActions.filter(a => a.goalId === goalId && !a.archived)) {
     const today = localDay(now, action.plans.at(-1)!.timezone), from = addDays(today, -13);
@@ -111,4 +112,5 @@ export function rowsRevision(rows: Array<{ id: string; title: string; kind: stri
   for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 0x01000193) >>> 0; }
   return `${text.length}:${hash.toString(16)}`;
 }
+/* Compared by value (not translated): the page shows its own conflict message for this error. */
 export const ROADMAP_CHANGED = 'The roadmap changed while you were editing it.';

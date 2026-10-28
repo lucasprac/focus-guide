@@ -1,4 +1,6 @@
 import type { AgentAccess, GoalData } from './goal-types';
+import type { Language } from './i18n';
+export type { Language } from './i18n';
 export * from './goal-types';
 export type SessionStatus = 'running' | 'paused' | 'completed';
 export const MIN_INCLUDED_SESSION_MS = 2 * 60000;
@@ -61,6 +63,8 @@ export interface Settings {
   agentAccess?: AgentAccess;
   focusVisual?: FocusVisual;
   attentionProbes?: boolean;
+  /* Interface language; absent in older data and backups, which means English. */
+  language?: Language;
 }
 export interface WeeklyReview { week: string; adjustment: string; updatedAt: string }
 export interface Dataset extends Partial<GoalData> {

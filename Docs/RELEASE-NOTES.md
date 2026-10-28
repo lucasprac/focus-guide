@@ -7,8 +7,16 @@
 - **Replay your journey.** Plays your history in about 9 seconds. Each session flies to its place and the map grows.
 - **Achievements.** 27 achievements in five groups: time, craft, exploration, rhythm and secrets. They come from your records, show their progress, and never expire. Rhythm counts different weeks in any order, not streaks. Earned achievements wait as golden gems on the map until you collect them.
 - **Palettes.** Four new palettes are rewards of achievements: Wild mint (Explorer), Open sea (A season), Ember (Summit) and Aurora (A hundred hours). The hour thresholds of the first four palettes do not change.
-- New command `achievements.collect`. The new optional setting `collectedAchievements` keeps the collection time and goes into backups inside `settings`. No schema change. The backup format stays version 11; version 3.1.2 and earlier reject a backup with the new setting, and cannot read settings that use a new palette. Choose one of the first four palettes before you go back to an older version.
+- New command `achievements.collect`. The new optional setting `collectedAchievements` keeps the collection time. A backup has it inside `settings` only when you collected at least one achievement. No schema change; the backup format stays version 11. Version 3.1.2 and earlier reject a backup with collected achievements, and cannot read settings that use a new palette. Choose one of the first four palettes before you go back to an older version.
+- The new texts are in the Brazilian Portuguese catalog. Dates on the page follow the selected language.
 - **Focus by area** and **Palettes & horizons** are replaced by the map, the side panel and the **Palettes** card.
+
+## Unreleased — Optional Brazilian Portuguese interface; English remains default
+
+- **Language setting.** Settings > **Language** offers **English** (default) and **Português (Brasil)**. The interface, tray, notifications, dialogs, error messages, Insights, the tutorial and the date and number format change when you save your preferences. In English the app is unchanged.
+- **How it works.** Texts go through `t(...)` in `src/shared/i18n.ts`; the English text is the key and the Portuguese catalog is `src/shared/locales/pt-BR.ts`. `src/shared/labels.ts` shows labels for values that stay English in the database (activity modes, interruption categories, weekdays, goal and occurrence statuses).
+- **Stays in English.** Stored values, IPC command names, MCP tool names and texts, CSV column headers, backup keys and the demo data of English installs.
+- **No migration.** `settings.language` is optional; when it is absent the language is English. English backups do not contain the field, and backups without it restore as English. Older app versions ignore the key.
 
 ## Unreleased (3.1.2) — session preparation answers
 

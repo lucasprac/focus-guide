@@ -1,3 +1,4 @@
+import { dateLocale } from '../../shared/i18n';
 import { areaRadius, coreRadius, goalRadius, type MapArea, type MapGoal, type WorldMap } from './world-map';
 
 /* Canvas 2D renderer of the Neural World overview. It owns its animation loop, so motion never renders React.
@@ -107,7 +108,7 @@ export function createWorldCanvas(canvas: HTMLCanvasElement, callbacks: WorldCal
       const area = map.areas.find(a => a.id === spark.areaId);
       if (area && spawned++ < 6) pulse(area, area.goals.find(g => g.goal.id === spark.goalId) ?? null, now, 1 + Math.min(1.5, spark.minutes / 60), 1300);
     }
-    callbacks.hud.textContent = new Date(Math.min(at, Date.now())).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    callbacks.hud.textContent = new Date(Math.min(at, Date.now())).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
     if (now - replay.start >= REPLAY_MS + 1400) stopReplay();
   }
   function spawnLife(now: number, elapsed: number) {

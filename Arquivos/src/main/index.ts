@@ -18,6 +18,7 @@ import { localDay } from '../shared/analytics';
 import { PALETTES, paletteUnlocked } from '../shared/achievements';
 import type { AppEvent, AppState, BackupFile, Command } from '../shared/types';
 import * as v from '../shared/validation';
+import { t, setLanguage } from '../shared/i18n';
 
 app.setName('Focus Guide');
 // Explicit compatibility mode is evaluated before Electron starts its GPU process.
@@ -42,7 +43,8 @@ let hideProbeFloat = false;
 let bridge: AgentBridge | null = null;
 let quitting = false;
 let quitPending = false;
-let backupStatus = 'Your data stays on this computer.';
+let backupStatus: string | null = null;
+const status = () => backupStatus ?? t('Your data stays on this computer.');
 let backupPromise: Promise<void> | null = null;
 const commandQueue = new CommandQueue();
 const insightsWorker = new InsightsWorker();
@@ -58,12 +60,12 @@ const csp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src
 const applicationIcon = join(__dirname, '../renderer/icon.png');
 
 function notify(mode: 'focus' | 'break'): void {
-  if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? 'Your timer ended — overtime is recording' : 'Focus session complete' : 'Your break is complete', body: mode === 'focus' ? timer?.current?.autoOvertime ? 'Extra time stays in this session. Finish when you are ready.' : 'Take a breath. Your session has been saved.' : 'Choose your next intention when you are ready.', silent: !store.getSettings().sound }).show();
+  if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound }).show();
 }
-function state(): AppState { return { ...store.all(), timer: timer.snapshot(), probe: probes?.pending ?? null, collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus, graphicsMode }; }
+function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); publish({ type: 'state', state: state() }); updateTray(); }
-function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'An unexpected error occurred.'; }
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : t('An unexpected error occurred.'); }
 function report(error: unknown): void { publish({ type: 'error', message: errorMessage(error) }); }
 function safeBounds(key: string, defaults: Electron.Rectangle): Electron.Rectangle {
   const saved = store.getMeta<Electron.Rectangle>(key);
@@ -162,11 +164,11 @@ function pollProbes(): void {
 function updateTray(): void {
   if (!tray) return;
   const snapshot = timer.snapshot();
-  tray.setToolTip(snapshot.mode === 'idle' ? 'Focus Guide — choose an intention' : snapshot.phase === 'stopwatch' ? `Focus Guide — ${Math.floor(snapshot.elapsedMs / 60000)} min recorded` : snapshot.phase === 'overtime' ? `Focus Guide — overtime +${Math.floor(snapshot.overtimeMs / 60000)} min` : `Focus Guide — ${Math.ceil(snapshot.remainingMs / 60000)} min remaining`);
+  tray.setToolTip(snapshot.mode === 'idle' ? t('Focus Guide — choose an intention') : snapshot.phase === 'stopwatch' ? t('Focus Guide — {v1} min recorded', { v1: Math.floor(snapshot.elapsedMs / 60000) }) : snapshot.phase === 'overtime' ? t('Focus Guide — overtime +{v1} min', { v1: Math.floor(snapshot.overtimeMs / 60000) }) : t('Focus Guide — {v1} min remaining', { v1: Math.ceil(snapshot.remainingMs / 60000) }));
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Focus Guide', click: showMain }, { label: 'Show floating timer', click: () => showFloating() },
-    { label: snapshot.running ? 'Pause timer' : 'Resume timer', enabled: snapshot.mode !== 'idle', click: () => { try { void enqueue(async () => { await transitions.run(() => { timer.snapshot().running ? timer.pause() : timer.resume(); }); changed(); }); } catch (e) { report(e); } } },
-    { type: 'separator' }, { label: 'Quit (save and pause)', click: () => app.quit() }
+    { label: t('Open Focus Guide'), click: showMain }, { label: t('Show floating timer'), click: () => showFloating() },
+    { label: snapshot.running ? t('Pause timer') : t('Resume timer'), enabled: snapshot.mode !== 'idle', click: () => { try { void enqueue(async () => { await transitions.run(() => { timer.snapshot().running ? timer.pause() : timer.resume(); }); changed(); }); } catch (e) { report(e); } } },
+    { type: 'separator' }, { label: t('Quit (save and pause)'), click: () => app.quit() }
   ]));
 }
 async function dailyBackup(force = false): Promise<void> {
@@ -174,7 +176,7 @@ async function dailyBackup(force = false): Promise<void> {
   const day = localDay(Date.now(), store.getSettings().timezone);
   if (!force && store.getMeta('lastBackupDay') === day) {
     const warning = store.getMeta<string>('lastBackupJsonError');
-    backupStatus = warning ? `SQLite backup saved · ${day}. JSON needs attention: ${warning}` : `Daily backup saved · ${day}`;
+    backupStatus = warning ? t('SQLite backup saved · {day}. JSON needs attention: {warning}', { day, warning }) : t('Daily backup saved · {day}', { day });
     return;
   }
   backupPromise = (async () => {
@@ -188,15 +190,15 @@ async function dailyBackup(force = false): Promise<void> {
       const target = resolve(directory, `${date}.${extension}`);
       if (target.startsWith(resolve(directory) + sep) && readdirSync(directory).includes(`${date}.${extension}`)) unlinkSync(target);
     }
-    backupStatus = outcome.jsonError ? `SQLite backup saved · ${day}. JSON needs attention: ${outcome.jsonError}` : `Daily backup saved · ${day}`;
-  })().catch(e => { backupStatus = `Backup needs attention: ${errorMessage(e)}`; report(e); }).finally(() => { backupPromise = null; });
+    backupStatus = outcome.jsonError ? t('SQLite backup saved · {day}. JSON needs attention: {jsonError}', { day, jsonError: outcome.jsonError }) : t('Daily backup saved · {day}', { day });
+  })().catch(e => { backupStatus = t('Backup needs attention: {errorMessage}', { errorMessage: errorMessage(e) }); report(e); }).finally(() => { backupPromise = null; });
   await backupPromise;
 }
 function trustedSender(event: Electron.IpcMainInvokeEvent): void {
-  if (![mainWindow, floatingWindow].some(w => w && !w.isDestroyed() && w.webContents.id === event.sender.id)) throw new Error('Unrecognized application window.');
+  if (![mainWindow, floatingWindow].some(w => w && !w.isDestroyed() && w.webContents.id === event.sender.id)) throw new Error(t('Unrecognized application window.'));
   const url = event.senderFrame?.url ?? '';
   const dev = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : '';
-  if (!(url.startsWith('focus://app/') || (dev && new URL(url).origin === new URL(dev).origin)) || event.senderFrame !== event.sender.mainFrame) throw new Error('Unrecognized application content.');
+  if (!(url.startsWith('focus://app/') || (dev && new URL(url).origin === new URL(dev).origin)) || event.senderFrame !== event.sender.mainFrame) throw new Error(t('Unrecognized application content.'));
 }
 function enqueue(action: () => Promise<unknown>): Promise<unknown> {
   return commandQueue.run(action).catch(error => { report(error); changed(); });
@@ -207,22 +209,22 @@ function acknowledgeReturn(value: unknown): void {
   publish({ type: 'attention-return', sessionId: event.sessionId, eventId: event.id, savedAt: event.startedAt });
 }
 async function prepare(command: Command): Promise<string | undefined> {
-  if (quitPending) throw new Error('Focus Guide is saving and closing.');
+  if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
   if (['export.sessions', 'export.events', 'export.backup', 'export.activity', 'export.goals'].includes(command)) {
     const kind = command.split('.')[1], extension = kind === 'backup' ? 'json' : 'csv';
     const name = `focus-guide-${kind}-${new Date().toISOString().slice(0, 10)}.${extension}`;
-    return (await dialog.showSaveDialog(mainWindow!, { title: 'Export your focus data', defaultPath: join(app.getPath('documents'), name), filters: [{ name: extension === 'json' ? 'Focus Guide backup' : 'CSV dataset', extensions: [extension] }] })).filePath;
+    return (await dialog.showSaveDialog(mainWindow!, { title: t('Export your focus data'), defaultPath: join(app.getPath('documents'), name), filters: [{ name: extension === 'json' ? t('Focus Guide backup') : t('CSV dataset'), extensions: [extension] }] })).filePath;
   }
   if (command === 'backup.preview') {
-    if (timer.snapshot().mode !== 'idle') throw new Error('Finish your current session or break before restoring data.');
-    return (await dialog.showOpenDialog(mainWindow!, { title: 'Choose a Focus Guide JSON backup', properties: ['openFile'], filters: [{ name: 'Focus Guide backup', extensions: ['json'] }] })).filePaths[0];
+    if (timer.snapshot().mode !== 'idle') throw new Error(t('Finish your current session or break before restoring data.'));
+    return (await dialog.showOpenDialog(mainWindow!, { title: t('Choose a Focus Guide JSON backup'), properties: ['openFile'], filters: [{ name: t('Focus Guide backup'), extensions: ['json'] }] })).filePaths[0];
   }
 }
 async function handle(command: Command, input: Record<string, unknown>, selectedFile?: string): Promise<unknown> {
-  if (quitPending) throw new Error('Focus Guide is saving and closing.');
+  if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
   if (command === 'settings.update') {
-    const next = v.settings(input), previous = store.getSettings();
-    if (next.palette !== previous.palette && !paletteUnlocked(PALETTES.find(p => p.id === next.palette)!, store.all())) throw new Error('This palette is not yet available.');
+    const previous = store.getSettings(), next = v.settings(v.withLanguage(input, previous));
+    if (next.palette !== previous.palette && !paletteUnlocked(PALETTES.find(p => p.id === next.palette)!, store.all())) throw new Error(t('This palette is not yet available.'));
     // Registration rejection leaves collection untouched; unrelated preferences remain editable.
     if (next.returnShortcut !== previous.returnShortcut) await collector.configureShortcut(next.returnShortcut ?? 'Ctrl+Alt+Space');
     try { const value = await transitions.run(() => service.run(command, input)); bridge?.sync(); return value; }
@@ -236,7 +238,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     case 'window.float': showFloating(); return;
     case 'window.main': showMain(); return;
     case 'window.hide': probes.cancel(); hideProbeFloat = false; floatingWindow?.hide(); return;
-    case 'backup.create': await dailyBackup(true); return backupStatus;
+    case 'backup.create': await dailyBackup(true); return status();
     case 'export.sessions': case 'export.events': case 'export.backup': case 'export.activity': case 'export.goals': {
       const filePath = selectedFile;
       if (!filePath) return;
@@ -246,21 +248,21 @@ async function handle(command: Command, input: Record<string, unknown>, selected
       return filePath;
     }
     case 'backup.preview': {
-      if (timer.snapshot().mode !== 'idle') throw new Error('Finish your current session or break before restoring data.');
+      if (timer.snapshot().mode !== 'idle') throw new Error(t('Finish your current session or break before restoring data.'));
       const file = selectedFile;
       if (!file) return;
       const data = readBackup(file); const token = randomUUID(); pendingRestore = { token, data, expires: Date.now() + 300000 };
       return { token, exportedAt: data.exportedAt, sessions: data.sessions.length, fields: data.fields.length, tasks: data.tasks.length, events: data.events.length, goals: data.goals.length, goalOccurrences: data.goalOccurrences.length, goalProgress: data.goalProgress.length };
     }
     case 'backup.restore': {
-      if (timer.snapshot().mode !== 'idle') throw new Error('Finish your current session or break before restoring data.');
-      if (!pendingRestore || input.token !== pendingRestore.token || Date.now() > pendingRestore.expires) throw new Error('The restore preview expired. Choose the backup again.');
+      if (timer.snapshot().mode !== 'idle') throw new Error(t('Finish your current session or break before restoring data.'));
+      if (!pendingRestore || input.token !== pendingRestore.token || Date.now() > pendingRestore.expires) throw new Error(t('The restore preview expired. Choose the backup again.'));
       const directory = join(store.directory, 'backups'); mkdirSync(directory, { recursive: true });
       await store.backup(join(directory, `before-restore-${Date.now()}.sqlite`));
       const data = pendingRestore.data; store.restore(data); pendingRestore = null; timer.recover();
       try { await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); } catch { /* Conflict stays visible in status. */ }
       bridge?.sync();
-      backupStatus = 'Restored successfully. A copy of the previous database is in backups.'; return;
+      backupStatus = t('Restored successfully. A copy of the previous database is in backups.'); return;
     }
     default: {
       const value = service.run(command, input);
@@ -274,7 +276,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
 /* insights.read reads its snapshot inside the queue, where no mutation can interleave, and computes outside it on the worker,
    so checkpoints, check-ins and other commands never wait for the engine. */
 async function readInsights(input: Record<string, unknown>): Promise<unknown> {
-  const job = await commandQueue.run(() => { if (quitPending) throw new Error('Focus Guide is saving and closing.'); return service.insightsJob(input); });
+  const job = await commandQueue.run(() => { if (quitPending) throw new Error(t('Focus Guide is saving and closing.')); return service.insightsJob(input); });
   if ('value' in job) return job.value;
   const running = job.key === null ? undefined : insightsInFlight.get(job.key);
   if (running) return running;
@@ -299,7 +301,7 @@ app.on('before-quit', e => {
     try {
       await commandQueue.idle();
       const stopped = collector?.stop();
-      timer.pause('App closed — resume when ready'); timer.endBreak();
+      timer.pause(t('App closed — resume when ready')); timer.endBreak();
       await stopped; collector?.flush(true); collector?.close();
       quitting = true; app.quit();
     } catch (error) { quitPending = false; showMain(); report(error); changed(); }
@@ -313,6 +315,7 @@ if (locked) void app.whenReady().then(async () => {
   // A failure only affects Insights, which then report it; the timer and the data still open.
   await loadStats().catch(error => console.error(error));
   store = new Store(app.getPath('userData'));
+  setLanguage(store.getSettings().language);
   timer = new TimerEngine(store, undefined, notify);
   probes = new ProbeScheduler();
   service = new FocusService(store, timer, kind => {
@@ -320,7 +323,7 @@ if (locked) void app.whenReady().then(async () => {
     mkdirSync(directory, { recursive: true });
     const file = join(directory, `before-${kind}-delete-${Date.now()}-${randomUUID()}.json`);
     atomicWrite(file, serializeBackup(store.all(true)));
-    backupStatus = `A recovery backup was saved before ${kind === 'goal' ? 'goal' : 'area'} deletion.`;
+    backupStatus = kind === 'goal' ? t('A recovery backup was saved before goal deletion.') : t('A recovery backup was saved before area deletion.');
   }, probes);
   collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, 'activity-helper.exe') : resolve(__dirname, '../../native/bin/activity-helper.exe'),
     () => {
@@ -339,10 +342,10 @@ if (locked) void app.whenReady().then(async () => {
   bridge = new AgentBridge({ directory: store.directory, access: () => store.getSettings().agentAccess ?? 'off',
     launch: { command: process.execPath, args: [mcpScript], env: { ELECTRON_RUN_AS_NODE: '1', FOCUS_GUIDE_DATA_DIR: store.directory } }, onStatus: () => { if (mainWindow) publish({ type: 'state', state: state() }); },
     call: (tool, input, source) => commandQueue.run(async () => {
-      if (quitPending) throw new Error('Focus Guide is saving and closing.');
+      if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
       const value = service.agentTool(tool, input, source);
       if (isAgentTool(tool) && AGENT_TOOLS[tool] !== 'read') changed();
-      if (isAgentTool(tool) && AGENT_TOOLS[tool] === 'edit') publish({ type: 'notice', message: `Your AI agent: ${(value as { summary?: string }).summary ?? 'changed your goals'}. You can undo it in Goals.` });
+      if (isAgentTool(tool) && AGENT_TOOLS[tool] === 'edit') publish({ type: 'notice', message: t('Your AI agent: {v1}. You can undo it in Goals.', { v1: (value as { summary?: string }).summary ?? t('changed your goals') }) });
       return value;
     }) });
   bridge.sync();
@@ -370,8 +373,8 @@ if (locked) void app.whenReady().then(async () => {
       void enqueue(async () => { await transitions.run(() => {}); changed(); });
     } catch (error) { report(error); }
   };
-  powerMonitor.on('suspend', () => systemPause('Computer went to sleep'));
-  powerMonitor.on('lock-screen', () => systemPause('Screen locked'));
+  powerMonitor.on('suspend', () => systemPause(t('Computer went to sleep')));
+  powerMonitor.on('lock-screen', () => systemPause(t('Screen locked')));
   const recoverWindows = () => { for (const [w, key] of [[mainWindow, 'mainBounds'], [floatingWindow, 'floatBounds']] as const) if (w && !w.isDestroyed()) { saveBounds(w, key); w.setBounds(safeBounds(key, screen.getPrimaryDisplay().workArea)); } };
   screen.on('display-removed', recoverWindows);
   screen.on('display-metrics-changed', (_event, _display, metrics) => { if (metrics.some(metric => ['bounds', 'workArea', 'scaleFactor'].includes(metric))) recoverWindows(); });
@@ -379,14 +382,14 @@ if (locked) void app.whenReady().then(async () => {
   ipcMain.handle('focus-guide:command', async (event, command, input) => {
     try {
       trustedSender(event); const args = v.object(input);
-      if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error('Invalid command input.');
+      if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error(t('Invalid command input.'));
       if (command === 'insights.read') return { ok: true, value: await readInsights(args) };
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
         if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
         if (command === 'shortcut.capture') {
-          if (event.sender !== mainWindow?.webContents || typeof args.enabled !== 'boolean') throw new Error('Invalid shortcut capture request.');
-          if (args.enabled && !mainWindow.isFocused()) throw new Error('Focus this window before configuring a shortcut.');
+          if (event.sender !== mainWindow?.webContents || typeof args.enabled !== 'boolean') throw new Error(t('Invalid shortcut capture request.'));
+          if (args.enabled && !mainWindow.isFocused()) throw new Error(t('Focus this window before configuring a shortcut.'));
           shortcutCaptureUntil = args.enabled ? Date.now() + 35000 : 0;
           return { ok: true };
         }
@@ -412,6 +415,6 @@ if (locked) void app.whenReady().then(async () => {
   backupInterval = setInterval(() => { void dailyBackup().then(() => { if (mainWindow?.isVisible()) changed(); }); }, 60000);
   await dailyBackup();
 }).catch(error => {
-  const message = `Focus Guide could not open its local dataset.\n\n${errorMessage(error)}\n\nYour existing database has not been replaced.`;
-  if (testing) { console.error(message); app.exit(1); } else { dialog.showErrorBox('Focus Guide needs attention', message); app.exit(1); }
+  const message = t('Focus Guide could not open its local dataset.\n\n{errorMessage}\n\nYour existing database has not been replaced.', { errorMessage: errorMessage(error) });
+  if (testing) { console.error(message); app.exit(1); } else { dialog.showErrorBox(t('Focus Guide needs attention'), message); app.exit(1); }
 });

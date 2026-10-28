@@ -1,6 +1,7 @@
 import type { Dataset, FocusSession, Settings } from './types';
 import { goalData } from './goal-types';
 import { monday, parts } from './analytics';
+import { t } from './i18n';
 
 /* Achievements are derived from records only, so they cannot drift from the data and need no migration.
    Design rules, from game design, adapted to a focus app that must never pressure:
@@ -19,54 +20,55 @@ export interface AchievementState extends AchievementDefinition {
 export interface PaletteDefinition { id: PaletteId; name: string; color: string; description: string; hours?: number; achievement?: string }
 
 export const ACHIEVEMENT_CATEGORIES: Array<{ id: AchievementCategory; name: string; description: string }> = [
-  { id: 'time', name: 'Time', description: 'Hours that you returned to.' },
-  { id: 'craft', name: 'Craft', description: 'Goals, roadmaps and the tasks that move them.' },
-  { id: 'explore', name: 'Exploration', description: 'New areas, new ways to work.' },
-  { id: 'rhythm', name: 'Rhythm', description: 'Weeks with focus, in any order. No streak to protect.' },
-  { id: 'secret', name: 'Secrets', description: 'Hidden until you find them.' }
+  { id: 'time', get name() { return t('Time'); }, get description() { return t('Hours that you returned to.'); } },
+  { id: 'craft', get name() { return t('Craft'); }, get description() { return t('Goals, roadmaps and the tasks that move them.'); } },
+  { id: 'explore', get name() { return t('Exploration'); }, get description() { return t('New areas, new ways to work.'); } },
+  { id: 'rhythm', get name() { return t('Rhythm'); }, get description() { return t('Weeks with focus, in any order. No streak to protect.'); } },
+  { id: 'secret', get name() { return t('Secrets'); }, get description() { return t('Hidden until you find them.'); } }
 ];
 
 export const ACHIEVEMENTS: AchievementDefinition[] = [
-  { id: 'first-spark', title: 'First spark', description: 'Finish your first focus session.', category: 'time', target: 1 },
-  { id: 'hours-1', title: 'First hour', description: 'Record 1 hour of focus.', category: 'time', target: 1, unit: 'h' },
-  { id: 'hours-10', title: 'First ten hours', description: 'Record 10 hours of focus.', category: 'time', target: 10, unit: 'h' },
-  { id: 'hours-25', title: 'Steady flame', description: 'Record 25 hours of focus.', category: 'time', target: 25, unit: 'h' },
-  { id: 'hours-50', title: 'Fifty hours', description: 'Record 50 hours of focus.', category: 'time', target: 50, unit: 'h' },
-  { id: 'hours-100', title: 'A hundred hours', description: 'Record 100 hours of focus.', category: 'time', target: 100, unit: 'h' },
-  { id: 'hours-250', title: 'Deep roots', description: 'Record 250 hours of focus.', category: 'time', target: 250, unit: 'h' },
-  { id: 'deep-dive', title: 'Deep dive', description: 'Finish one session with 90 active minutes or more.', category: 'time', target: 90 },
-  { id: 'first-goal', title: 'A direction', description: 'Create your first goal.', category: 'craft', target: 1 },
-  { id: 'mapped-route', title: 'Mapped route', description: 'Give one goal a roadmap with 3 steps.', category: 'craft', target: 3 },
-  { id: 'aimed-effort', title: 'Aimed effort', description: 'Finish 10 sessions linked to a goal.', category: 'craft', target: 10 },
-  { id: 'task-trio', title: 'More than three', description: 'Complete more than 3 tasks of one goal.', category: 'craft', target: 4 },
-  { id: 'steps-5', title: 'Step by step', description: 'Finish 5 roadmap steps.', category: 'craft', target: 5 },
-  { id: 'steps-25', title: 'Long road', description: 'Finish 25 roadmap steps.', category: 'craft', target: 25 },
-  { id: 'summit', title: 'Summit', description: 'Mark a goal as achieved.', category: 'craft', target: 1 },
-  { id: 'explorer', title: 'Explorer', description: 'Focus in 3 different areas.', category: 'explore', target: 3 },
-  { id: 'two-clocks', title: 'Two clocks', description: 'Finish a countdown session and a stopwatch session.', category: 'explore', target: 2 },
-  { id: 'clear-intention', title: 'Clear intention', description: 'Write an intention for 10 sessions.', category: 'explore', target: 10 },
-  { id: 'honest-mirror', title: 'Honest mirror', description: 'Rate your focus after 10 sessions.', category: 'explore', target: 10 },
-  { id: 'looking-back', title: 'Looking back', description: 'Save 3 weekly or goal reviews.', category: 'explore', target: 3 },
-  { id: 'weeks-4', title: 'Four weeks', description: 'Focus in 4 different weeks, in any order.', category: 'rhythm', target: 4 },
-  { id: 'weeks-12', title: 'A season', description: 'Focus in 12 different weeks, in any order.', category: 'rhythm', target: 12 },
-  { id: 'weeks-26', title: 'Half a year', description: 'Focus in 26 different weeks, in any order.', category: 'rhythm', target: 26 },
-  { id: 'welcome-back', title: 'Welcome back', description: 'Return after 7 days or more away. Your world waited.', category: 'secret', target: 1 },
-  { id: 'night-owl', title: 'Night owl', description: 'Start a session between 22:00 and 04:00.', category: 'secret', target: 1 },
-  { id: 'early-light', title: 'Early light', description: 'Start a session between 05:00 and 07:00.', category: 'secret', target: 1 },
-  { id: 'past-the-bell', title: 'Past the bell', description: 'Continue a countdown session for 10 minutes or more after it ends.', category: 'secret', target: 1 }
+  { id: 'first-spark', get title() { return t('First spark'); }, get description() { return t('Finish your first focus session.'); }, category: 'time', target: 1 },
+  { id: 'hours-1', get title() { return t('First hour'); }, get description() { return t('Record 1 hour of focus.'); }, category: 'time', target: 1, unit: 'h' },
+  { id: 'hours-10', get title() { return t('First ten hours'); }, get description() { return t('Record 10 hours of focus.'); }, category: 'time', target: 10, unit: 'h' },
+  { id: 'hours-25', get title() { return t('Steady flame'); }, get description() { return t('Record 25 hours of focus.'); }, category: 'time', target: 25, unit: 'h' },
+  { id: 'hours-50', get title() { return t('Fifty hours'); }, get description() { return t('Record 50 hours of focus.'); }, category: 'time', target: 50, unit: 'h' },
+  { id: 'hours-100', get title() { return t('A hundred hours'); }, get description() { return t('Record 100 hours of focus.'); }, category: 'time', target: 100, unit: 'h' },
+  { id: 'hours-250', get title() { return t('Deep roots'); }, get description() { return t('Record 250 hours of focus.'); }, category: 'time', target: 250, unit: 'h' },
+  { id: 'deep-dive', get title() { return t('Deep dive'); }, get description() { return t('Finish one session with 90 active minutes or more.'); }, category: 'time', target: 90 },
+  { id: 'first-goal', get title() { return t('A direction'); }, get description() { return t('Create your first goal.'); }, category: 'craft', target: 1 },
+  { id: 'mapped-route', get title() { return t('Mapped route'); }, get description() { return t('Give one goal a roadmap with 3 steps.'); }, category: 'craft', target: 3 },
+  { id: 'aimed-effort', get title() { return t('Aimed effort'); }, get description() { return t('Finish 10 sessions linked to a goal.'); }, category: 'craft', target: 10 },
+  { id: 'task-trio', get title() { return t('More than three'); }, get description() { return t('Complete more than 3 tasks of one goal.'); }, category: 'craft', target: 4 },
+  { id: 'steps-5', get title() { return t('Step by step'); }, get description() { return t('Finish 5 roadmap steps.'); }, category: 'craft', target: 5 },
+  { id: 'steps-25', get title() { return t('Long road'); }, get description() { return t('Finish 25 roadmap steps.'); }, category: 'craft', target: 25 },
+  { id: 'summit', get title() { return t('Summit'); }, get description() { return t('Mark a goal as achieved.'); }, category: 'craft', target: 1 },
+  { id: 'explorer', get title() { return t('Explorer'); }, get description() { return t('Focus in 3 different areas.'); }, category: 'explore', target: 3 },
+  { id: 'two-clocks', get title() { return t('Two clocks'); }, get description() { return t('Finish a countdown session and a stopwatch session.'); }, category: 'explore', target: 2 },
+  { id: 'clear-intention', get title() { return t('Clear intention'); }, get description() { return t('Write an intention for 10 sessions.'); }, category: 'explore', target: 10 },
+  { id: 'honest-mirror', get title() { return t('Honest mirror'); }, get description() { return t('Rate your focus after 10 sessions.'); }, category: 'explore', target: 10 },
+  { id: 'looking-back', get title() { return t('Looking back'); }, get description() { return t('Save 3 weekly or goal reviews.'); }, category: 'explore', target: 3 },
+  { id: 'weeks-4', get title() { return t('Four weeks'); }, get description() { return t('Focus in 4 different weeks, in any order.'); }, category: 'rhythm', target: 4 },
+  { id: 'weeks-12', get title() { return t('A season'); }, get description() { return t('Focus in 12 different weeks, in any order.'); }, category: 'rhythm', target: 12 },
+  { id: 'weeks-26', get title() { return t('Half a year'); }, get description() { return t('Focus in 26 different weeks, in any order.'); }, category: 'rhythm', target: 26 },
+  { id: 'welcome-back', get title() { return t('Welcome back'); }, get description() { return t('Return after 7 days or more away. Your world waited.'); }, category: 'secret', target: 1 },
+  { id: 'night-owl', get title() { return t('Night owl'); }, get description() { return t('Start a session between 22:00 and 04:00.'); }, category: 'secret', target: 1 },
+  { id: 'early-light', get title() { return t('Early light'); }, get description() { return t('Start a session between 05:00 and 07:00.'); }, category: 'secret', target: 1 },
+  { id: 'past-the-bell', get title() { return t('Past the bell'); }, get description() { return t('Continue a countdown session for 10 minutes or more after it ends.'); }, category: 'secret', target: 1 }
 ];
 export const ACHIEVEMENT_IDS = ACHIEVEMENTS.map(a => a.id);
 
-/* The first four palettes keep their hour thresholds. The others are rewards of achievements. */
+/* The first four palettes keep their hour thresholds. The others are rewards of achievements.
+   Names and descriptions are getters, so they follow the current language. */
 export const PALETTES: PaletteDefinition[] = [
-  { id: 'cyan', name: 'First light', color: '#62d8cd', hours: 0, description: 'A quiet cyan beginning.' },
-  { id: 'violet', name: 'Afterglow', color: '#ac9df3', hours: 5, description: 'Five hours, a softer sky.' },
-  { id: 'amber', name: 'Golden hour', color: '#edbe78', hours: 20, description: 'Twenty hours of returning.' },
-  { id: 'rose', name: 'Rose horizon', color: '#eea5bb', hours: 50, description: 'Fifty hours, a wider world.' },
-  { id: 'mint', name: 'Wild mint', color: '#7fd6a2', achievement: 'explorer', description: 'Three areas, one greener map.' },
-  { id: 'ocean', name: 'Open sea', color: '#79aef2', achievement: 'weeks-12', description: 'A season of weeks, a deeper blue.' },
-  { id: 'ember', name: 'Ember', color: '#f2956b', achievement: 'summit', description: 'A goal reached, a warm glow.' },
-  { id: 'aurora', name: 'Aurora', color: '#c4e06e', achievement: 'hours-100', description: 'A hundred hours, a sky that moves.' }
+  { id: 'cyan', get name() { return t('First light'); }, color: '#62d8cd', hours: 0, get description() { return t('A quiet cyan beginning.'); } },
+  { id: 'violet', get name() { return t('Afterglow'); }, color: '#ac9df3', hours: 5, get description() { return t('Five hours, a softer sky.'); } },
+  { id: 'amber', get name() { return t('Golden hour'); }, color: '#edbe78', hours: 20, get description() { return t('Twenty hours of returning.'); } },
+  { id: 'rose', get name() { return t('Rose horizon'); }, color: '#eea5bb', hours: 50, get description() { return t('Fifty hours, a wider world.'); } },
+  { id: 'mint', get name() { return t('Wild mint'); }, color: '#7fd6a2', achievement: 'explorer', get description() { return t('Three areas, one greener map.'); } },
+  { id: 'ocean', get name() { return t('Open sea'); }, color: '#79aef2', achievement: 'weeks-12', get description() { return t('A season of weeks, a deeper blue.'); } },
+  { id: 'ember', get name() { return t('Ember'); }, color: '#f2956b', achievement: 'summit', get description() { return t('A goal reached, a warm glow.'); } },
+  { id: 'aurora', get name() { return t('Aurora'); }, color: '#c4e06e', achievement: 'hours-100', get description() { return t('A hundred hours, a sky that moves.'); } }
 ];
 export const PALETTE_IDS = PALETTES.map(p => p.id);
 
@@ -159,5 +161,5 @@ export function paletteUnlocked(palette: PaletteDefinition, data: Dataset, achie
   return included(data).reduce((sum, s) => sum + s.activeMs, 0) / 3600000 >= (palette.hours ?? 0);
 }
 export function paletteUnlockLabel(palette: PaletteDefinition): string {
-  return palette.achievement ? `Earn “${ACHIEVEMENTS.find(a => a.id === palette.achievement)?.title}”` : `Record ${palette.hours} hours`;
+  return palette.achievement ? t('Earn “{title}”', { title: ACHIEVEMENTS.find(a => a.id === palette.achievement)?.title }) : t('Record {hours} hours', { hours: palette.hours });
 }

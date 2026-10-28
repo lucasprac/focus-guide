@@ -5,6 +5,7 @@
    Call loadStats() once before the first insight; the scalar helpers below stay in TypeScript because a call into
    WebAssembly costs more than they do, and Kaplan–Meier uses log and exp, which differ by an ulp between math libraries. */
 import { STATS_WASM } from './stats-wasm';
+import { t } from './i18n';
 
 export const Z90 = 1.6448536269514722;
 
@@ -79,7 +80,7 @@ interface StatsModule {
 }
 let stats: StatsModule | null = null, loading: Promise<void> | null = null;
 // k-means++ draws from the caller's generator through this import, so the seeded stream stays the same.
-let draw: () => number = () => { throw new Error('No random source is set.'); };
+let draw: () => number = () => { throw new Error(t('No random source is set.')); };
 /* Compiles the module once. WebAssembly.instantiate is asynchronous because browsers refuse to compile large modules synchronously. */
 export function loadStats(): Promise<void> {
   loading ??= (async () => {
@@ -90,7 +91,7 @@ export function loadStats(): Promise<void> {
   loading.catch(() => { loading = null; });
   return loading;
 }
-function engine(): StatsModule { if (!stats) throw new Error('The statistics engine is still loading. Try again in a moment.'); return stats; }
+function engine(): StatsModule { if (!stats) throw new Error(t('The statistics engine is still loading. Try again in a moment.')); return stats; }
 /* Copies `inputs` in, reserves `outputs` slots, runs `call` with the pointers (inputs first) and reads the outputs back. */
 function withBuffers<T>(inputs: ArrayLike<number>[], outputs: number[], call: (m: StatsModule, pointers: number[]) => number | void, read: (outs: Float64Array[], result: number | void) => T): T {
   const m = engine(), sizes = [...inputs.map(b => b.length), ...outputs], pointers = sizes.map(len => m.stats_alloc(len));
