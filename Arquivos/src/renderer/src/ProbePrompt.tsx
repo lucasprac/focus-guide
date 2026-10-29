@@ -9,14 +9,19 @@ import { t } from '../../shared/i18n';
 
 const probeIcons: Record<ProbeAnswer, IconName> = { 'on-task': 'focus', drifting: 'thought', elsewhere: 'world' };
 /** The host owns visibility, deadlines and timing; these controls only submit an answer. They never take keyboard focus. */
-export default function ProbePrompt({ probe, act, mini = false }: { probe: PendingProbe; act: Action; mini?: boolean }) {
+export default function ProbePrompt({ probe, act, mini = false, bar = false }: { probe: PendingProbe; act: Action; mini?: boolean; bar?: boolean }) {
   const busy = useRef(false), [saving, setSaving] = useState(false);
   const answer = async (value: ProbeAnswer) => {
     if (busy.current) return;
     busy.current = true; setSaving(true);
-    try { await act('probe.answer', { id: probe.id, answer: value, source: mini ? 'floating' : 'main' }); }
+    try { await act('probe.answer', { id: probe.id, answer: value, source: mini || bar ? 'floating' : 'main' }); }
     finally { busy.current = false; setSaving(false); }
   };
+  // Floating bar: the window widens beside the bar, so each answer keeps its visible label.
+  if (bar) return <section className="probe-prompt probe-bar" aria-label={t('Attention check-in')}>
+    <p>{t('Where is your attention right now?')}</p>
+    <div>{PROBE_ANSWERS.map(value => <button key={value} type="button" disabled={saving} onClick={() => void answer(value)}><Icon name={probeIcons[value]} size={18} />{PROBE_ANSWER_LABELS[value]}</button>)}</div>
+  </section>;
   if (mini) return <section className="probe-prompt probe-mini" aria-label={t('Attention check-in')}>
     <p aria-hidden="true">{t('Attention right now?')}</p>
     <div>{PROBE_ANSWERS.map(value => <button key={value} type="button" disabled={saving} aria-label={PROBE_ANSWER_LABELS[value]} title={PROBE_ANSWER_LABELS[value]} onClick={() => void answer(value)}><Icon name={probeIcons[value]} size={15} /></button>)}</div>

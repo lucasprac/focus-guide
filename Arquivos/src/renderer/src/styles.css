@@ -162,6 +162,9 @@ select { padding-right: 24px; }
 .break-link { width: 100%; margin-top: 23px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--muted); padding: 20px 0 0; display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 12px; }
 .parked-review { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 20px; }
 .parked-review p { color: var(--muted); padding: 6px 0; font-size: 12px; overflow-wrap: anywhere; }
+.parked-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.parked-note p { flex: 1; min-width: 0; }
+.parked-added { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: var(--muted); font-size: 12px; }
 .danger-button { color: var(--on-accent); background: var(--danger); border-color: var(--danger); }
 .empty-state { text-align: center; padding: 33px 17px; color: var(--muted); }
 .empty-state h3 { color: var(--muted); margin-top: 15px; font-size: 14px; }

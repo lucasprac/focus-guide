@@ -1,5 +1,41 @@
 # Release notes
 
+## Unreleased (3.5.0) — Floating bar: drag to an edge, vertical at the sides, palette colour
+
+- **Orientation.** The floating bar is horizontal at the top and bottom of the screen (it fills from left to right) and vertical at the left and right edges (it fills from bottom to top). At a side edge the check-in and the panel open beside the bar, toward the centre of the screen.
+- **Drag to move.** Drag the bar with the mouse. While you drag, a label shows the edge it will go to; when you release, the bar moves to the middle of the nearest edge of its screen. It still has only the four fixed places. With keyboard focus on the bar, Alt + an arrow key moves it. The **Move to** arrows are removed from the panel. The command stays `window.floatMove`.
+- **Palette colour.** The fill and the check-in dot use the colour of the palette chosen in Neural World, so the colour changes as you unlock and choose palettes. Breaks stay blue. The track outline is darker, so the light palette colours stay visible on it.
+- **Cards.** The check-in and the panel are 70% opaque and have rounder corners (22 pixels).
+- At a side edge the bar window is 280 × 330 pixels; at the top and bottom it stays 260 × 330. No change to data, schema or backups.
+
+## Unreleased (3.4.0) — Quick notes in the floating bar and I'm back feedback
+
+- **Quick notes.** During a focus session, the floating bar's panel has a field to note a task, a thought or anything you remember. Press Enter or **+** to save it; the field shows "Saved for after the session". The note is a parked thought of the session (`thought.record`), so it appears with the thoughts you parked on the Focus page.
+- **After the session.** The session review lists the parked thoughts and notes. Each one has **Add to tasks**, which creates a to-do in the session's area (its first line is the title, up to 200 characters; longer text goes to the task notes). Notes also stay in Calendar with their session.
+- **I'm back feedback.** When you press **I'm back** in the bar's panel or use the shortcut, the bar flashes a green ring and a check shows at the end of the fill for about one second. Screen readers hear "Return saved". With animations off, the check shows without motion.
+- The bar window is now 260 × 330 pixels, to fit the note field. No change to data, schema or backups.
+
+## Unreleased (3.3.2) — Patterns bars restored
+
+- **Patterns.** The horizontal bars in Patterns (and every other `bar-chart`) look as before 3.3.0 again. The floating bar's `.bar-track` style had the same class name and overrode them. The floating bar's classes now use the `fbar-` prefix. Renderer and CSS only.
+
+## Unreleased (3.3.1) — Horizontal floating bar with fixed places
+
+- **Horizontal.** The floating bar now lies flat and fills from left to right. It is 20% shorter: 160 × 16 pixels.
+- **Fixed places.** The bar sits at the middle of one screen edge: top, bottom, left or right. Choose the place with **Move to** in its panel; the bar can no longer be dragged. The place is kept with the window position (`floatBarPosition` in the local metadata), not in settings or backups. The brain keeps its own dragged position.
+- **No more ghost bar.** The bar window no longer changes size when the pointer moves onto it, which briefly painted a second bar. The window has one fixed size (260 × 290 pixels); its empty area lets clicks pass through to other windows, and the bar turns input on only while the pointer is over the bar or its cards.
+- The internal command `window.floatExpand` is replaced by `window.floatPointer` and `window.floatMove`, accepted only from the floating window in bar style. `AppState` has the runtime field `floatBarPosition`.
+- New texts are in the Brazilian Portuguese catalog; the drag hint of the vertical bar is removed.
+
+## Unreleased (3.3.0) — Floating timer as a bar
+
+- **Bar style.** Settings › Appearance & feedback › **Floating timer** can now be **Bar**. The floating timer is then a thin bar (16 × 200 pixels) that fills upward as the session runs: purple during focus, blue during a break, dimmed when paused, with an amber top in overtime. Drag the small grip above the bar to move it.
+- **Time and controls.** Move the pointer onto the bar, or give it keyboard focus, to show the time, **I'm back**, Pause / Resume, Finish, Open and Hide in a panel beside it.
+- **Attention check-ins.** A check-in shows a pulsing dot on the bar and the question with the three answers, each with its label, beside the bar. Answers are saved from the floating timer as before.
+- The window is 40 × 232 pixels and widens to 300 pixels to the left only while the panel or a check-in shows, so the empty area does not block clicks on other windows. New internal command `window.floatExpand`, accepted only from the floating window.
+- New optional setting `floatingStyle` (`brain` or `bar`, default `brain`). No schema change; the backup format stays version 11. A backup without the key restores with the brain. Version 3.2.2 and earlier reject a backup that contains the key, because they reject unknown settings keys.
+- The new texts are in the Brazilian Portuguese catalog.
+
 ## Unreleased (3.2.2) — Clearer Behaviour card
 
 - **Behaviour card** (Calendar and the session review). The activity mode is a badge above the explanation. The totals are small tiles with the number on top. The marker, phase and axis rows now end where the columns end.

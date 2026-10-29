@@ -22,6 +22,12 @@ export const PROBE_ANSWERS = ['on-task', 'drifting', 'elsewhere'] as const;
 export type ProbeAnswer = typeof PROBE_ANSWERS[number];
 /* What the Focus stage draws: the 3D brain or the isometric session gauge. Appearance only; timing is unchanged. */
 export type FocusVisual = 'brain' | 'instrument';
+/* How the floating timer looks: the brain constellation or a thin bar that fills as time passes. Appearance only. */
+export type FloatingStyle = 'brain' | 'bar';
+/* Where the floating bar sits: the middle of one screen edge. Window placement, kept with the window bounds, not in settings. */
+export const FLOAT_BAR_POSITIONS = ['top', 'bottom', 'left', 'right'] as const;
+export type FloatBarPosition = typeof FLOAT_BAR_POSITIONS[number];
+export function isFloatBarPosition(value: unknown): value is FloatBarPosition { return (FLOAT_BAR_POSITIONS as readonly unknown[]).includes(value); }
 export interface ActivitySample {
   id: string; sessionId: string; startMs: number; endMs: number; observedMs: number;
   keys: number; clicks: number; scrolls: number; movementMs: number;
@@ -62,6 +68,7 @@ export interface Settings {
   collectActivity?: boolean; returnShortcut?: string; activityModes?: Record<string, ActivityMode>;
   agentAccess?: AgentAccess;
   focusVisual?: FocusVisual;
+  floatingStyle?: FloatingStyle;
   attentionProbes?: boolean;
   /* Interface language; absent in older data and backups, which means English. */
   language?: Language;
@@ -83,7 +90,7 @@ export interface TimerSnapshot {
 export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: string; launch: { command: string; args: string[]; env: Record<string, string> } | null }
 /* Runtime state of the attention check-in that is on screen now; it never reaches settings, datasets or backups. */
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
-export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null }
+export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
 export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 11; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
 export type Command =
@@ -99,7 +106,7 @@ export type Command =
   | 'settings.update' | 'review.save' | 'achievements.collect'
   | 'attention.return' | 'attention.remove' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
   | 'probe.answer' | 'insights.read'
-  | 'window.float' | 'window.main' | 'window.hide'
+  | 'window.float' | 'window.main' | 'window.hide' | 'window.floatPointer' | 'window.floatMove'
   | 'export.sessions' | 'export.events' | 'export.backup'
   | 'backup.preview' | 'backup.restore' | 'backup.create';
 export type AppEvent = { type: 'state'; state: AppState } | { type: 'timer'; timer: TimerSnapshot } | { type: 'error'; message: string } | { type: 'notice'; message: string } | { type: 'visibility'; visible: boolean } | { type: 'attention-return'; sessionId: string; eventId: string; savedAt: string } | { type: 'shortcut-captured'; shortcut: string };

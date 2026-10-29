@@ -227,6 +227,18 @@ Click **Floating timer** in the top bar.
 
 Sometimes an [attention check-in](#attention-check-ins) is due while the main window has no focus. The floating timer then shows three small icon buttons: **On the task**, **Drifting** and **Somewhere else**. They do not take keyboard focus. If you hid the floating timer, it appears without taking focus and hides again after the check-in. If you close or hide the window while a check-in shows, the app cancels the check-in and saves nothing. The buttons cover only the lower part of the window. You can still drag the brain, press **I'm back** and use the timer controls.
 
+#### Bar style
+
+In **Settings › Appearance & feedback › Floating timer**, choose **Bar** to show a thin bar instead of the brain.
+
+- At the top and bottom of the screen the bar is horizontal and fills from left to right. At the left and right edges it is vertical and fills from bottom to top. During focus it has the colour of the palette you chose in Neural World; during a break it is blue. It is dimmed when you pause. In overtime it is full and its end is amber.
+- The bar sits at the middle of one screen edge: top, bottom, left or right. To change the place, drag the bar with the mouse. A label shows the edge it will go to. When you release it, it moves to the nearest edge. With keyboard focus on the bar, Alt + an arrow key also moves it.
+- To show the time and the controls, move the pointer onto the bar or give it keyboard focus. They show in a panel that opens toward the centre of the screen.
+- When an attention check-in is due, a dot pulses on the bar and the question **Where is your attention right now?** shows next to the bar with **On the task**, **Drifting** and **Somewhere else**. One click saves the answer.
+- When you press **I'm back** (in the panel or with the shortcut), the bar flashes and a check shows at the end of the fill for about one second.
+- During focus, the panel has a field to note a task or a thought. Press Enter to save it. After the session, the review lists your notes, and **Add to tasks** turns a note into a to-do in the session's area.
+- The check-in and the panel are slightly transparent. The window is 260 × 330 pixels at the top and bottom and 280 × 330 pixels at the sides, and does not change size while you use it. Outside the bar and its cards, clicks go through to the windows below.
+
 To show the time and the controls, move the pointer onto the window. When the pointer moves away, they hide again. This also occurs after you click a control. Tab or keyboard focus also shows them.
 
 The time display depends on the mode:

@@ -19,6 +19,7 @@ import SettingsPage from './SettingsPage';
 import { BehaviourReview, ReturnFeedback } from './Behaviour';
 import ProbePrompt, { ProbeAnnouncer, ReflectionQuestions } from './ProbePrompt';
 import BehaviourTutorial from './BehaviourTutorial';
+import FloatingBar from './FloatingBar';
 import { t, dateLocale, setLanguage } from '../../shared/i18n';
 
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
@@ -100,6 +101,7 @@ export default function App() {
     } catch (e) { const message = String(e); setError(message); return { ok: false, error: message }; }
   };
   if (!data) return mini ? <div className="mini-app mini-loading" role="status"><Icon name="world" size={32} /><span>{error || t('Opening timer…')}</span></div> : <div className="loading-screen"><Icon name="world" size={42} /><h1>Focus Guide</h1><p>{error || t('Opening your focus space…')}</p></div>;
+  if (mini && data.settings.floatingStyle === 'bar') return <FloatingBar data={data} act={act} error={error} onDismissError={() => setError('')} />;
   if (mini) return <div className="mini-app" key={language} tabIndex={0} role="group" aria-label={t('Floating timer. Hover or focus to reveal time and controls.')}>
     {data.timer.mode === 'focus' && <ProbeAnnouncer probe={data.probe} />}
     <div className="mini-drag" title={t('Drag the brain to move the floating timer')}>
@@ -165,10 +167,27 @@ export default function App() {
     <Modal open={!!(review && reviewed)} title={t('A moment to notice.')} onClose={() => setReview(null)}>{review && reviewed && <><div className="completion-symbol"><Icon name="spark" size={28} /></div><p className="modal-intro">{t('You made room for')}{' '}<strong>{minutesLabel(review.activeMs / 60000)}</strong>{' '}{t('of {v1}. What was it like?', { v1: data.goals?.find(g => g.id === reviewed.goalId)?.title ?? data.fields.find(f => f.id === review.fieldId)?.name.toLowerCase() ?? t('focus') })}</p>{planDifferenceMinutes(review) !== null && <p className="hint">{planComparison(review.plannedMs! / 60000, planDifferenceMinutes(review)!)}</p>}<div className="session-inclusion"><label><CheckControl aria-label={t('Exclude this session from insights')} checked={reviewed.excluded} onChange={e => void act('session.exclude', { id: review.id, excluded: e.target.checked })} />{t('Exclude this session from insights')}</label><p className="hint">{t('{v1} Recorded time stays in history and exports.', { v1: reviewed.excluded ? reviewed.activeMs < MIN_INCLUDED_SESSION_MS ? t('Sessions below 2 minutes of active time are excluded automatically. Uncheck to include this one.') : t('Excluded from insights. Uncheck to include it again.') : t('Included in your focus insights.') })}</p></div><Rating value={focus} onChange={setFocus} label={t('How focused did you feel?')} low={t('Scattered')} high={t('Very focused')} /><ReflectionQuestions detractor={detractor} challenge={challenge} onDetractor={setDetractor} onChallenge={setChallenge} /><label className="form-label">{t('A note to your future self')}<span className="optional">{t('optional')}</span><textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder={t('What helped? What got in the way?')} rows={3} /></label>
       <BehaviourReview session={reviewed} data={data} act={act} />
       {reviewedOccurrence && <DisclosureForGoal row={reviewedOccurrence} data={data} act={act} />}
-      {data.events.some(e => e.sessionId === review.id && e.kind === 'thought') && <div className="parked-review"><span className="tiny-label">{t('THOUGHTS YOU PARKED')}</span>{data.events.filter(e => e.sessionId === review.id && e.kind === 'thought').map(e => <p key={e.id}>{e.text}</p>)}</div>}
+      <ParkedNotes sessionId={review.id} fieldId={reviewed.fieldId} data={data} act={act} />
       <div className="modal-actions"><button className="text-button" onClick={() => setReview(null)}>{t('Skip check-in')}</button><button className="primary" onClick={async () => { const result = await act('session.review', { id: review.id, focus, note, detractor, challenge }); if (result.ok) setReview(null); }}>{t('Save reflection')}{' '}<Icon name="check" size={17} /></button></div><button className="break-link" onClick={async () => { const saved = await act('session.review', { id: review.id, focus, note, detractor, challenge }); if (saved.ok) { setReview(null); const result = await act('break.start'); if (result.ok) setPage('Focus'); } }}><Icon name="sun" size={18} />{t('Save & take a 10-minute break')}</button>
     </>}</Modal>
   </div>;
+}
+// Thoughts and quick notes parked during the session. Each can become a to-do in the session's area.
+function ParkedNotes({ sessionId, fieldId, data, act }: { sessionId: string; fieldId: string } & ViewProps) {
+  const [added, setAdded] = useState<Record<string, boolean>>({}), busy = useRef(false);
+  const notes = data.events.filter(e => e.sessionId === sessionId && e.kind === 'thought' && e.text);
+  if (!notes.length) return null;
+  const areaActive = data.fields.some(f => f.id === fieldId && !f.archived);
+  const addTask = async (id: string, text: string) => {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const title = text.trim().split('\n')[0].slice(0, 200);
+      const result = await act('task.create', { fieldId, title, notes: title === text.trim() ? '' : text.trim() });
+      if (result.ok) setAdded(current => ({ ...current, [id]: true }));
+    } finally { busy.current = false; }
+  };
+  return <div className="parked-review"><span className="tiny-label">{t('THOUGHTS YOU PARKED')}</span>{notes.map(e => <div className="parked-note" key={e.id}><p>{e.text}</p>{areaActive && (added[e.id] ? <span className="parked-added"><Icon name="check" size={14} />{t('Added to tasks')}</span> : <Button size="sm" variant="ghost" icon="plus" onClick={() => void addTask(e.id, e.text ?? '')}>{t('Add to tasks')}</Button>)}</div>)}</div>;
 }
 function DisclosureForGoal({ row,data,act }: { row: GoalOccurrence } & ViewProps) {
   const title = data.goalActions?.find(a => a.id === row.actionId)?.title ?? t('Planned action');
