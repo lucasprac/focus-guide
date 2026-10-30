@@ -207,7 +207,7 @@ export function installPreview(): void {
     command: async (command, input = {}) => {
       try {
         if (command === 'shortcut.capture') return { ok: true };
-        if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.')) throw new Error(t('This native feature is available in the Windows app. The demo is isolated from your files.'));
+        if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.') || command === 'agent.plugin.write') throw new Error(t('This native feature is available in the Windows app. The demo is isolated from your files.'));
         if (command === 'session.pause' || command === 'session.finish' || command === 'settings.update' || command === 'field.delete' || command === 'goal.delete' || command === 'activity.delete') { timer.checkpoint(); simulate(); }
         const value = service.run(command, input);
         if (command === 'attention.return' && value) { const marker = value as SessionEvent; emit({ type: 'attention-return', sessionId: marker.sessionId, eventId: marker.id, savedAt: marker.startedAt }); }

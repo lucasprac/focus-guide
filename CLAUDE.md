@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick facts
 
-- **Focus Guide** is an offline Windows desktop app (Electron + React 19 + TypeScript + better-sqlite3), version in `Arquivos/package.json`.
+- **Focus Guide** is a local-first Windows desktop app (Electron + React 19 + TypeScript + better-sqlite3), version in `Arquivos/package.json`. Records stay in a local database. The app integrates with AI agents through MCP to recognize patterns in the user's focus, goals, workflow and behaviour (see "Objective" in `AGENTS.md`).
 - `Arquivos/` is the only source root; run every npm command from there. `Aplicativo/` is a packaged build and must never be edited.
 - Use `npm.cmd` (not `npm`) in PowerShell. There is no test suite, linter, or formatter: `npm.cmd run typecheck` is the verification gate.
 - `npm.cmd run build` first compiles `native/activity-helper.cpp` via `scripts/build-helper.cjs` (needs MinGW `g++`, default `C:\msys64\ucrt64\bin\g++.exe`, override with `FOCUS_GUIDE_CXX`), then the Rust statistics kernels in `native/stats/` via `scripts/build-stats.cjs` (WebAssembly embedded in the committed `src/shared/stats-wasm.ts`; Rust with the `wasm32-unknown-unknown` target is needed only when the crate changes), then runs `electron-vite build` into `out/`.
@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Three processes with a strict boundary, plus an optional MCP server process:
+Three processes with a strict boundary, plus the MCP server process for agent integration:
 
 1. **Main** (`src/main/`) owns everything authoritative.
    - `index.ts`: windows (main + transparent floating timer), tray, power events, local protocol, IPC sender checks.
@@ -30,7 +30,7 @@ Three processes with a strict boundary, plus an optional MCP server process:
    - `agent-service.ts` and `agent-bridge.ts`: local AI agent support. The bridge listens on a Windows named pipe only while `settings.agentAccess` is not `off`, checks a per-start token and accepts only the tools in `src/shared/agent-tools.ts`. At `read` and `propose` the agent only reads or saves proposals (the user applies them with `agent.proposal.apply`). At `edit`, `agent-edits.ts` (`AgentEditor`) applies changes through the normal commands and writes an `agentChanges` audit record in the same transaction; `agent.change.undo` reverts one.
 2. **Preload** (`src/preload/index.ts`): exposes only `window.focusGuide` with `getState`, `command(name, input)`, `onEvent`. Over IPC that is `focus-guide:state`, `focus-guide:command`, `focus-guide:event`.
 3. **Renderer** (`src/renderer/src/`): sandboxed React UI. `App.tsx` routes the pages (Goals, Focus, Tasks, Calendar, Patterns, World, Settings) and the floating timer. Goals opens `GoalWorkspace.tsx` for one goal (overview, roadmap, tasks, behaviour, plan & review); fields are shown as "areas". Shared Radix-based controls are in `ui.tsx`, shared visuals/formatting in `components.tsx`, Three.js scenes in `ThreeScene.tsx`/`NeuralVisual.tsx` with an SVG fallback, and the 2D Neural World canvas in `WorldCanvas.ts`. `preview.ts` is the dev-only browser adapter and is tree-shaken from production.
-4. **MCP server** (`src/mcp/server.ts`): stdio server bundled by `scripts/build-mcp.cjs` and run as `FocusGuide.exe` with `ELECTRON_RUN_AS_NODE=1`. It never opens the database; it relays tool calls to the bridge.
+4. **MCP server** (`src/mcp/server.ts`): stdio server bundled by `scripts/build-mcp.cjs` and run as `FocusGuide.exe` with `ELECTRON_RUN_AS_NODE=1`. It never opens the database; it relays tool calls to the bridge (`client.ts`). With `--hook <event>` the same bundle runs the Claude Code plugin hooks (`hooks.ts`). `src/main/agent-plugin.ts` writes that plugin (MCP server, the skills in `Arquivos/agent-plugin/skills/`, hooks) to the data folder on `agent.plugin.write`.
 
 `src/shared/` is imported by all three: `types.ts` (dataset, `AppState`, command names, events), `validation.ts` / `goal-validation.ts` (input validation used by main), `analytics.ts` (local-date splits, Spearman correlation), `goal-planning.ts` (occurrence projection), `focus-insights.ts` (personal insight engine and its thresholds), `insight-stats.ts` (statistics for that engine; its matrix kernels are Rust in `native/stats/`, loaded by `loadStats()`, and must keep bit-identical results with the TypeScript they replaced), `demo.ts` (synthetic data), `achievements.ts` (achievements derived from records, and the palette unlock rules).
 

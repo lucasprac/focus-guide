@@ -23,6 +23,7 @@
   --font-sans: 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
+  --radius-chip: 6px;
   --radius-control: 10px;
   --radius-card: 18px;
   --radius-pill: 9999px;
@@ -79,18 +80,80 @@
 @layer components {
   /* Inside the sticky top bar: it follows the bar's real height (also when the bar wraps) and the page-content width. */
   .app-shell .topbar > .probe-prompt { position: absolute; top: calc(100% + 8px); left: 0; right: 0; }
-  .app-shell .probe-prompt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 14px; background: var(--soft); color: var(--text); box-shadow: var(--shadow-overlay, none); }
+  .app-shell .probe-prompt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--radius-card); background: var(--soft); color: var(--text); box-shadow: var(--shadow-overlay, none); }
   .app-shell .probe-prompt p { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 500; }
   .app-shell .probe-prompt > div { display: flex; flex-wrap: wrap; gap: 6px; }
   /* Floating window (132 x 156): the check-in covers only the lower part of the brain, so dragging, I'm back and the timer controls stay usable. */
-  .probe-mini { position: absolute; left: 6px; right: 6px; top: 40px; z-index: 3; margin: 0; padding: 4px 5px 5px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 2px 8px rgba(37, 36, 58, .16); color: var(--text); -webkit-app-region: no-drag; }
+  .probe-mini { position: absolute; left: 6px; right: 6px; top: 40px; z-index: 3; margin: 0; padding: 4px 5px 5px; border: 1px solid var(--line); border-radius: var(--radius-control); background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 2px 8px rgba(37, 36, 58, .16); color: var(--text); -webkit-app-region: no-drag; }
   .probe-mini p { margin: 0 0 4px; font-size: 11px; line-height: 14px; text-align: center; white-space: nowrap; overflow: hidden; }
   .probe-mini > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-  .probe-mini button { display: grid; place-items: center; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); cursor: pointer; }
+  .probe-mini button { display: grid; place-items: center; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-chip); background: var(--panel); color: var(--text); cursor: pointer; }
   .probe-mini button:hover:enabled, .probe-mini button:focus-visible { border-color: var(--accent); background: var(--soft); color: var(--accent); }
   .probe-mini button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .probe-mini button:disabled { opacity: .5; }
   .mini-app:has(.probe-mini) > .mini-error { z-index: 4; }
+
+  /* Floating bar: one fixed 260 x 330 window at the middle of a screen edge. The bar sits at that edge; its cards open toward the screen centre. */
+  .fbar-app { --text: #25243A; --muted: #5B5A72; --accent: #6D4AFF; --soft: #F1EEFF; --panel: #FFFFFF; --line: #DEDDEA; --danger: #A4314A; --error-soft: #FFF0F3; --fill: var(--palette, var(--accent)); color-scheme: light; width: 100vw; height: 100vh; box-sizing: border-box; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; background: transparent; overflow: hidden; color: var(--text); font-size: 12px; }
+  .fbar-cards { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .fbar-app.pos-bottom, .fbar-app.pos-bottom .fbar-cards { flex-direction: column-reverse; }
+  /* At a side edge the bar is vertical and the cards open beside it, toward the centre of the screen. */
+  .fbar-app.vertical { flex-direction: row; justify-content: flex-start; align-items: center; }
+  .fbar-app.pos-right { flex-direction: row-reverse; }
+  .fbar-app.pos-left .fbar-cards { align-items: flex-start; }
+  .fbar-app.pos-right .fbar-cards { align-items: flex-end; }
+  .fbar-app.break { --fill: #5786DC; }
+  .fbar-line { position: relative; flex: 0 0 auto; width: 160px; height: 24px; display: flex; align-items: center; }
+  .fbar-track { position: relative; width: 160px; height: 16px; border-radius: var(--radius-pill); background: #ffffffe6; box-shadow: 0 0 0 1px rgba(37, 36, 58, .28), 0 2px 8px rgba(37, 36, 58, .16); overflow: hidden; outline: none; cursor: grab; touch-action: none; }
+  .fbar-app.dragging .fbar-track { cursor: grabbing; }
+  .fbar-app.vertical .fbar-line { width: 24px; height: 160px; justify-content: center; }
+  .fbar-app.vertical .fbar-track { width: 16px; height: 160px; }
+  .fbar-track:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  .fbar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--radius-pill); background: var(--fill); transition: width 600ms linear, height 600ms linear, opacity 160ms ease; }
+  .fbar-app.vertical .fbar-fill { top: auto; right: 0; }
+  .fbar-app.paused .fbar-fill { opacity: .45; }
+  .fbar-overtime { position: absolute; top: 0; bottom: 0; right: 0; width: 18px; background: #E0962A; }
+  .fbar-app.vertical .fbar-overtime { bottom: auto; left: 0; width: auto; height: 18px; }
+  .fbar-app.vertical .fbar-marker, .fbar-app.vertical .fbar-ack { left: 0; }
+  .fbar-marker { position: absolute; top: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--fill); box-shadow: 0 0 0 3px #fff; pointer-events: none; animation: bar-ping 1.6s ease-out infinite; }
+  @keyframes bar-ping { 0%, 100% { transform: scale(.75); } 50% { transform: scale(1); } }
+  .fbar-drop { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--radius-pill); background: #25243A; color: #fff; font-size: 12px; white-space: nowrap; }
+  .fbar-drop.to-top svg { transform: rotate(-90deg); }
+  .fbar-drop.to-bottom svg { transform: rotate(90deg); }
+  .fbar-drop.to-left svg { transform: rotate(180deg); }
+  .fbar-note { display: flex; gap: 6px; }
+  .fbar-note input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--panel); color: var(--text); font: inherit; font-size: 12px; }
+  .fbar-note input::placeholder { color: var(--muted); }
+  .fbar-note input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .fbar-note button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--accent); border-radius: var(--radius-control); background: var(--accent); color: #fff; cursor: pointer; }
+  .fbar-note button:disabled { border-color: var(--line); background: var(--panel); color: var(--muted); cursor: default; }
+  .fbar-note button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* I'm back: the track flashes a ring and a check sits at the end of the fill. */
+  .fbar-ack { position: absolute; top: 0; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: #1F8A5B; color: #fff; box-shadow: 0 0 0 3px #fff; pointer-events: none; animation: fbar-ack 1.2s ease-out both; }
+  .fbar-app.returned .fbar-track { animation: fbar-flash 1.2s ease-out; }
+  @keyframes fbar-ack { 0% { transform: scale(.4); opacity: 0; } 20% { transform: scale(1.1); opacity: 1; } 35%, 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+  @keyframes fbar-flash { 0% { box-shadow: 0 0 0 1px rgba(37, 36, 58, .14), 0 0 0 0 #1F8A5B80; } 30% { box-shadow: 0 0 0 1px #1F8A5B, 0 0 0 6px #1F8A5B40; } 100% { box-shadow: 0 0 0 1px rgba(37, 36, 58, .14), 0 0 0 0 #1F8A5B00; } }
+  /* The cards are 70% opaque with round corners, so the screen behind still shows a little. */
+  .fbar-panel, .probe-bar { padding: 10px; border: 1px solid #DEDDEAB3; border-radius: var(--radius-float); background: #FFFFFFB3; box-shadow: 0 4px 14px rgba(37, 36, 58, .16); -webkit-app-region: no-drag; }
+  .fbar-panel { display: flex; flex-direction: column; gap: 8px; }
+  .fbar-time { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .fbar-time span { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fbar-time small { font-size: 11px; color: var(--muted); }
+  .fbar-controls { display: flex; gap: 6px; }
+  .fbar-controls button, .probe-bar button { border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+  .fbar-controls button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: var(--radius-control); }
+  .fbar-controls button:hover:enabled, .fbar-controls button:focus-visible, .probe-bar button:hover:enabled, .probe-bar button:focus-visible { border-color: var(--accent); background: var(--soft); color: var(--accent); }
+  .fbar-controls button:focus-visible, .probe-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fbar-controls button:disabled, .probe-bar button:disabled { opacity: .5; cursor: default; }
+  .probe-bar button svg { flex-shrink: 0; }
+  .probe-bar p { margin: 0 0 8px; font-size: 12px; line-height: 16px; font-weight: 600; text-align: center; }
+  .probe-bar > div { display: grid; grid-template-columns: repeat(3, 64px); gap: 6px; }
+  .probe-bar button { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 52px; padding: 6px 2px 4px; border-radius: var(--radius-card); font-family: inherit; font-size: 11px; font-weight: 500; line-height: 13px; text-align: center; }
+  .fbar-app.still .fbar-marker, .fbar-app.still .fbar-fill, .fbar-app.still .fbar-ack, .fbar-app.still.returned .fbar-track { animation: none; transition: none; }
+  @media (prefers-reduced-motion: reduce) { .fbar-marker, .fbar-ack, .fbar-app.returned .fbar-track { animation: none; } .fbar-fill { transition: none; } }
+  .fbar-error { max-width: 100%; display: flex; align-items: flex-start; gap: 4px; padding: 6px; border-radius: var(--radius-chip); background: var(--error-soft); color: var(--danger); overflow-wrap: anywhere; -webkit-app-region: no-drag; }
+  .fbar-error span { flex: 1; min-width: 0; }
+  .fbar-error button { flex-shrink: 0; border: 0; background: transparent; color: inherit; padding: 2px; }
 
   .reflection-questions { display: grid; gap: 16px; margin-top: 18px; }
   .reflection-choice { min-width: 0; }
@@ -99,7 +162,7 @@
   .reflection-clear { margin-left: 10px; padding: 0 2px; border: 0; border-radius: 4px; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 400; line-height: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
   .reflection-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .reflection-options { display: flex; flex-wrap: wrap; gap: 6px; }
-  .reflection-options > button { min-height: 32px; padding: 4px 12px; border: 1px solid var(--control-line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer; }
+  .reflection-options > button { min-height: 32px; padding: 4px 12px; border: 1px solid var(--control-line); border-radius: var(--radius-pill); background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer; }
   .reflection-options > button:hover { background: var(--soft); }
   .reflection-options > button[data-state="on"] { border-color: var(--accent); background: var(--soft); color: var(--accent); }
   .reflection-options > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -107,7 +170,7 @@
   .focus-adjustment { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
   .focus-adjustment strong { display: block; font-size: 12px; font-weight: 500; color: var(--text); }
   .focus-hints { display: grid; gap: 8px; margin-top: 12px; }
-  .focus-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--blue-soft); }
+  .focus-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-control); background: var(--blue-soft); }
 
   .page-tab { cursor: pointer; border-radius: 0; }
   .page-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -122,7 +185,7 @@
   .insight-quality-list strong { font-size: 20px; font-weight: 400; color: var(--text); }
   .insight-quality-list span { font-size: 13px; line-height: 1.45; color: var(--muted); }
   .insight-notes { margin: 16px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--muted); }
-  .insight-reason { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 12px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .insight-reason { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 14px 16px; border: 1px dashed var(--line); border-radius: var(--radius-control); font-size: 13px; line-height: 1.5; color: var(--muted); }
   .insight-callout { margin: 12px 0 6px; font-size: 14px; line-height: 1.5; color: var(--text); }
   .insight-subhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 18px 0 8px; }
   .insight-subhead h3 { margin: 0; font-size: 14px; font-weight: 500; color: var(--text); }
@@ -144,7 +207,7 @@
   .insight-heat { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
   .insight-heat th { padding: 4px 6px; font-weight: 500; text-align: left; white-space: nowrap; color: var(--muted); }
   .insight-heat th small { display: block; font-size: 12px; font-weight: 400; }
-  .insight-heat td { min-width: 44px; padding: 7px 4px; border-radius: 6px; text-align: center; color: var(--text); background: color-mix(in srgb, var(--blue) calc(var(--heat, 0) * 40%), var(--surface-raised, var(--panel))); }
+  .insight-heat td { min-width: 44px; padding: 7px 4px; border-radius: var(--radius-chip); text-align: center; color: var(--text); background: color-mix(in srgb, var(--blue) calc(var(--heat, 0) * 40%), var(--surface-raised, var(--panel))); }
   .insight-heat td.empty { color: var(--muted); }
   .survival-multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
   .survival-multiples figure { min-width: 0; margin: 0; }
@@ -156,7 +219,7 @@
   .state-legend li > div:first-child { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; font-size: 14px; }
   .state-legend span { font-size: 13px; color: var(--muted); }
   .state-legend p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
-  .share-track { display: block; height: 6px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--text) 7%, var(--panel)); }
+  .share-track { display: block; height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 7%, var(--panel)); }
   .share-track > span { display: block; height: 100%; border-radius: 0 3px 3px 0; background: var(--blue); }
   .mean-rows { display: grid; gap: 10px; }
   .mean-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(48px, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }

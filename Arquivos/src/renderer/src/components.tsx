@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { animate, createScope, svg } from 'animejs';
-import { Fold, Overlay, Segments } from './ui';
+import { Overlay, Segments } from './ui';
 import floatingBrainSheet from './assets/floating-brain-sheet.png';
 import { Icon, type IconName } from './icons';
 import NeuralVisual from './NeuralVisual';
@@ -16,8 +16,6 @@ export function planComparison(plannedMinutes: number, differenceMinutes: number
   return Math.abs(differenceMinutes) < 1 ? t('{base} · on plan', { base }) : t('{base} · {minutesLabel} {v3} than planned', { base, minutesLabel: minutesLabel(Math.abs(differenceMinutes)), v3: differenceMinutes > 0 ? t('more') : t('less') });
 }
 export function displayDay(day: string, short = false): string { return new Date(`${day}T12:00:00Z`).toLocaleDateString(dateLocale(), { timeZone: 'UTC', month: short ? 'short' : 'long', day: 'numeric', ...(short ? {} : { weekday: 'long' }) }); }
-export function Empty({ title, children }: { title: string; children?: ReactNode }) { return <div className="empty-state"><span className="empty-orbit"><Icon name="spark" size={23} /></span><h3>{title}</h3><p>{children}</p></div>; }
-export const Disclosure = Fold;
 export function useMotionEnabled(animation: boolean) {
   const [visible, setVisible] = useState(document.visibilityState !== 'hidden');
   const [windowVisible, setWindowVisible] = useState(true);

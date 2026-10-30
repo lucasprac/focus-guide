@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Arquivos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Arquivos/package-lock.json
+      # The type check needs no native modules, so install scripts (Electron download, native rebuild) are skipped.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck

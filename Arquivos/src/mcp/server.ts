@@ -1,45 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import * as z from 'zod/v4';
-import { connect } from 'node:net';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { AGENT_BRIDGE_FILE, type AgentBridgeFile, type AgentTool } from '../shared/agent-tools';
+import type { AgentTool } from '../shared/agent-tools';
 import { ACTIVITY_MODES } from '../shared/types';
 import { version } from '../../package.json';
+import { call } from './client';
+import { HOOK_EVENTS, runHook } from './hooks';
 
 /* A stdio MCP server for Focus Guide. It holds no data and opens no database. It sends each tool call
    to the running app over the local named pipe that the app announces in its data folder. The app
-   validates every call again and applies nothing: propose tools only save proposals for the user. */
-const unavailable = 'Focus Guide is not running, or AI agent access is off. Open Focus Guide, then select Settings > AI agent and choose an access level.';
-function bridge(): AgentBridgeFile {
-  const directory = process.env.FOCUS_GUIDE_DATA_DIR || join(process.env.APPDATA ?? '', 'Focus Guide');
-  let file: AgentBridgeFile;
-  try { file = JSON.parse(readFileSync(join(directory, AGENT_BRIDGE_FILE), 'utf8')) as AgentBridgeFile; } catch { throw new Error(unavailable); }
-  if (file.version !== 1 || typeof file.pipe !== 'string' || !file.pipe.startsWith('\\\\.\\pipe\\focus-guide-agent-') || typeof file.token !== 'string') throw new Error(unavailable);
-  return file;
-}
-function call(tool: AgentTool, input: Record<string, unknown>): Promise<unknown> {
-  const { pipe, token } = bridge();
-  return new Promise((resolve, reject) => {
-    const socket = connect(pipe);
-    let buffer = '', done = false;
-    const finish = (error: Error | null, value?: unknown) => { if (done) return; done = true; clearTimeout(timer); socket.destroy(); if (error) reject(error); else resolve(value); };
-    const timer = setTimeout(() => finish(new Error('Focus Guide did not answer in 30 seconds. It may be busy or closing.')), 30000);
-    socket.setEncoding('utf8');
-    socket.on('connect', () => socket.write(JSON.stringify({ id: randomUUID(), token, tool, input, client: 'MCP client' }) + '\n'));
-    socket.on('data', (chunk: string) => {
-      buffer += chunk;
-      const end = buffer.indexOf('\n');
-      if (end < 0) return;
-      try { const reply = JSON.parse(buffer.slice(0, end)) as { ok: boolean; value?: unknown; error?: string }; finish(reply.ok ? null : new Error(reply.error ?? 'The request failed.'), reply.value); }
-      catch { finish(new Error('Focus Guide sent a reply that is not valid.')); }
-    });
-    socket.on('error', (error: NodeJS.ErrnoException) => finish(error.code === 'ENOENT' ? new Error(unavailable) : error));
-    socket.on('close', () => finish(new Error('Focus Guide closed the connection before it answered.')));
-  });
-}
+   validates every call again and applies nothing: propose tools only save proposals for the user.
+   With "--hook <event>", the same file runs one Claude Code hook of the Focus Guide plugin instead. */
 const result = async (tool: AgentTool, input: Record<string, unknown>) => {
   try { return { content: [{ type: 'text' as const, text: JSON.stringify(await call(tool, input) ?? null, null, 2) }] }; }
   catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] }; }
@@ -97,4 +68,6 @@ function create(): McpServer {
   return server;
 }
 
-serveStdio(create, { onerror: error => process.stderr.write(`focus-guide-mcp: ${error.message}\n`) });
+const hookEvent = process.argv[2] === '--hook' ? process.argv[3] : undefined;
+if (hookEvent !== undefined) void runHook(HOOK_EVENTS.find(event => event === hookEvent));
+else serveStdio(create, { onerror: error => process.stderr.write(`focus-guide-mcp: ${error.message}\n`) });

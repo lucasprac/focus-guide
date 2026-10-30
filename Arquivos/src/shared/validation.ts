@@ -1,4 +1,4 @@
-import type { AgentAccess, FocusVisual, Settings } from './types';
+import type { AgentAccess, FloatingStyle, FocusVisual, Settings } from './types';
 import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type Medication, type ProbeAnswer, type WarmUp } from './types';
 import { ACHIEVEMENT_IDS, PALETTE_IDS } from './achievements';
 import { t, isLanguage, type Language } from './i18n';
@@ -98,6 +98,7 @@ export function settings(value: unknown): Settings {
     theme, sidebarCollapsed: v.sidebarCollapsed === undefined ? false : bool(v.sidebarCollapsed, t('Collapsed side panel')),
     agentAccess: agentAccess(v.agentAccess ?? 'off'),
     focusVisual: focusVisual(v.focusVisual ?? 'brain'),
+    floatingStyle: floatingStyle(v.floatingStyle ?? 'brain'),
     attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, t('Attention check-ins')),
     language: language(v.language),
     collectedAchievements: Object.fromEntries(collected.map(([key, at]) => [key, timestamp(at)]))
@@ -115,6 +116,10 @@ export function withLanguage(input: unknown, current: Settings): unknown {
 }
 function focusVisual(value: unknown): FocusVisual {
   if (value !== 'brain' && value !== 'instrument') throw new Error(t('Choose the brain or the session gauge for Focus.'));
+  return value;
+}
+function floatingStyle(value: unknown): FloatingStyle {
+  if (value !== 'brain' && value !== 'bar') throw new Error(t('Choose the brain or the bar for the floating timer.'));
   return value;
 }
 export function agentAccess(value: unknown): AgentAccess {

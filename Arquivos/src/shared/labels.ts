@@ -24,4 +24,3 @@ export function eventSourceLabel(source: string | null | undefined): string { re
 export function occurrenceStatusLabel(status: string): string { return label(PT_BR.occurrenceStatus, status); }
 /* Lower case, as the stored status; badges capitalise it with CSS. */
 export function goalStatusLabel(status: string): string { return label(PT_BR.goalStatus, status); }
-export function upperFirst(text: string): string { return text ? text[0].toUpperCase() + text.slice(1) : text; }

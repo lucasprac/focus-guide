@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a problem in Focus Guide.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach your database, backups or exports. They contain your personal records. For a security problem, follow SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings shows the version at the bottom of the page.
+      placeholder: "3.7.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Focus.
+        2. Start a 25-minute session.
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Screenshots or other information

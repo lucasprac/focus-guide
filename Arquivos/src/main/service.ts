@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Store } from './store';
 import { TimerEngine } from './timer';
-import type { ActivitySample, Command, Dataset, FocusSession, Task } from '../shared/types';
+import type { ActivitySample, Command, Dataset, Task } from '../shared/types';
 import * as v from '../shared/validation';
 import { addDays, selectedSessions } from '../shared/analytics';
 import { ACHIEVEMENT_IDS, PALETTES, evaluateAchievements, paletteUnlocked, paletteUnlockLabel } from '../shared/achievements';

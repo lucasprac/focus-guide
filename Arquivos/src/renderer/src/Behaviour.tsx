@@ -3,7 +3,8 @@ import type { ActivitySample, FocusSession, ProbeAnswer, SessionEvent } from '..
 import { INSIGHT_THRESHOLDS, PROBE_ANSWER_LABELS } from '../../shared/focus-insights';
 import type { Action, ViewProps } from './App';
 import { eventSourceLabel, interruptionLabel, activityModeLabel } from '../../shared/labels';
-import { Disclosure, Icon, useMotionEnabled, minutesLabel } from './components';
+import { Icon, useMotionEnabled, minutesLabel } from './components';
+import { Badge, Fold } from './ui';
 import { t } from '../../shared/i18n';
 
 export function ReturnFeedback({ children, sessionId, animation, visible = true, neutral = false }: { children: ReactNode; sessionId: string | null; animation: boolean; visible?: boolean; neutral?: boolean }) {
@@ -76,8 +77,8 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
   const probeMark = (answer: string) => answer === 'on-task' ? '●' : answer === 'missed' ? '○' : '◐';
   const tracks: Array<{ key: 'keys' | 'clicks' | 'scrolls' | 'movementMs' | 'inputMs' | 'switches'; label: string; unit: string }> = [{ key: 'keys', label: t('Keys'), unit: t('keys') }, { key: 'clicks', label: t('Clicks'), unit: t('clicks') }, { key: 'scrolls', label: t('Scrolls'), unit: t('scrolls') }, { key: 'movementMs', label: t('Movement'), unit: t('ms in movement intervals') },
     ...(measured ? [{ key: 'inputMs' as const, label: t('Input'), unit: t('ms with input') }, { key: 'switches' as const, label: t('Switches'), unit: t('window switches') }] : [])];
-  return <Disclosure title={t('Behaviour')} open={open} onOpenChange={setOpen}><div className="behaviour-review">
-    <p className="hint">{t('Activity mode ·')}{' '}{activityModeLabel(session.activityMode)}{t('. Computer interaction and reported returns provide context; they do not measure attention.')}</p>
+  return <Fold title={t('Behaviour')} open={open} onOpenChange={setOpen}><div className="behaviour-review">
+    <div className="behaviour-intro"><span className="behaviour-mode">{t('Activity mode')}<Badge>{activityModeLabel(session.activityMode)}</Badge></span><p className="hint">{t('Computer interaction and reported returns provide context; they do not measure attention.')}</p></div>
     {error ? <p role="alert">{error}</p> : samples === null ? <p role="status">{t('Loading session behaviour…')}</p> : <>
       <div className="behaviour-totals"><span><strong>{totals.keys}</strong>{t('key presses')}</span><span><strong>{totals.clicks}</strong>{t('mouse clicks')}</span><span><strong>{totals.scrolls}</strong>{t('scroll events')}</span><span><strong>{(totals.movementMs / 1000).toFixed(1)}s</strong>{t('intervals with mouse movement')}</span>
         {measured && totals.inputObservedMs > 0 && <span><strong>{Math.round(Math.min(1, totals.inputMs / totals.inputObservedMs) * 100)}%</strong>{t('of observed time with input')}</span>}{measured && totals.switchesKnown && <span><strong>{totals.switches}</strong>{t('window switches')}</span>}</div>
@@ -96,9 +97,13 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
         </div>
         <div className="timeline-phases" aria-label={t('Session phases')}>{([[t('Warm-up'), 0], [t('Sustain'), 1], [t('Fatigue'), 2]] as const).map(([label, i]) => phaseMs[i] > 0 && <span key={label} className={`phase-${i}`} style={{ width: `${phaseMs[i] / totalMs * 100}%` }} title={t('{label}: {v2} active min', { label, v2: i === 0 ? `0–${warmUpMinutes}` : i === 1 ? `${warmUpMinutes}–${fatigueMinutes}` : `${fatigueMinutes}+` })}>{label}</span>)}</div>
         <div className="timeline-axis"><span>{t('0 active min')}</span><span>{t('{v1} active min', { v1: Math.ceil(session.activeMs / 60000) })}</span></div>
-        <p className="hint">{t('Solid: recorded (including zero) · striped: partial · pale: disabled · dotted: unavailable. ↩ Return · ! Interruption · ● On the task · ◐ Drifting or elsewhere · ○ Missed check-in · Ⅱ Pause ({length}). Phases: warm-up 0–{warmUpMinutes}, sustain {warmUpMinutes2}–{fatigueMinutes}, fatigue {fatigueMinutes2}+ active minutes. Hover a column for values.', { length: pauses.length, warmUpMinutes, warmUpMinutes2: warmUpMinutes, fatigueMinutes, fatigueMinutes2: fatigueMinutes })}</p>
+      </div>
+      <div className="behaviour-legend">
+        <div><span className="legend-title">{t('Columns')}</span><div className="legend-items"><span><i className="legend-swatch legend-recorded" />{t('Recorded (including zero)')}</span><span><i className="legend-swatch legend-partial" />{t('Partial')}</span><span><i className="legend-swatch legend-disabled" />{t('Disabled')}</span><span><i className="legend-swatch legend-unavailable" />{t('Unavailable')}</span></div></div>
+        <div><span className="legend-title">{t('Markers')}</span><div className="legend-items"><span><b className="timeline-return">↩</b>{t('Return')}</span><span><b className="timeline-interruption">!</b>{t('Interruption')}</span><span><b className="timeline-probe">●</b>{t('On the task')}</span><span><b className="timeline-probe">◐</b>{t('Drifting or elsewhere')}</span><span><b className="timeline-probe">○</b>{t('Missed check-in')}</span><span><b className="timeline-pause">Ⅱ</b>{t('Pause ({length})', { length: pauses.length })}</span></div></div>
+        <p className="hint">{t('Phases: warm-up 0–{warmUpMinutes}, sustain {warmUpMinutes2}–{fatigueMinutes}, fatigue {fatigueMinutes2}+ active minutes. Hover a column for values.', { warmUpMinutes, warmUpMinutes2: warmUpMinutes, fatigueMinutes, fatigueMinutes2: fatigueMinutes })}</p>
       </div>
     </>}
     <ReturnMarkers events={data.events} sessionId={session.id} act={act} />
-  </div></Disclosure>;
+  </div></Fold>;
 }

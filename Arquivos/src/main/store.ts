@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ActivitySample, Dataset, Field, FocusSession, SessionEvent, Settings, Task, TaskCategory, WeeklyReview } from '../shared/types';
 import { settings } from '../shared/validation';
-import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalMilestone, type GoalOccurrence } from '../shared/goal-types';
+import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalMilestone } from '../shared/goal-types';
 import { t } from '../shared/i18n';
 
 export const defaultSettings: Settings = {

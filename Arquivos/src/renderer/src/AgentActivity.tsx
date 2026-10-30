@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { ViewProps } from './App';
 import { goalData, type AgentChange } from '../../shared/types';
-import { Badge, Button, Card } from './ui';
-import { Disclosure } from './components';
+import { Badge, Button, Card, Fold } from './ui';
 import { eventSourceLabel } from '../../shared/labels';
 import { t, dateLocale } from '../../shared/i18n';
 
@@ -37,6 +36,6 @@ export function AgentActivity({ data, act, goalId }: ViewProps & { goalId?: stri
   return <Card className="agent-activity" title={t('Agent activity')} icon="spark" actions={<span className="hint">{t('{v1} in the last 7 days', { v1: recent.length === 1 ? t('1 change') : t('{length} changes', { length: recent.length }) })}</span>}>
     <p className="hint">{t('Changes that your AI agent made directly. Undo puts back the earlier state; a record that the agent created is archived, not deleted.')}</p>
     {changes.slice(0, 5).map(c => <ChangeRow key={c.id} data={data} act={act} change={c} />)}
-    {changes.length > 5 && <Disclosure title={t('Earlier changes ({v1})', { v1: changes.length - 5 })}>{changes.slice(5, 100).map(c => <ChangeRow key={c.id} data={data} act={act} change={c} />)}</Disclosure>}
+    {changes.length > 5 && <Fold title={t('Earlier changes ({v1})', { v1: changes.length - 5 })}>{changes.slice(5, 100).map(c => <ChangeRow key={c.id} data={data} act={act} change={c} />)}</Fold>}
   </Card>;
 }

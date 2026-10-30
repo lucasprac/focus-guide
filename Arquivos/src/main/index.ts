@@ -10,13 +10,15 @@ import { BehaviourCollector } from './behaviour';
 import { ProbeScheduler } from './probes';
 import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
+import { readAgentPlugin, writeAgentPlugin } from './agent-plugin';
 import { InsightsWorker } from './insights';
 import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
 import { localDay } from '../shared/analytics';
 import { PALETTES, paletteUnlocked } from '../shared/achievements';
-import type { AppEvent, AppState, BackupFile, Command } from '../shared/types';
+import type { AgentPluginStatus, AppEvent, AppState, BackupFile, Command, FloatBarPosition } from '../shared/types';
+import { isFloatBarPosition } from '../shared/types';
 import * as v from '../shared/validation';
 import { t, setLanguage } from '../shared/i18n';
 
@@ -41,6 +43,7 @@ let collector: BehaviourCollector;
 let probes: ProbeScheduler;
 let hideProbeFloat = false;
 let bridge: AgentBridge | null = null;
+let agentPlugin: AgentPluginStatus | null = null;
 let quitting = false;
 let quitPending = false;
 let backupStatus: string | null = null;
@@ -57,14 +60,15 @@ let updateInterval: NodeJS.Timeout;
 let checkpointInterval: NodeJS.Timeout;
 let backupInterval: NodeJS.Timeout;
 const csp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'";
-const applicationIcon = join(__dirname, '../renderer/icon.png');
+// Multi-size ICO: Windows picks the tray (16-32 px) and taskbar (32-256 px) frame for the display scale.
+const applicationIcon = join(__dirname, '../renderer/icon.ico');
 
 function notify(mode: 'focus' | 'break'): void {
-  if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound }).show();
+  if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound, icon: applicationIcon }).show();
 }
-function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
+function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
-function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); publish({ type: 'state', state: state() }); updateTray(); }
+function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); layoutFloating(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : t('An unexpected error occurred.'); }
 function report(error: unknown): void { publish({ type: 'error', message: errorMessage(error) }); }
 function safeBounds(key: string, defaults: Electron.Rectangle): Electron.Rectangle {
@@ -79,7 +83,44 @@ function safeBounds(key: string, defaults: Electron.Rectangle): Electron.Rectang
   const edge = key === 'mainBounds' ? 0 : 8;
   return { width, height, x: Math.max(a.x, Math.min(saved.x, a.x + a.width - width - edge)), y: Math.max(a.y, Math.min(saved.y, a.y + a.height - height - edge)) };
 }
-function saveBounds(w: BrowserWindow, key: string): void { if (!w.isDestroyed()) { try { store.setMeta(key, w.getNormalBounds()); } catch (e) { report(e); } } }
+// The brain keeps its dragged place; the bar has fixed places and never overwrites it.
+function saveBounds(w: BrowserWindow, key: string): void { if (!w.isDestroyed() && !(key === 'floatBounds' && barStyle())) { try { store.setMeta(key, w.getNormalBounds()); } catch (e) { report(e); } } }
+function barStyle(): boolean { return store.getSettings().floatingStyle === 'bar'; }
+function barPosition(): FloatBarPosition { const saved = store.getMeta<unknown>('floatBarPosition'); return isFloatBarPosition(saved) ? saved : 'top'; }
+// The bar window has one fixed size, so hovering never resizes it (a resize briefly painted a second bar).
+// Its empty area lets clicks through (setIgnoreMouseEvents); the renderer turns input on only over the bar and its cards.
+// At the top and bottom the bar is horizontal with its cards below or above it; at the sides it is vertical with its cards beside it.
+const BAR_WINDOW = { horizontal: { width: 260, height: 330 }, vertical: { width: 280, height: 330 } }, BAR_MARGIN = 8;
+function brainDefaults(): Electron.Rectangle {
+  const a = screen.getPrimaryDisplay().workArea;
+  return { x: a.x + a.width - 152, y: a.y + Math.min(55, Math.max(0, a.height - 156)), width: 132, height: 156 };
+}
+// The bar sits at the middle of one edge of the screen the window is on.
+function floatBounds(): Electron.Rectangle {
+  if (!barStyle()) return safeBounds('floatBounds', brainDefaults());
+  const current = floatingWindow && !floatingWindow.isDestroyed() ? floatingWindow.getBounds() : null;
+  const a = (current ? screen.getDisplayMatching(current) : screen.getPrimaryDisplay()).workArea;
+  const position = barPosition(), { width, height } = position === 'left' || position === 'right' ? BAR_WINDOW.vertical : BAR_WINDOW.horizontal;
+  const centerX = a.x + Math.round((a.width - width) / 2), centerY = a.y + Math.round((a.height - height) / 2);
+  if (position === 'top') return { x: centerX, y: a.y + BAR_MARGIN, width, height };
+  if (position === 'bottom') return { x: centerX, y: a.y + a.height - height - BAR_MARGIN, width, height };
+  return { x: position === 'left' ? a.x + BAR_MARGIN : a.x + a.width - width - BAR_MARGIN, y: centerY, width, height };
+}
+let floatLayoutBar: boolean | null = null;
+function layoutFloating(): void {
+  if (!floatingWindow || floatingWindow.isDestroyed()) return;
+  const bar = barStyle();
+  if (floatLayoutBar !== bar) {
+    floatLayoutBar = bar;
+    if (bar) floatingWindow.setIgnoreMouseEvents(true, { forward: true }); else floatingWindow.setIgnoreMouseEvents(false);
+  }
+  const next = floatBounds(), b = floatingWindow.getBounds();
+  if (b.x === next.x && b.y === next.y && b.width === next.width && b.height === next.height) return;
+  floatingWindow.setMinimumSize(Math.min(b.width, next.width), Math.min(b.height, next.height));
+  floatingWindow.setMaximumSize(next.width, next.height);
+  floatingWindow.setMinimumSize(next.width, next.height);
+  floatingWindow.setBounds(next);
+}
 function loadWindow(w: BrowserWindow, mini = false): void {
   const dev = process.env.ELECTRON_RENDERER_URL;
   if (!app.isPackaged && dev) void w.loadURL(dev + (mini ? '?mini=1' : ''));
@@ -111,7 +152,7 @@ function observeVisibility(w: BrowserWindow): void {
 function createMain(): void {
   const a = screen.getPrimaryDisplay().workArea;
   const defaults = { x: a.x + Math.max(0, (a.width - 1366) / 2), y: a.y + Math.max(0, (a.height - 840) / 2), width: Math.min(1366, a.width), height: Math.min(840, a.height) };
-  mainWindow = new BrowserWindow({ ...safeBounds('mainBounds', defaults), minWidth: 1050, minHeight: 650, title: 'Focus Guide', icon: applicationIcon, backgroundColor: '#F8F9FD', show: false,
+  mainWindow = new BrowserWindow({ ...safeBounds('mainBounds', defaults), minWidth: 1050, minHeight: 650, title: 'Focus Guide', icon: applicationIcon, backgroundColor: store.getSettings().theme === 'dark' ? '#101020' : '#F5F5FC', show: false,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
   mainWindow.setMenuBarVisibility(false);
   observeVisibility(mainWindow);
@@ -127,12 +168,15 @@ function showMain(): void { if (!mainWindow || mainWindow.isDestroyed()) createM
 function showFloating(inactive = false): void {
   if (!inactive) hideProbeFloat = false;
   if (floatingWindow && !floatingWindow.isDestroyed()) { if (!inactive) floatingWindow.show(); return; }
-  const a = screen.getPrimaryDisplay().workArea;
-  const defaults = { x: a.x + a.width - 152, y: a.y + Math.min(55, Math.max(0, a.height - 156)), width: 132, height: 156 };
-  floatingWindow = new BrowserWindow({ ...safeBounds('floatBounds', defaults), minWidth: 132, minHeight: 156, maxWidth: 132, maxHeight: 156, frame: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, show: false, backgroundColor: '#00000000', icon: applicationIcon,
+  const bounds = floatBounds();
+  floatLayoutBar = null;
+  floatingWindow = new BrowserWindow({ ...bounds, minWidth: bounds.width, minHeight: bounds.height, maxWidth: bounds.width, maxHeight: bounds.height, frame: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, show: false, backgroundColor: '#00000000', icon: applicationIcon,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
   if (!inactive) showWhenLoaded(floatingWindow);
   observeVisibility(floatingWindow);
+  layoutFloating();
+  // Hidden, the renderer sees no pointer: the bar starts letting clicks through again when it shows.
+  floatingWindow.on('hide', () => { if (barStyle()) floatingWindow!.setIgnoreMouseEvents(true, { forward: true }); });
   floatingWindow.on('close', e => { saveBounds(floatingWindow!, 'floatBounds'); if (!quitting) { e.preventDefault(); hideProbeFloat = false; floatingWindow!.hide(); if (probes?.cancel()) changed(); } });
   loadWindow(floatingWindow, true);
 }
@@ -140,6 +184,7 @@ function showFloating(inactive = false): void {
 function presentProbe(): void {
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) return;
   showFloating(true);
+  layoutFloating();
   if (!floatingWindow!.isVisible()) { hideProbeFloat = true; floatingWindow!.showInactive(); }
 }
 // The main window lost focus, hid or minimized while a check-in waits: move it to the floating timer before it expires unseen.
@@ -238,7 +283,14 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     case 'window.float': showFloating(); return;
     case 'window.main': showMain(); return;
     case 'window.hide': probes.cancel(); hideProbeFloat = false; floatingWindow?.hide(); return;
+    case 'window.floatPointer': floatingWindow?.setIgnoreMouseEvents(input.interactive !== true, { forward: true }); return;
+    case 'window.floatMove': store.setMeta('floatBarPosition', input.position); layoutFloating(); return;
     case 'backup.create': await dailyBackup(true); return status();
+    case 'agent.plugin.write': {
+      if ((store.getSettings().agentAccess ?? 'off') === 'off' || !bridge?.status.launch) throw new Error(t('Choose an agent access level first.'));
+      agentPlugin = writeAgentPlugin(store.directory, bridge.status.launch);
+      return agentPlugin;
+    }
     case 'export.sessions': case 'export.events': case 'export.backup': case 'export.activity': case 'export.goals': {
       const filePath = selectedFile;
       if (!filePath) return;
@@ -349,6 +401,7 @@ if (locked) void app.whenReady().then(async () => {
       return value;
     }) });
   bridge.sync();
+  agentPlugin = bridge.status.launch && readAgentPlugin(store.directory, bridge.status.launch);
   collector.reconcile();
   const rendererRoot = resolve(__dirname, '../renderer');
   protocol.handle('focus', async request => {
@@ -364,7 +417,7 @@ if (locked) void app.whenReady().then(async () => {
   createMain();
   mainWindow!.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   if (app.isPackaged || !process.env.ELECTRON_RENDERER_URL) mainWindow!.webContents.session.webRequest.onHeadersReceived((details, callback) => callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] } }));
-  tray = new Tray(nativeImage.createFromPath(applicationIcon).resize({ width: 32, height: 32 })); tray.on('double-click', showMain); updateTray();
+  tray = new Tray(nativeImage.createFromPath(applicationIcon)); tray.on('double-click', showMain); updateTray();
   const systemPause = (reason: string) => {
     try {
       // Freeze time synchronously: the OS may suspend before a queued drain runs.
@@ -375,7 +428,7 @@ if (locked) void app.whenReady().then(async () => {
   };
   powerMonitor.on('suspend', () => systemPause(t('Computer went to sleep')));
   powerMonitor.on('lock-screen', () => systemPause(t('Screen locked')));
-  const recoverWindows = () => { for (const [w, key] of [[mainWindow, 'mainBounds'], [floatingWindow, 'floatBounds']] as const) if (w && !w.isDestroyed()) { saveBounds(w, key); w.setBounds(safeBounds(key, screen.getPrimaryDisplay().workArea)); } };
+  const recoverWindows = () => { for (const [w, key] of [[mainWindow, 'mainBounds'], [floatingWindow, 'floatBounds']] as const) if (w && !w.isDestroyed()) { if (key === 'floatBounds' && barStyle()) { layoutFloating(); continue; } saveBounds(w, key); w.setBounds(safeBounds(key, screen.getPrimaryDisplay().workArea)); } };
   screen.on('display-removed', recoverWindows);
   screen.on('display-metrics-changed', (_event, _display, metrics) => { if (metrics.some(metric => ['bounds', 'workArea', 'scaleFactor'].includes(metric))) recoverWindows(); });
   ipcMain.handle('focus-guide:state', event => { trustedSender(event); return state(); });
@@ -387,6 +440,7 @@ if (locked) void app.whenReady().then(async () => {
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
         if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
+        if ((command === 'window.floatPointer' || command === 'window.floatMove') && (event.sender !== floatingWindow?.webContents || !barStyle() || (command === 'window.floatPointer' ? typeof args.interactive !== 'boolean' : !isFloatBarPosition(args.position)))) throw new Error(t('Invalid floating timer request.'));
         if (command === 'shortcut.capture') {
           if (event.sender !== mainWindow?.webContents || typeof args.enabled !== 'boolean') throw new Error(t('Invalid shortcut capture request.'));
           if (args.enabled && !mainWindow.isFocused()) throw new Error(t('Focus this window before configuring a shortcut.'));

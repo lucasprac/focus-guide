@@ -8,6 +8,8 @@
   --line: #DEDDEA; --control-line: #898B9F;
   --danger: #A4314A; --error-soft: #FFF0F3;
   --success: #2E7A55; --success-soft: #EAF6EF;
+  /* Floating-bar panel and check-in: rounder than main-window cards so they read as one soft shape over the desktop. */
+  --radius-float: 22px;
 }
 :root[data-theme="dark"] {
   --background: #11111B; --panel: #1C1C2A; --text: #F0EFF8; --muted: #B5B5CB;
@@ -24,6 +26,8 @@
   --shadow-panel: 0 6px 24px rgba(48, 35, 98, .045);
   --shadow-overlay: 0 24px 80px rgba(29, 22, 65, .24);
   --motion-control: 180ms; --motion-page: 280ms;
+  /* Clock variants of the --text-timer step (64px): quiet session, and both on narrow windows. */
+  --text-timer-quiet: 80px; --text-timer-compact: 58px; --text-timer-quiet-compact: 65px;
 }
 :root[data-theme="dark"]:not(.floating-window) {
   --background: #101020; --panel: #191A2D; --text: #F0EFF8; --muted: #B5B5CB;

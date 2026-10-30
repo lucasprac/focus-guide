@@ -82,7 +82,7 @@ export default function WorldOverview({ map, color, paletteName, animation, them
   const [selected, setSelected] = useState<WorldSelection | null>(null);
   const [replaying, setReplaying] = useState(false);
   const [failed, setFailed] = useState(false);
-  const latest = useRef({ onCollect, select: (selection: WorldSelection | null) => {} });
+  const latest = useRef({ onCollect, select: (_selection: WorldSelection | null) => {} });
   const areaOf = (goalId: string) => map.areas.find(a => a.goals.some(g => g.goal.id === goalId));
   const goal = selected?.kind === 'goal' ? areaOf(selected.id)?.goals.find(g => g.goal.id === selected.id)?.goal : undefined;
   const area = selected?.kind === 'area' ? map.areas.find(a => a.id === selected.id) : undefined;

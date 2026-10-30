@@ -2,7 +2,7 @@ import { Badge, Button, CheckControl, Choice, EmptyState, Fold, IconButton, Page
 import { useEffect, useMemo, useState } from 'react';
 import { sortMilestones, type Task, type TaskCategory } from '../../shared/types';
 import type { ViewProps, SessionPreparation } from './App';
-import { Disclosure, Modal } from './components';
+import { Modal } from './components';
 import { localDay } from '../../shared/analytics';
 import { t, tc } from '../../shared/i18n';
 
@@ -104,10 +104,10 @@ export default function TasksPage({ data, act, preparation, setPreparation, open
         <Button variant="primary" icon="focus" disabled={!sessionField || data.timer.mode === 'break'} onClick={openFocus}>{current ? t('Return to focus') : t('Go to Focus')}</Button>
       </div>
       {current && <div className="linked-task-list">{data.tasks.filter(t => selection.includes(t.id)).map(t => row(t, true))}{!selection.length && <p className="hint">{t('Select open tasks from this session’s area below.')}</p>}</div>}
-    </section><Disclosure title={t('Manage categories')}><section className="panel organizer-categories"><div className="section-title"><h2>{t('Categories')}</h2></div><p className="hint">{t('Your own groups and colors. Areas track time separately.')}</p>
+    </section><Fold title={t('Manage categories')}><section className="panel organizer-categories"><div className="section-title"><h2>{t('Categories')}</h2></div><p className="hint">{t('Your own groups and colors. Areas track time separately.')}</p>
       <form className="category-add" onSubmit={async e => { e.preventDefault(); const result = await act('category.create', { name: newCategory, color: categoryColor }); if (result.ok) setNewCategory(''); }}><input type="color" aria-label={t('New category color')} value={categoryColor} onChange={e => setCategoryColor(e.target.value)} /><input aria-label={t('New category name')} placeholder={t('A new category…')} maxLength={60} value={newCategory} onChange={e => setNewCategory(e.target.value)} /><IconButton icon="plus" type="submit" className="size-8" disabled={!newCategory.trim()} label={t('Add category')} /></form>
       {data.categories.map(c => <CategoryEditor key={c.id} category={c} act={act} />)}{!data.categories.length && <p className="hint">{t('Start with a project, Personal, or Study.')}</p>}
-    </section></Disclosure></aside></div>
+    </section></Fold></aside></div>
     <Modal busy={busy} open={!!(editor)} title={t('Edit task')} onClose={() => { if (!busy) setEditor(null); }}>{editor && <><form onSubmit={async e => { e.preventDefault(); setBusy(true); try { const result = await act('task.update', { id: editor.id, title: editor.title, notes: editor.notes, priority: editor.priority, dueDate: editor.dueDate, categoryId: editor.categoryId,goalId: editor.goalId ?? null,milestoneId: editor.milestoneId ?? null }); if (result.ok) setEditor(null); } finally { setBusy(false); } }}>
       <label className="form-label">{t('Title')}<input aria-label={t('Task title')} maxLength={200} value={editor.title} onChange={e => setEditor({ ...editor, title: e.target.value })} required /></label>
       <label className="form-label">{t('Notes')}<textarea aria-label={t('Task notes')} maxLength={2000} rows={3} value={editor.notes} onChange={e => setEditor({ ...editor, notes: e.target.value })} /></label>

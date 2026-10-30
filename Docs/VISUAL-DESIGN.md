@@ -125,7 +125,7 @@ The app does not import Tailwind Preflight yet. This is intentional. Preflight r
 | Token group | Values |
 |---|---|
 | Colors (`@theme inline`, resolved at runtime for each theme) | `canvas`, `surface`, `surface-raised`, `ink`, `ink-muted`, `accent`, `accent-hover`, `accent-soft`, `on-accent`, `info`, `info-soft`, `line`, `line-strong`, `danger`, `danger-soft`, `success`, `success-soft` |
-| Radius | `rounded-control` (10px), `rounded-card` (18px, the current main-window panel), `rounded-pill` |
+| Radius | `rounded-chip` (6px: tags, small badges, check boxes in lists), `rounded-control` (10px), `rounded-card` (18px, the current main-window panel), `rounded-pill`. Legacy CSS uses the same values through `var(--radius-*)`. Only data marks (2–4px) and circles (50%) keep raw values. |
 | Type | `text-badge` 12, `text-caption` 13 (smallest readable text), `text-label` 14, `text-body` 15, `text-title` 16, `text-heading` 20, `text-display` 28, `text-timer` 64 |
 | Elevation | `shadow-elevation-1` (panels), `shadow-elevation-2` (overlays) |
 | Motion | `--motion-control` 180ms, `--motion-page` 280ms, with `ease-standard` |
@@ -151,7 +151,7 @@ In figures, `--anatomy-hi` and `--anatomy-mid` have 3:1 at minimum against `--an
 | `PageHeader` | `page-heading` | Title, optional one-line description and actions. |
 | `Field` | `field` | Links the label, hint and error to its single control (`id`, `aria-describedby`, `aria-invalid`). |
 | `Badge` | `badge` | Tones `neutral`, `accent`, `info`, `success`, `danger`. The contrast test includes every tone pair. |
-| `EmptyState` | `empty-state` | Compact row with an icon, text and an optional action. The older, centered `Empty` stays until the pages migrate. |
+| `EmptyState` | `empty-state` | Compact row with an icon, text and an optional action. Every page uses it. The older, centered `Empty` and its legacy rules are removed. |
 
 Select chevrons, the checks in selects and checkboxes, disclosure arrows and the dialog close button use SVG icons, not Unicode glyphs.
 
@@ -302,3 +302,24 @@ The check-in is a prompt, not a dialog. It never takes keyboard focus, and it ne
   - Thus the removal is conservative.
 - The remaining legacy rules still match live elements. Migrated components keep their legacy class as a hook. The Focus stage, calendar, constellation and charts still use these rules. To make the legacy layer smaller, move these rules into utilities, one component at a time.
 - A comparison of the computed styles of 7,412 elements found no differences caused by CSS. It covered all seven pages in both themes, and the floating window. The only differences came from runtime state: the readiness of the WebGL fallback and the measurement of the Radix switch.
+
+## Standardization pass (3.7.0)
+
+- **Radius scale.** The legacy layer had 20 different radius values. They now map to the token scale: 5–7px to `--radius-chip`, 8–13px to `--radius-control`, 14–24px to `--radius-card` and larger values to `--radius-pill`. The floating window uses the same scale. The floating-bar panel and check-in use `--radius-float` (22px, from 3.5.0), so they read as one soft shape over the desktop. No stylesheet has a raw radius of 5px or more.
+- **Type scale.** Every font size in the legacy layer now comes from a type token. Text at 10–12px moved to `--text-caption` (13px). Badges, keycaps, calendar-cell and axis labels, and unit labels in fixed-size buttons use `--text-badge` (12px). Off-scale headings and values map to the nearest step (`--text-heading` 20px, `--text-display` 28px). The clock has three named variants of `--text-timer`: `--text-timer-quiet` (80px), `--text-timer-compact` (58px) and `--text-timer-quiet-compact` (65px). Only the compact floating window keeps raw sizes (its 11px labels and 23px clock).
+- **Glyphs.** Agent proposal rows show an SVG check box and a dot, not `☐`, `☑` and `•` text.
+- **Goal cards.** The content of each card starts at the top, and the summary line sits at the bottom, so the badges and titles of a row align. Cards show a hover border.
+- **Durations.** The Neural World header shows recorded time in the same format as the side panel (for example `51h 12m`), not as decimal hours.
+- **Dead rules.** Rules for `.stage-top`, `.goal-milestone`, `.goal-detail`, `.goal-detail-columns`, `.goal-behaviour-table` and `.goal-behaviour-row` are removed. No source contains these classes. The `Disclosure` alias is removed. Pages import `Fold` from `ui.tsx`.
+- **Patterns filters.** The goal and area pickers keep at least 200px. At the minimum window width (1050px) the toolbar wraps them to the next row instead of squeezing them to 96px.
+- **Check.** At 1366 × 840 and at 1050 × 650, no page overflows horizontally. The only shortened text is the long goal-filter label, which ends with an ellipsis in its picker.
+
+## App icon
+
+The icon is the brain-and-eye glyph in white on a rounded tile. The tile has a diagonal gradient from #7B5CFF to `--blue` (#2F62D9). The filled tile keeps the icon visible on light and dark surfaces: the sidebar in both themes, the taskbar, the tray and notifications.
+
+- `build/icon.ico` holds 16, 20, 24, 32, 40, 48, 64, 128 and 256 pixel frames. Windows picks the frame for the display scale.
+- At 16 to 24 pixels, the detail of the brain is not readable. These frames show only the eye: an almond outline and the pupil.
+- `src/renderer/public/icon.ico` is a copy of `build/icon.ico`. The main process uses it for the windows, the tray and notifications.
+- `src/renderer/public/icon.png` (256 pixels) is the favicon and the sidebar mark. `Docs/images/icon.png` is the same image for the README.
+

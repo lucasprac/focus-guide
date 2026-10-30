@@ -1,5 +1,69 @@
 # Release notes
 
+## Unreleased (3.7.0) — Publication: visible icon, design standardization, cleanup
+
+- **Icon.** The icon is now a white brain-and-eye glyph on a purple-to-blue tile. The old dark-blue line drawing on a transparent background was almost invisible in the dark theme, on a dark taskbar and in the tray. The windows, the tray and notifications use a multi-size `icon.ico` (16 to 256 pixels). The tray sizes show a simplified eye, so the mark stays readable at 16 pixels. Notifications now show the icon.
+- **Window background.** The main window opens with the background colour of the saved theme, so the dark theme no longer flashes white at startup.
+- **Design standardization.** Every radius and font size in the stylesheets comes from a token. The radius scale has a new `rounded-chip` (6px) step and `--radius-float` (22px) for the floating bar. In the main window, text is 13px or larger, and only badges and chart labels use 12px. The Patterns filters wrap at the minimum window width instead of squeezing the pickers. Agent proposal rows use SVG check boxes, not text glyphs. Goal cards align their content to the top and show a hover border. The Neural World header shows recorded time as `51h 12m`, as in the rest of the app. See [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
+- **Cleanup.** Unused code is removed: the `Empty` component, the `Disclosure` alias, `ridgeLoo`, `upperFirst`, three unused imports and parameters, and CSS rules for classes that no source uses. The type check now fails on unused variables, parameters and imports (`noUnusedLocals`, `noUnusedParameters`).
+- **Repository.** The repository has a new README with screenshots, `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates, and a CI workflow that runs the type check. `LICENSE` moved to the repository root. `package.json` has the repository links and `private: true`. `.gitignore` no longer ignores the whole `Docs/` folder, only local working notes. The two Portuguese design proposals moved to `Docs/design-history/`, with an English index that summarizes them and links to the current documentation.
+- No change to data, schema or backups.
+
+## Unreleased (3.6.0) — Claude Code plugin: skills and hooks for the agent
+
+- **Plugin.** **Settings > AI agent (MCP) > Create plugin files** writes a Claude Code plugin to `claude-plugin/` in the data folder, with the commands to install it. The plugin contains the MCP server, four skills and hooks. New command `agent.plugin.write` (main process only).
+- **Skills.** `weekly-review`, `pattern-analysis`, `plan-day` and `roadmap` give the agent a fixed method that uses the access level, the roadmap revision rules and the evidence rules (associations are not causes, `null` is unknown, give the sample size).
+- **Hooks.** Session start: access level and counts only. Before edits: a rationale is required, `update_roadmap` needs the revision from a `get_goal` in the same session, and roadmap replacement or archiving asks the user. After proposals and edits: a reminder to tell the user where to apply or undo. A local log `agent-hook-log.jsonl` keeps the tool name and result of each call, never the content.
+- The hooks run `focus-guide-mcp.cjs --hook <event>` with the app executable, so no Node.js installation is needed. The bridge client moved to `src/mcp/client.ts`. No change to data, schema or backups.
+
+## Unreleased (3.5.0) — Floating bar: drag to an edge, vertical at the sides, palette colour
+
+- **Orientation.** The floating bar is horizontal at the top and bottom of the screen (it fills from left to right) and vertical at the left and right edges (it fills from bottom to top). At a side edge the check-in and the panel open beside the bar, toward the centre of the screen.
+- **Drag to move.** Drag the bar with the mouse. While you drag, a label shows the edge it will go to; when you release, the bar moves to the middle of the nearest edge of its screen. It still has only the four fixed places. With keyboard focus on the bar, Alt + an arrow key moves it. The **Move to** arrows are removed from the panel. The command stays `window.floatMove`.
+- **Palette colour.** The fill and the check-in dot use the colour of the palette chosen in Neural World, so the colour changes as you unlock and choose palettes. Breaks stay blue. The track outline is darker, so the light palette colours stay visible on it.
+- **Cards.** The check-in and the panel are 70% opaque and have rounder corners (22 pixels).
+- At a side edge the bar window is 280 × 330 pixels; at the top and bottom it stays 260 × 330. No change to data, schema or backups.
+
+## Unreleased (3.4.0) — Quick notes in the floating bar and I'm back feedback
+
+- **Quick notes.** During a focus session, the floating bar's panel has a field to note a task, a thought or anything you remember. Press Enter or **+** to save it; the field shows "Saved for after the session". The note is a parked thought of the session (`thought.record`), so it appears with the thoughts you parked on the Focus page.
+- **After the session.** The session review lists the parked thoughts and notes. Each one has **Add to tasks**, which creates a to-do in the session's area (its first line is the title, up to 200 characters; longer text goes to the task notes). Notes also stay in Calendar with their session.
+- **I'm back feedback.** When you press **I'm back** in the bar's panel or use the shortcut, the bar flashes a green ring and a check shows at the end of the fill for about one second. Screen readers hear "Return saved". With animations off, the check shows without motion.
+- The bar window is now 260 × 330 pixels, to fit the note field. No change to data, schema or backups.
+
+## Unreleased (3.3.2) — Patterns bars restored
+
+- **Patterns.** The horizontal bars in Patterns (and every other `bar-chart`) look as before 3.3.0 again. The floating bar's `.bar-track` style had the same class name and overrode them. The floating bar's classes now use the `fbar-` prefix. Renderer and CSS only.
+
+## Unreleased (3.3.1) — Horizontal floating bar with fixed places
+
+- **Horizontal.** The floating bar now lies flat and fills from left to right. It is 20% shorter: 160 × 16 pixels.
+- **Fixed places.** The bar sits at the middle of one screen edge: top, bottom, left or right. Choose the place with **Move to** in its panel; the bar can no longer be dragged. The place is kept with the window position (`floatBarPosition` in the local metadata), not in settings or backups. The brain keeps its own dragged position.
+- **No more ghost bar.** The bar window no longer changes size when the pointer moves onto it, which briefly painted a second bar. The window has one fixed size (260 × 290 pixels); its empty area lets clicks pass through to other windows, and the bar turns input on only while the pointer is over the bar or its cards.
+- The internal command `window.floatExpand` is replaced by `window.floatPointer` and `window.floatMove`, accepted only from the floating window in bar style. `AppState` has the runtime field `floatBarPosition`.
+- New texts are in the Brazilian Portuguese catalog; the drag hint of the vertical bar is removed.
+
+## Unreleased (3.3.0) — Floating timer as a bar
+
+- **Bar style.** Settings › Appearance & feedback › **Floating timer** can now be **Bar**. The floating timer is then a thin bar (16 × 200 pixels) that fills upward as the session runs: purple during focus, blue during a break, dimmed when paused, with an amber top in overtime. Drag the small grip above the bar to move it.
+- **Time and controls.** Move the pointer onto the bar, or give it keyboard focus, to show the time, **I'm back**, Pause / Resume, Finish, Open and Hide in a panel beside it.
+- **Attention check-ins.** A check-in shows a pulsing dot on the bar and the question with the three answers, each with its label, beside the bar. Answers are saved from the floating timer as before.
+- The window is 40 × 232 pixels and widens to 300 pixels to the left only while the panel or a check-in shows, so the empty area does not block clicks on other windows. New internal command `window.floatExpand`, accepted only from the floating window.
+- New optional setting `floatingStyle` (`brain` or `bar`, default `brain`). No schema change; the backup format stays version 11. A backup without the key restores with the brain. Version 3.2.2 and earlier reject a backup that contains the key, because they reject unknown settings keys.
+- The new texts are in the Brazilian Portuguese catalog.
+
+## Unreleased (3.2.2) — Clearer Behaviour card
+
+- **Behaviour card** (Calendar and the session review). The activity mode is a badge above the explanation. The totals are small tiles with the number on top. The marker, phase and axis rows now end where the columns end.
+- **Legend.** The long line of symbols is now two labelled rows, **Columns** (with a sample of each column style) and **Markers** (each symbol with its name), and a short line about the phases. Reported returns are separated by a rule.
+- The pt-BR catalog has the new legend texts. Three texts that only the old legend used are removed. No change to data or commands.
+
+## Unreleased (3.2.1) — Clearer day details in Calendar
+
+- **Selected day.** Each session shows a larger title with an aligned time, the intention in normal text colour, and the recorded time and focus rating separated by a dot. All lines start under the title text. Notes have a side rule, and thoughts align with their icon.
+- **Planned actions.** The card title shows a readable date (for example "Oct 12") instead of `2026-10-12`. Each action shows its status as a badge, the goal and timezone on one small line, and cue → action with an arrow icon. A moved action shows its original date in the same format.
+- Renderer and CSS only. No change to data, commands or translations.
+
 ## Unreleased (3.2.0) — Neural World in 2D, achievements and new palettes
 
 - **2D overview.** Neural World is now a 2D map on a canvas instead of a 3D scene. You are at the centre, each area is a region around you, and each goal is a cell at the edge of its area with its roadmap as beads. Each finished session is a mote that orbits its goal or area. Pulses carry your time of the last 28 days from you to where you spent it, and a running session streams to its goal. The page no longer loads Three.js.
