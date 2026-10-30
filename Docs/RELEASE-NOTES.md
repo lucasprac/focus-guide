@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased (3.8.0) — Claude Code plugin marketplace on GitHub
+
+- **Marketplace.** The repository root has `.claude-plugin/marketplace.json` (marketplace `focus-guide`), so `/plugin marketplace add lucasprac/focus-guide` works. The plugin `focus-guide` is in `Arquivos/agent-plugin/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json`, the four skills and `scripts/focus-guide.cmd`.
+- **Launcher.** The app writes `agent-launch.cmd` to the data folder at each start, with the executable path, the MCP script path and `ELECTRON_RUN_AS_NODE` and `FOCUS_GUIDE_DATA_DIR`. The plugin's `focus-guide.cmd` calls it from `%APPDATA%\Focus Guide`, so the plugin holds no absolute path. A custom data folder (`FOCUS_GUIDE_DATA_DIR`) is not found by the GitHub plugin; use **Create plugin files** for it.
+- **Create plugin files** stays for local installs (`focus-guide-local`).
+- No change to data, schema or backups.
+
 ## Unreleased (3.7.0) — Publication: visible icon, design standardization, cleanup
 
 - **Icon.** The icon is now a white brain-and-eye glyph on a purple-to-blue tile. The old dark-blue line drawing on a transparent background was almost invisible in the dark theme, on a dark taskbar and in the tray. The windows, the tray and notifications use a multi-size `icon.ico` (16 to 256 pixels). The tray sizes show a simplified eye, so the mark stays readable at 16 pixels. Notifications now show the icon.

@@ -36,6 +36,7 @@ npm-debug.log*
 *.pfx
 *.p12
 .mcp.json
+!Arquivos/agent-plugin/.mcp.json
 
 # Editors and OS
 .vscode/
@@ -57,5 +58,4 @@ graphify-out/
 Aplicativo-backup-*/
 
 # Local working notes (not published)
-Docs/Future.md
-Docs/relatorio-*.md
+Docs/
