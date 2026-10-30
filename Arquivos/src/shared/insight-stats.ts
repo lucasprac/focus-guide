@@ -122,8 +122,6 @@ export function ridgeSelect(x: number[][], y: number[], lambdas: readonly number
   return withBuffers([flatten(x.slice(0, n), p), y, sorted], [3 + p], (m, [xs, ys, ls, out]) => m.ridge_select(xs, ys, n, p, ls, sorted.length, out),
     ([out]) => ({ lambda: out[0], loo: out[1], intercept: out[2], coefficients: Array.from(out.subarray(3)) }));
 }
-/* Mean absolute leave-one-out error, in closed form. */
-export function ridgeLoo(x: number[][], y: number[], lambda: number): number { return ridgeSelect(x, y, [lambda]).loo; }
 
 /* k-means++ seeding, then Lloyd iterations. Fewer than k distinct points give fewer centroids; an empty cluster keeps its centroid. */
 export function kMeans(points: number[][], k: number, random: () => number, maxIterations = 50): { centroids: number[][]; labels: number[] } {

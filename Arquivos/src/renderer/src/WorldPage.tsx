@@ -7,7 +7,7 @@ import type { GoalFocusOptions } from './GoalWorkspace';
 import { goalData, type Goal } from '../../shared/goal-types';
 import { PALETTES, evaluateAchievements, paletteUnlocked, paletteUnlockLabel } from '../../shared/achievements';
 import { buildWorldMap } from './world-map';
-import { Icon } from './components';
+import { Icon, minutesLabel } from './components';
 import { t } from '../../shared/i18n';
 
 type WorldProps = ViewProps & { openGoal: (id: string | null) => void; focusGoal: (goal: Goal, options?: GoalFocusOptions) => void };
@@ -26,7 +26,7 @@ export default function WorldPage({ data, act, openGoal, focusGoal }: WorldProps
   const focus = (goalId: string, stepId: string | null) => { const goal = goalData(data).goals.find(g => g.id === goalId); if (goal) focusGoal(goal, { milestoneId: stepId }); };
   const collect = async (ids: string[]) => (await act('achievements.collect', { ids })).ok;
   return <div className="world-page" style={{ '--world-color': selectedPalette.color } as CSSProperties}>
-    <PageHeader title={t('Your world, alive.')} description={t('You are at the centre. Each area is a region you tend, each goal a cell that grows, and each finished session a mote that stays.')} actions={<span className="world-hours tabular-nums">{hours.toFixed(1)}<small className="text-caption tracking-normal">{t('recorded hours')}</small></span>} />
+    <PageHeader title={t('Your world, alive.')} description={t('You are at the centre. Each area is a region you tend, each goal a cell that grows, and each finished session a mote that stays.')} actions={<span className="world-hours tabular-nums">{minutesLabel(map.totalMinutes)}<small className="text-caption tracking-normal">{t('Recorded focus')}</small></span>} />
     <section className="panel neural-world-panel">
       <WorldOverview map={map} color={selectedPalette.color} paletteName={selectedPalette.name} animation={data.settings.animation} theme={data.settings.theme}
         gems={gems} horizon={nextTime ? nextTime.fraction : 1} nextHorizon={nextTime ? t('Next time milestone: {title}, {progress}.', { title: nextTime.title, progress: progressLabel(nextTime) }) : t('Every time milestone is reached.')}

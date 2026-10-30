@@ -60,10 +60,11 @@ let updateInterval: NodeJS.Timeout;
 let checkpointInterval: NodeJS.Timeout;
 let backupInterval: NodeJS.Timeout;
 const csp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'";
-const applicationIcon = join(__dirname, '../renderer/icon.png');
+// Multi-size ICO: Windows picks the tray (16-32 px) and taskbar (32-256 px) frame for the display scale.
+const applicationIcon = join(__dirname, '../renderer/icon.ico');
 
 function notify(mode: 'focus' | 'break'): void {
-  if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound }).show();
+  if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound, icon: applicationIcon }).show();
 }
 function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
@@ -151,7 +152,7 @@ function observeVisibility(w: BrowserWindow): void {
 function createMain(): void {
   const a = screen.getPrimaryDisplay().workArea;
   const defaults = { x: a.x + Math.max(0, (a.width - 1366) / 2), y: a.y + Math.max(0, (a.height - 840) / 2), width: Math.min(1366, a.width), height: Math.min(840, a.height) };
-  mainWindow = new BrowserWindow({ ...safeBounds('mainBounds', defaults), minWidth: 1050, minHeight: 650, title: 'Focus Guide', icon: applicationIcon, backgroundColor: '#F8F9FD', show: false,
+  mainWindow = new BrowserWindow({ ...safeBounds('mainBounds', defaults), minWidth: 1050, minHeight: 650, title: 'Focus Guide', icon: applicationIcon, backgroundColor: store.getSettings().theme === 'dark' ? '#101020' : '#F5F5FC', show: false,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
   mainWindow.setMenuBarVisibility(false);
   observeVisibility(mainWindow);
@@ -416,7 +417,7 @@ if (locked) void app.whenReady().then(async () => {
   createMain();
   mainWindow!.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   if (app.isPackaged || !process.env.ELECTRON_RENDERER_URL) mainWindow!.webContents.session.webRequest.onHeadersReceived((details, callback) => callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] } }));
-  tray = new Tray(nativeImage.createFromPath(applicationIcon).resize({ width: 32, height: 32 })); tray.on('double-click', showMain); updateTray();
+  tray = new Tray(nativeImage.createFromPath(applicationIcon)); tray.on('double-click', showMain); updateTray();
   const systemPause = (reason: string) => {
     try {
       // Freeze time synchronously: the OS may suspend before a queued drain runs.

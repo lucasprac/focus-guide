@@ -3,24 +3,29 @@ import type { ViewProps } from './App';
 import { goalData, sortMilestones, type AgentProposal, type ProposalKind } from '../../shared/types';
 import { parseMilestoneMarkdown, reconnectMilestones } from '../../shared/milestone-markdown';
 import { weekdayNames } from './GoalForms';
-import { Badge, Button, Card } from './ui';
-import { Disclosure } from './components';
+import { Badge, Button, Card, Fold, cn } from './ui';
+import { Icon } from './icons';
 import { t, dateLocale } from '../../shared/i18n';
 
 const KIND_LABELS: Record<ProposalKind, string> = { get 'goal.create'() { return t('New goal'); }, get 'roadmap.replace'() { return t('Roadmap'); }, get 'tasks.add'() { return t('Tasks'); }, get 'action.add'() { return t('Weekly action'); }, get 'review.note'() { return t('Review note'); } };
 type Draft = Record<string, unknown>;
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 
+/* Read-only roadmap marks: an SVG check box for steps and a dot for bullets, never text glyphs. */
+function RowMark({ kind, completed }: { kind: string; completed?: boolean }) {
+  if (kind === 'todo') return <span className={cn('proposal-check', completed && 'checked')} role="img" aria-label={completed ? t('Completed') : t('Not completed')}>{completed && <Icon name="check" size={12} strokeWidth={2.4} />}</span>;
+  return kind === 'bullet' ? <span className="proposal-bullet" aria-hidden="true" /> : null;
+}
 function MarkdownRows({ markdown }: { markdown: string }) {
   const rows = parseMilestoneMarkdown(markdown);
-  return <ul className="proposal-rows">{rows.map((row, i) => <li key={i} className={`proposal-row-${row.kind}`}>{row.kind === 'todo' ? (row.completed ? '☑ ' : '☐ ') : row.kind === 'bullet' ? '• ' : ''}{row.title}</li>)}</ul>;
+  return <ul className="proposal-rows">{rows.map((row, i) => <li key={i} className={`proposal-row-${row.kind}`}><RowMark kind={row.kind} completed={row.completed} />{row.title}</li>)}</ul>;
 }
 /* Shows what applying a roadmap proposal does: kept rows keep their links, new rows are added, missing rows are archived. */
 function RoadmapDiff({ data, goalId, markdown }: Pick<ViewProps, 'data'> & { goalId: string; markdown: string }) {
   const current = sortMilestones(goalData(data).milestones.filter(m => m.goalId === goalId && !m.archived));
   let n = 0; const rows = reconnectMilestones(parseMilestoneMarkdown(markdown), current, () => `new-${n++}`);
   const kept = new Set(rows.map(r => r.id)), removed = current.filter(m => !kept.has(m.id));
-  return <div className="proposal-diff"><ul className="proposal-rows">{rows.map(row => { const old = current.find(m => m.id === row.id); return <li key={row.id} className={`proposal-row-${row.kind}`}>{row.kind === 'todo' ? (row.completed || old?.completed ? '☑ ' : '☐ ') : row.kind === 'bullet' ? '• ' : ''}{row.title}{!old ? <Badge tone="accent">{t('new')}</Badge> : old.title !== row.title ? <Badge tone="info">{t('renamed')}</Badge> : null}</li>; })}</ul>
+  return <div className="proposal-diff"><ul className="proposal-rows">{rows.map(row => { const old = current.find(m => m.id === row.id); return <li key={row.id} className={`proposal-row-${row.kind}`}><RowMark kind={row.kind} completed={row.completed || old?.completed} />{row.title}{!old ? <Badge tone="accent">{t('new')}</Badge> : old.title !== row.title ? <Badge tone="info">{t('renamed')}</Badge> : null}</li>; })}</ul>
     {!!removed.length && <p className="hint">{t('Archived when applied: {v1}. Archived rows keep their task and session links and can be restored.', { v1: removed.map(m => m.title).join(' · ') })}</p>}</div>;
 }
 
@@ -70,6 +75,6 @@ export function AgentProposals({ data, act, goalId, onApplied }: ViewProps & { g
   return <Card className="agent-proposals" title={goalId ? t('Proposals from your AI agent') : t('New goals proposed by your AI agent')} icon="spark" actions={<span className="hint">{t('{length} to review', { length: open.length })}</span>}>
     {open.map(p => <ProposalCard key={`${p.id}_${p.status}`} data={data} act={act} proposal={p} onApplied={onApplied} />)}
     {!open.length && <p className="hint">{t('Nothing to review. Your agent saves proposals here; nothing changes until you apply one.')}</p>}
-    {!!decided.length && <Disclosure title={t('Agent history')}><div className="goal-history">{decided.slice(0, 20).map(p => <div className="goal-history-row" key={p.id}><span>{p.decidedAt?.slice(0, 10)} · {p.status === 'applied' ? t('applied') : t('rejected')}</span><strong>{KIND_LABELS[p.kind]} · {p.summary}</strong>{p.rationale && <p className="hint">{p.rationale}</p>}</div>)}</div></Disclosure>}
+    {!!decided.length && <Fold title={t('Agent history')}><div className="goal-history">{decided.slice(0, 20).map(p => <div className="goal-history-row" key={p.id}><span>{p.decidedAt?.slice(0, 10)} · {p.status === 'applied' ? t('applied') : t('rejected')}</span><strong>{KIND_LABELS[p.kind]} · {p.summary}</strong>{p.rationale && <p className="hint">{p.rationale}</p>}</div>)}</div></Fold>}
   </Card>;
 }

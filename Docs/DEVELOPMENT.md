@@ -10,11 +10,11 @@
 | Process boundary | `src/preload/index.ts`: restricted bridge |
 | Shared contracts | `src/shared/types.ts`, `validation.ts`, `analytics.ts`, goal planning, timer and brain display helpers |
 | Renderer | `src/renderer/src/App.tsx`, page components, `ui.tsx`, `components.tsx`, `app.css` |
-| Neural visuals | `NeuralVisual.tsx`, `ThreeScene.tsx`, `Constellation.tsx`, `styles.css`: bounded local scenes with SVG fallback |
+| Neural visuals | `NeuralVisual.tsx`, `ThreeScene.tsx`, `BrainScene.ts`, `NeuronScene.ts`, `WorldCanvas.ts`, `styles.css`: bounded local scenes with SVG fallback |
 | Browser preview | `preview.vite.config.ts`, `src/renderer/src/preview.ts`: synthetic adapter |
 | Windows helper | `native/activity-helper.cpp`. `scripts/build-helper.cjs` compiles it to `native/bin/`. |
 | Statistics module | `native/stats/` (Rust). `scripts/build-stats.cjs` compiles it to WebAssembly and writes `src/shared/stats-wasm.ts`. |
-| Packaging assets | `build/icon.ico`, `build/THIRD-PARTY-NOTICES.txt`, `scripts/Start-Software-Rendering.cmd` |
+| Packaging assets | `build/icon.ico` (copied to `src/renderer/public/icon.ico` for the windows, tray and notifications), `build/THIRD-PARTY-NOTICES.txt`, `scripts/Start-Software-Rendering.cmd` |
 
 ## Prerequisites
 

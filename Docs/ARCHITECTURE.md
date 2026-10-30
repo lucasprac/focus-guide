@@ -34,7 +34,7 @@ The default language is English. Brazilian Portuguese is optional through `setti
 
 ## Behaviour insights (schema 10, unreleased)
 
-Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. The records stay on this computer. An agent with access reads the same results through `get_focus_insights`. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
+Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. The records stay on this computer. An agent with access reads the same results through `get_focus_insights`. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](design-history/BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
 
 ```mermaid
 flowchart LR

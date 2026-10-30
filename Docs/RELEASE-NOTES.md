@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased (3.7.0) — Publication: visible icon, design standardization, cleanup
+
+- **Icon.** The icon is now a white brain-and-eye glyph on a purple-to-blue tile. The old dark-blue line drawing on a transparent background was almost invisible in the dark theme, on a dark taskbar and in the tray. The windows, the tray and notifications use a multi-size `icon.ico` (16 to 256 pixels). The tray sizes show a simplified eye, so the mark stays readable at 16 pixels. Notifications now show the icon.
+- **Window background.** The main window opens with the background colour of the saved theme, so the dark theme no longer flashes white at startup.
+- **Design standardization.** Every radius and font size in the stylesheets comes from a token. The radius scale has a new `rounded-chip` (6px) step and `--radius-float` (22px) for the floating bar. In the main window, text is 13px or larger, and only badges and chart labels use 12px. The Patterns filters wrap at the minimum window width instead of squeezing the pickers. Agent proposal rows use SVG check boxes, not text glyphs. Goal cards align their content to the top and show a hover border. The Neural World header shows recorded time as `51h 12m`, as in the rest of the app. See [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
+- **Cleanup.** Unused code is removed: the `Empty` component, the `Disclosure` alias, `ridgeLoo`, `upperFirst`, three unused imports and parameters, and CSS rules for classes that no source uses. The type check now fails on unused variables, parameters and imports (`noUnusedLocals`, `noUnusedParameters`).
+- **Repository.** The repository has a new README with screenshots, `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates, and a CI workflow that runs the type check. `LICENSE` moved to the repository root. `package.json` has the repository links and `private: true`. `.gitignore` no longer ignores the whole `Docs/` folder, only local working notes. The two Portuguese design proposals moved to `Docs/design-history/`, with an English index that summarizes them and links to the current documentation.
+- No change to data, schema or backups.
+
 ## Unreleased (3.6.0) — Claude Code plugin: skills and hooks for the agent
 
 - **Plugin.** **Settings > AI agent (MCP) > Create plugin files** writes a Claude Code plugin to `claude-plugin/` in the data folder, with the commands to install it. The plugin contains the MCP server, four skills and hooks. New command `agent.plugin.write` (main process only).

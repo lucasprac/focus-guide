@@ -53,8 +53,9 @@ desktop.ini
 # graphify knowledge graph (local only)
 graphify-out/
 
-#backup
-Aplicativo-backup-2.0.0/
+# Local backups of the packaged app
+Aplicativo-backup-*/
 
-#Docs
-Docs
+# Local working notes (not published)
+Docs/Future.md
+Docs/relatorio-*.md

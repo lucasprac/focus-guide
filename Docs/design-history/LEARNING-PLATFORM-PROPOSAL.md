@@ -27,7 +27,7 @@ O código em `Arquivos/` declara versão 1.5.0 e esquema/backup 6. Já existem G
 | Tempo, check-ins e observações de resultado | Esforço, execução e evidências de aprendizagem apresentados separadamente |
 | IPC interno do Electron | Adaptador MCP local para serviços e consultas delimitadas |
 
-Fontes locais: [tipos de Goal](../Arquivos/src/shared/goal-types.ts), [tipos gerais](../Arquivos/src/shared/types.ts), [serviço de Goals](../Arquivos/src/main/goal-service.ts), [navegação](../Arquivos/src/renderer/src/App.tsx), [persistência](../Arquivos/src/main/store.ts), [planejamento atual](GOAL-PLANNING.md) e [coleta atual](USER-GUIDE.md#behaviour-collection--version-130).
+Fontes locais: [tipos de Goal](../../Arquivos/src/shared/goal-types.ts), [tipos gerais](../../Arquivos/src/shared/types.ts), [serviço de Goals](../../Arquivos/src/main/goal-service.ts), [navegação](../../Arquivos/src/renderer/src/App.tsx), [persistência](../../Arquivos/src/main/store.ts), [planejamento atual](../GOAL-PLANNING.md) e [coleta atual](../USER-GUIDE.md#behaviour-collection--version-130).
 
 ## Modelo do produto
 

@@ -3,8 +3,8 @@ import type { ActivitySample, FocusSession, ProbeAnswer, SessionEvent } from '..
 import { INSIGHT_THRESHOLDS, PROBE_ANSWER_LABELS } from '../../shared/focus-insights';
 import type { Action, ViewProps } from './App';
 import { eventSourceLabel, interruptionLabel, activityModeLabel } from '../../shared/labels';
-import { Disclosure, Icon, useMotionEnabled, minutesLabel } from './components';
-import { Badge } from './ui';
+import { Icon, useMotionEnabled, minutesLabel } from './components';
+import { Badge, Fold } from './ui';
 import { t } from '../../shared/i18n';
 
 export function ReturnFeedback({ children, sessionId, animation, visible = true, neutral = false }: { children: ReactNode; sessionId: string | null; animation: boolean; visible?: boolean; neutral?: boolean }) {
@@ -77,7 +77,7 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
   const probeMark = (answer: string) => answer === 'on-task' ? '●' : answer === 'missed' ? '○' : '◐';
   const tracks: Array<{ key: 'keys' | 'clicks' | 'scrolls' | 'movementMs' | 'inputMs' | 'switches'; label: string; unit: string }> = [{ key: 'keys', label: t('Keys'), unit: t('keys') }, { key: 'clicks', label: t('Clicks'), unit: t('clicks') }, { key: 'scrolls', label: t('Scrolls'), unit: t('scrolls') }, { key: 'movementMs', label: t('Movement'), unit: t('ms in movement intervals') },
     ...(measured ? [{ key: 'inputMs' as const, label: t('Input'), unit: t('ms with input') }, { key: 'switches' as const, label: t('Switches'), unit: t('window switches') }] : [])];
-  return <Disclosure title={t('Behaviour')} open={open} onOpenChange={setOpen}><div className="behaviour-review">
+  return <Fold title={t('Behaviour')} open={open} onOpenChange={setOpen}><div className="behaviour-review">
     <div className="behaviour-intro"><span className="behaviour-mode">{t('Activity mode')}<Badge>{activityModeLabel(session.activityMode)}</Badge></span><p className="hint">{t('Computer interaction and reported returns provide context; they do not measure attention.')}</p></div>
     {error ? <p role="alert">{error}</p> : samples === null ? <p role="status">{t('Loading session behaviour…')}</p> : <>
       <div className="behaviour-totals"><span><strong>{totals.keys}</strong>{t('key presses')}</span><span><strong>{totals.clicks}</strong>{t('mouse clicks')}</span><span><strong>{totals.scrolls}</strong>{t('scroll events')}</span><span><strong>{(totals.movementMs / 1000).toFixed(1)}s</strong>{t('intervals with mouse movement')}</span>
@@ -105,5 +105,5 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
       </div>
     </>}
     <ReturnMarkers events={data.events} sessionId={session.id} act={act} />
-  </div></Disclosure>;
+  </div></Fold>;
 }
