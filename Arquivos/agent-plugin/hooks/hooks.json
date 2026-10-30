@@ -1,0 +1,9 @@
+{
+  "description": "Focus Guide: status at session start, checks before agent edits, reminders after proposals and edits, and a local log of tool calls.",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "shell": "powershell", "command": "& '${CLAUDE_PLUGIN_ROOT}/scripts/focus-guide.cmd' --hook session-start; exit $LASTEXITCODE", "timeout": 15 }] }],
+    "PreToolUse": [{ "matcher": "mcp__(plugin_focus-guide_)?focus-guide__.*", "hooks": [{ "type": "command", "shell": "powershell", "command": "& '${CLAUDE_PLUGIN_ROOT}/scripts/focus-guide.cmd' --hook pre-tool-use; exit $LASTEXITCODE", "timeout": 15 }] }],
+    "PostToolUse": [{ "matcher": "mcp__(plugin_focus-guide_)?focus-guide__.*", "hooks": [{ "type": "command", "shell": "powershell", "command": "& '${CLAUDE_PLUGIN_ROOT}/scripts/focus-guide.cmd' --hook post-tool-use; exit $LASTEXITCODE", "timeout": 15 }] }],
+    "PostToolUseFailure": [{ "matcher": "mcp__(plugin_focus-guide_)?focus-guide__.*", "hooks": [{ "type": "command", "shell": "powershell", "command": "& '${CLAUDE_PLUGIN_ROOT}/scripts/focus-guide.cmd' --hook post-tool-use; exit $LASTEXITCODE", "timeout": 15 }] }]
+  }
+}

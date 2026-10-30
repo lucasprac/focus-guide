@@ -101,7 +101,16 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
 
 ### Claude Code plugin
 
-For Claude Code, the plugin is the easier way to connect. It contains the MCP server, four skills and hooks.
+For Claude Code, the plugin is the easier way to connect. It contains the MCP server, four skills and hooks. You can install it in two ways.
+
+**From GitHub (recommended).** Open Focus Guide once and choose an access level. Then run these commands in Claude Code and restart it:
+
+- `/plugin marketplace add lucasprac/focus-guide`
+- `/plugin install focus-guide@focus-guide`
+
+The plugin finds the app through `agent-launch.cmd`, which Focus Guide writes to `%APPDATA%\Focus Guide` each time it starts. After you move the app, open it once again. To get a newer plugin, run `/plugin marketplace update focus-guide`.
+
+**From local files.** Use this way if you cannot reach GitHub.
 
 1. In **Settings > AI agent (MCP)**, choose an access level, then select **Create plugin files**. Focus Guide writes the plugin to the `claude-plugin` folder in its data folder.
 2. Copy the commands that appear and run them in a terminal:

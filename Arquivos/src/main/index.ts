@@ -10,7 +10,7 @@ import { BehaviourCollector } from './behaviour';
 import { ProbeScheduler } from './probes';
 import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
-import { readAgentPlugin, writeAgentPlugin } from './agent-plugin';
+import { readAgentPlugin, writeAgentLauncher, writeAgentPlugin } from './agent-plugin';
 import { InsightsWorker } from './insights';
 import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
@@ -401,7 +401,8 @@ if (locked) void app.whenReady().then(async () => {
       return value;
     }) });
   bridge.sync();
-  agentPlugin = bridge.status.launch && readAgentPlugin(store.directory, bridge.status.launch);
+  if (bridge.status.launch) try { writeAgentLauncher(store.directory, bridge.status.launch); } catch { /* Only the marketplace plugin needs this file. */ }
+  agentPlugin =bridge.status.launch && readAgentPlugin(store.directory, bridge.status.launch);
   collector.reconcile();
   const rendererRoot = resolve(__dirname, '../renderer');
   protocol.handle('focus', async request => {

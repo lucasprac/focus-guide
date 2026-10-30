@@ -1,6 +1,6 @@
 {
   "name": "focus-guide",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "An offline focus and goal-planning companion with a private personal dataset.",
   "main": "out/main/index.js",
   "author": "Focus Guide contributors",

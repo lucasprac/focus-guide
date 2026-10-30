@@ -42,6 +42,22 @@ Focus Guide runs on Windows 10 and 11 (x64).
 
 Closing the main window keeps the app in the tray, so a running session continues. Use **Quit** in the tray menu to stop the app.
 
+### Claude Code plugin
+
+This repository is also a Claude Code plugin marketplace. The plugin contains the Focus Guide MCP server, four skills and hooks.
+
+1. Open Focus Guide once (version 3.8.0 or later), and in **Settings > AI agent (MCP)** choose an access level other than `off`.
+2. In Claude Code, add the marketplace and install the plugin:
+
+   ```
+   /plugin marketplace add lucasprac/focus-guide
+   /plugin install focus-guide@focus-guide
+   ```
+
+3. Restart Claude Code.
+
+The plugin finds the app through `agent-launch.cmd`, which Focus Guide writes to `%APPDATA%\Focus Guide` each time it starts. If you move the app, open it once again.
+
 ## Build from source
 
 Requirements: Windows x64, Node.js 22 or later and npm. To build the optional activity helper, you also need MinGW C++ (`g++`). Run all commands from `Arquivos/`:

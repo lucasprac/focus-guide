@@ -39,6 +39,16 @@ function hooksConfig(launch: Launch) {
   };
 }
 
+/* The plugin in the GitHub marketplace (.claude-plugin/marketplace.json at the repository root) cannot know where
+   this executable is. Its scripts/focus-guide.cmd calls agent-launch.cmd in the data folder, which the app writes
+   at each start. The file holds paths only, no personal records. */
+export function writeAgentLauncher(dataDirectory: string, launch: Launch) {
+  const text = (value: string) => value.replace(/%/g, '%%');
+  const lines = ['@echo off', ...Object.entries(launch.env).map(([name, value]) => `set "${name}=${text(value)}"`),
+    `"${text(launch.command)}" ${launch.args.map((arg) => `"${text(arg)}"`).join(' ')} %*`, 'exit /b %ERRORLEVEL%'];
+  atomicWrite(join(dataDirectory, 'agent-launch.cmd'), lines.join('\r\n') + '\r\n');
+}
+
 /* The plugin is current when its version and its executable match this app. */
 export function readAgentPlugin(dataDirectory: string, launch: Launch): AgentPluginStatus | null {
   const root = folder(dataDirectory);

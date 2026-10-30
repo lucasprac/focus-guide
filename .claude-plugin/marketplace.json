@@ -1,0 +1,14 @@
+{
+  "name": "focus-guide",
+  "owner": { "name": "Lucasprac" },
+  "description": "Claude Code plugin for the Focus Guide desktop app.",
+  "plugins": [
+    {
+      "name": "focus-guide",
+      "source": "./Arquivos/agent-plugin",
+      "description": "Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan and roadmaps.",
+      "category": "productivity",
+      "keywords": ["focus", "goals", "productivity", "mcp"]
+    }
+  ]
+}
