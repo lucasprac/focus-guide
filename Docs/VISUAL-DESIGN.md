@@ -314,6 +314,13 @@ The check-in is a prompt, not a dialog. It never takes keyboard focus, and it ne
 - **Patterns filters.** The goal and area pickers keep at least 200px. At the minimum window width (1050px) the toolbar wraps them to the next row instead of squeezing them to 96px.
 - **Check.** At 1366 × 840 and at 1050 × 650, no page overflows horizontally. The only shortened text is the long goal-filter label, which ends with an ellipsis in its picker.
 
+## Component layer type tokens (3.8.1)
+
+- The component layer in `app.css` (Insights, reflection questions, focus hints, check-in prompt) had 33 raw font sizes. They now use the type tokens: 13px → `--text-caption`, 14px → `--text-label`, 20px → `--text-heading`. Small labels inside Insights charts and tables (`.insight-heat th small`, `.mean-row-value small`, `.plain-rows small`, `.forest-value small`, `.forest-label small`, `.insight-cycle-table small`) use `--text-badge`. The weekly-adjustment title (`.focus-adjustment strong`) moves from 12px to `--text-caption`, the size of its own text.
+- Raw sizes stay only in the compact floating window (`.fbar-*`, `.probe-bar`, `.probe-mini`, `.mini-*`) and in the disclosure-icon box, which is not text.
+- Check: the token scan of the `ui-standards-audit` skill reports 0 raw font sizes and 0 raw radii of 5px or more outside these exceptions. At 1366 × 840 and 1050 × 650, in both themes, no page overflows horizontally, including the Insights tab.
+- Still open: the Behaviour timeline legend uses text marks (`●`, `○`, `◐`, `↩`), and `MilestoneChecklist.tsx` shows `•` for bullet rows.
+
 ## App icon
 
 The icon is the brain-and-eye glyph in white on a rounded tile. The tile has a diagonal gradient from #7B5CFF to `--blue` (#2F62D9). The filled tile keeps the icon visible on light and dark surfaces: the sidebar in both themes, the taskbar, the tray and notifications.

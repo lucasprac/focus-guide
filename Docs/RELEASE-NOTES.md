@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased (3.8.1) — Type tokens in the component layer
+
+- **Type tokens.** The 33 raw font sizes in the component layer of `app.css` (Insights, reflection questions, focus hints, check-in prompt) now use the type tokens. 28 matched a token exactly and look the same. Four small labels in the Insights charts and tables use `--text-badge` (12px), as before. The title of the weekly adjustment hint on Focus grows from 12px to 13px (`--text-caption`), the size of its text.
+- With this change, every font size in the main window comes from a token. Only the compact floating window keeps raw sizes, as documented in [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
+- **Correction.** The 3.7.0 notes said that every font size in the stylesheets came from a token. That was true only for `styles.css`. The 3.7.0 entry now says so.
+- No change to data, schema or backups.
+
 ## Unreleased (3.8.0) — Claude Code plugin marketplace on GitHub
 
 - **Marketplace.** The repository root has `.claude-plugin/marketplace.json` (marketplace `focus-guide`), so `/plugin marketplace add lucasprac/focus-guide` works. The plugin `focus-guide` is in `Arquivos/agent-plugin/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json`, the four skills and `scripts/focus-guide.cmd`.
@@ -11,7 +18,7 @@
 
 - **Icon.** The icon is now a white brain-and-eye glyph on a purple-to-blue tile. The old dark-blue line drawing on a transparent background was almost invisible in the dark theme, on a dark taskbar and in the tray. The windows, the tray and notifications use a multi-size `icon.ico` (16 to 256 pixels). The tray sizes show a simplified eye, so the mark stays readable at 16 pixels. Notifications now show the icon.
 - **Window background.** The main window opens with the background colour of the saved theme, so the dark theme no longer flashes white at startup.
-- **Design standardization.** Every radius and font size in the stylesheets comes from a token. The radius scale has a new `rounded-chip` (6px) step and `--radius-float` (22px) for the floating bar. In the main window, text is 13px or larger, and only badges and chart labels use 12px. The Patterns filters wrap at the minimum window width instead of squeezing the pickers. Agent proposal rows use SVG check boxes, not text glyphs. Goal cards align their content to the top and show a hover border. The Neural World header shows recorded time as `51h 12m`, as in the rest of the app. See [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
+- **Design standardization.** Every radius in the stylesheets and every font size in the legacy stylesheet (`styles.css`) comes from a token. (Correction: the first version of this note said "every font size in the stylesheets". The component layer in `app.css` was tokenized only in 3.8.1.) The radius scale has a new `rounded-chip` (6px) step and `--radius-float` (22px) for the floating bar. In the main window, text is 13px or larger, and only badges and chart labels use 12px. The Patterns filters wrap at the minimum window width instead of squeezing the pickers. Agent proposal rows use SVG check boxes, not text glyphs. Goal cards align their content to the top and show a hover border. The Neural World header shows recorded time as `51h 12m`, as in the rest of the app. See [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
 - **Cleanup.** Unused code is removed: the `Empty` component, the `Disclosure` alias, `ridgeLoo`, `upperFirst`, three unused imports and parameters, and CSS rules for classes that no source uses. The type check now fails on unused variables, parameters and imports (`noUnusedLocals`, `noUnusedParameters`).
 - **Repository.** The repository has a new README with screenshots, `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates, and a CI workflow that runs the type check. `LICENSE` moved to the repository root. `package.json` has the repository links and `private: true`. `.gitignore` no longer ignores the whole `Docs/` folder, only local working notes. The two Portuguese design proposals moved to `Docs/design-history/`, with an English index that summarizes them and links to the current documentation.
 - No change to data, schema or backups.
