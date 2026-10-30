@@ -14,6 +14,18 @@ Design rules that follow from these objectives:
 - One analysis feeds the interface and the agent. For example, `get_focus_insights` uses the same engine as the Insights tab, and `get_goal_behaviour` uses `goalBehaviourProfile()`.
 - The user sets agent access (`off`, `read`, `propose`, `edit`). The agent rules in [Agent bridge and proposals](#agent-bridge-and-proposals-schema-8) apply to every new agent feature.
 - If the client uses a cloud model, the data that the agent reads leaves this computer. The settings and the user guide must say this.
+- The app makes one outbound call of its own: TypeSafe Jev judgments (3.9.0). It is off by default, runs only when the user starts a check, and only suggests answers that the user then saves. See [TypeSafe Jev](#typesafe-jev-judgments-390).
+
+## TypeSafe Jev judgments (3.9.0)
+
+TypeSafe Jev reads free text and answers typed questions with probabilities. The use cases, the rules and the phases are in [TypeSafe Jev in Focus Guide](JEV-USE-CASES.md). Phase 1 fills empty main-distraction answers from the text of a session.
+
+- `settings.jevAssist` turns the feature on. The default is `false`. Restore sets it to `false`. No schema bump.
+- `jev.gaps.scan` reads its candidates inside the command queue (`FocusService.jevReflectionGaps()`), then sends the requests outside it, as `insights.read` computes outside it. The scan writes nothing. The user saves an answer through `session.review`.
+- `jev.key.set`, `jev.key.clear` and `jev.log.read` run outside the queue and only from the main window. They touch no records.
+- `src/main/jev-questions.ts` holds all wording and the pinned model. `src/shared/jev-decisions.ts` holds the truth tables and thresholds. `src/main/jev-client.ts` makes the call with `net.fetch`, retries status 429 and 529 with backoff, and keeps the last 20 requests in memory. `src/main/jev.ts` stores the key with `safeStorage` and runs three requests at a time. A rejected key stops the scan.
+- `AppState.jev` (`keyStored`, `encryption`) is runtime only. It never reaches settings, datasets or backups.
+- The preview has no network access and refuses `jev.*` commands.
 
 ## Interface language (unreleased)
 

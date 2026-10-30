@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Store } from './store';
 import { TimerEngine } from './timer';
-import type { ActivitySample, Command, Dataset, Task } from '../shared/types';
+import { MIN_INCLUDED_SESSION_MS, type ActivitySample, type Command, type Dataset, type Task } from '../shared/types';
 import * as v from '../shared/validation';
 import { addDays, selectedSessions } from '../shared/analytics';
 import { ACHIEVEMENT_IDS, PALETTES, evaluateAchievements, paletteUnlocked, paletteUnlockLabel } from '../shared/achievements';
@@ -10,6 +10,7 @@ import type { ProbeScheduler } from './probes';
 import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
 import { t, getLanguage } from '../shared/i18n';
+import { JEV_GAP_LIMITS, type JevReflectionGap, type ReflectionText } from '../shared/jev-decisions';
 
 export class FocusService {
   constructor(readonly store: Store, readonly timer: TimerEngine, private beforeDelete?: (kind: 'field' | 'goal') => void, readonly probes?: ProbeScheduler) {}
@@ -57,6 +58,23 @@ export class FocusService {
     const revision = key === null ? null : JSON.parse(key)[0];
     if (key === null || revision !== this.store.revision()) return;
     this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
+  }
+  /* jev.gaps.scan reads its candidates here, inside the command queue; the requests to TypeSafe run outside it.
+     A candidate is a finished, included session of the last 90 days with no main-distraction answer but with text to read. */
+  jevReflectionGaps(now = Date.now()): Array<Omit<JevReflectionGap, 'status'> & { text: ReflectionText }> {
+    if (!this.store.getSettings().jevAssist) throw new Error(t('Turn on TypeSafe judgments in Settings first.'));
+    const data = this.store.all(), since = now - JEV_GAP_LIMITS.days * 86400000, texts = new Map<string, { thoughts: string[]; interruptions: string[] }>();
+    for (const e of data.events) {
+      if ((e.kind !== 'thought' && e.kind !== 'interruption') || !e.text.trim()) continue;
+      const entry = texts.get(e.sessionId) ?? { thoughts: [], interruptions: [] };
+      (e.kind === 'thought' ? entry.thoughts : entry.interruptions).push(e.text.trim()); texts.set(e.sessionId, entry);
+    }
+    return data.sessions
+      .filter(s => s.status === 'completed' && !s.excluded && s.activeMs >= MIN_INCLUDED_SESSION_MS && s.detractor == null && Date.parse(s.startedAt) >= since)
+      .map(s => ({ s, text: { intention: s.intention.trim(), note: s.note.trim(), thoughts: texts.get(s.id)?.thoughts ?? [], interruptions: texts.get(s.id)?.interruptions ?? [] } }))
+      .filter(({ text }) => text.note || text.thoughts.length || text.interruptions.length)
+      .sort((a, b) => b.s.startedAt.localeCompare(a.s.startedAt)).slice(0, JEV_GAP_LIMITS.sessions)
+      .map(({ s, text }) => ({ sessionId: s.id, startedAt: s.startedAt, timezone: s.timezone, fieldName: data.fields.find(f => f.id === s.fieldId)?.name ?? '', intention: s.intention, note: s.note, text }));
   }
   run(command: Command, input: Record<string, unknown> = {}): unknown {
     const now = new Date().toISOString();

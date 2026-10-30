@@ -100,6 +100,7 @@ export function settings(value: unknown): Settings {
     focusVisual: focusVisual(v.focusVisual ?? 'brain'),
     floatingStyle: floatingStyle(v.floatingStyle ?? 'brain'),
     attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, t('Attention check-ins')),
+    jevAssist: v.jevAssist === undefined ? false : bool(v.jevAssist, t('TypeSafe judgments')),
     language: language(v.language),
     collectedAchievements: Object.fromEntries(collected.map(([key, at]) => [key, timestamp(at)]))
   };
@@ -125,6 +126,12 @@ function floatingStyle(value: unknown): FloatingStyle {
 export function agentAccess(value: unknown): AgentAccess {
   if (value !== 'off' && value !== 'read' && value !== 'propose' && value !== 'edit') throw new Error(t('Choose Off, Read only, Read and propose, or Read and edit for the AI agent.'));
   return value;
+}
+/* A TypeSafe API key: printable ASCII without spaces. */
+export function jevKey(value: unknown): string {
+  const result = text(value, t('API key'), 200, true);
+  if (!/^[!-~]+$/.test(result)) throw new Error(t('An API key has no spaces or special characters.'));
+  return result;
 }
 function vBoolean(value: unknown): boolean { return value === undefined ? false : bool(value, t('Activity collection')); }
 export function timestamp(value: unknown): string {

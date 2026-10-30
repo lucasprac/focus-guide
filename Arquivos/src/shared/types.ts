@@ -70,6 +70,8 @@ export interface Settings {
   focusVisual?: FocusVisual;
   floatingStyle?: FloatingStyle;
   attentionProbes?: boolean;
+  /* Opt-in TypeSafe Jev judgments. Off by default and after restore; the API key is never part of settings. */
+  jevAssist?: boolean;
   /* Interface language; absent in older data and backups, which means English. */
   language?: Language;
 }
@@ -92,7 +94,9 @@ export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: 
 export interface AgentPluginStatus { path: string; version: string; current: boolean }
 /* Runtime state of the attention check-in that is on screen now; it never reaches settings, datasets or backups. */
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
-export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
+/* Runtime state of TypeSafe Jev; it never reaches settings, datasets or backups. The key itself never leaves the main process. */
+export interface JevStatus { keyStored: boolean; encryption: boolean }
+export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
 export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 11; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
 export type Command =
@@ -108,6 +112,7 @@ export type Command =
   | 'settings.update' | 'review.save' | 'achievements.collect'
   | 'attention.return' | 'attention.remove' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
   | 'probe.answer' | 'insights.read'
+  | 'jev.key.set' | 'jev.key.clear' | 'jev.log.read' | 'jev.gaps.scan'
   | 'window.float' | 'window.main' | 'window.hide' | 'window.floatPointer' | 'window.floatMove'
   | 'export.sessions' | 'export.events' | 'export.backup'
   | 'backup.preview' | 'backup.restore' | 'backup.create';

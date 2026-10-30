@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased (3.9.0) — TypeSafe Jev judgments
+
+- **Fill missing reflections.** With **Settings > TypeSafe judgments (Jev)** on and an API key saved, **Patterns > Overview** has a check. It reads up to 50 sessions of the last 90 days that have a note, parked thoughts or interruption notes but no answer to "What got in the way most?". TypeSafe Jev suggests an answer for each session. Nothing changes until you pick **Use suggestion** or another answer. If the text does not settle the answer, the app makes no suggestion.
+- **Privacy.** This is the first network call of the app. It is off by default, sends text only when you start a check, and goes from the main process. Restore turns it off. The API key is encrypted with Windows in the data folder and is never in settings or backups. **What was sent** shows the last 20 requests.
+- **Design.** [TypeSafe Jev in Focus Guide](JEV-USE-CASES.md) describes this use case and the next ones: task links, planned-action barriers, old interruption categories, plan quality checks and text features for the focus model.
+- New setting `jevAssist`. No schema change. Backups do not change.
+
 ## Unreleased (3.8.1) — Type tokens in the component layer
 
 - **Type tokens.** The 33 raw font sizes in the component layer of `app.css` (Insights, reflection questions, focus hints, check-in prompt) now use the type tokens. 28 matched a token exactly and look the same. Four small labels in the Insights charts and tables use `--text-badge` (12px), as before. The title of the weekly adjustment hint on Focus grows from 12px to 13px (`--text-caption`), the size of its text.

@@ -310,7 +310,7 @@ export class Store {
       data.tasks.forEach(t => this.putTask(t));
       data.sessions.forEach(s => this.putSession(s)); data.events.forEach(e => this.putEvent(e));
       (data.activity ?? []).forEach(sample => this.putActivity(sample));
-      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off', attentionProbes: false });
+      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off', attentionProbes: false, jevAssist: false });
     })();
   }
   async backup(path: string): Promise<void> { await this.db.backup(path); }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification, powerMonitor, dialog, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification, powerMonitor, dialog, protocol, net, safeStorage } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mkdirSync, readdirSync, unlinkSync } from 'node:fs';
@@ -12,6 +12,8 @@ import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
 import { readAgentPlugin, writeAgentLauncher, writeAgentPlugin } from './agent-plugin';
 import { InsightsWorker } from './insights';
+import { clearJevKey, jevKeyStored, saveJevKey, scanReflectionGaps } from './jev';
+import { jevLog } from './jev-client';
 import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
@@ -66,7 +68,7 @@ const applicationIcon = join(__dirname, '../renderer/icon.ico');
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound, icon: applicationIcon }).show();
 }
-function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
+function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, jev: { keyStored: jevKeyStored(store.directory), encryption: safeStorage.isEncryptionAvailable() }, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); layoutFloating(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : t('An unexpected error occurred.'); }
@@ -337,6 +339,16 @@ async function readInsights(input: Record<string, unknown>): Promise<unknown> {
   try { const value = await task; service.rememberInsights(job.key, value); return value; }
   finally { if (job.key !== null) insightsInFlight.delete(job.key); }
 }
+/* TypeSafe Jev commands run outside the command queue: the key and the log are not records, and a scan reads its
+   candidates inside the queue and waits for the network outside it, as insights.read does. A scan writes nothing. */
+async function jevCommand(command: string, input: Record<string, unknown>): Promise<unknown> {
+  if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
+  if (command === 'jev.key.set') { saveJevKey(store.directory, v.jevKey(input.key)); changed(); return; }
+  if (command === 'jev.key.clear') { clearJevKey(store.directory); changed(); return; }
+  if (command === 'jev.log.read') return jevLog();
+  const candidates = await commandQueue.run(() => service.jevReflectionGaps());
+  return scanReflectionGaps(store.directory, candidates);
+}
 app.on('second-instance', showMain);
 app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -438,6 +450,7 @@ if (locked) void app.whenReady().then(async () => {
       trustedSender(event); const args = v.object(input);
       if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error(t('Invalid command input.'));
       if (command === 'insights.read') return { ok: true, value: await readInsights(args) };
+      if (typeof command === 'string' && command.startsWith('jev.')) { if (!['jev.key.set', 'jev.key.clear', 'jev.log.read', 'jev.gaps.scan'].includes(command) || event.sender !== mainWindow?.webContents) throw new Error(t('Invalid command input.')); return { ok: true, value: await jevCommand(command, args) }; }
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
         if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
