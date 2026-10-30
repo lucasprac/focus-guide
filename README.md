@@ -1,6 +1,6 @@
 # Focus Guide
 
-Offline Windows app (Electron, React, TypeScript, SQLite) for planning focus sessions, recording focus time and exploring a private personal dataset. Version **2.0.0**.
+Local-first Windows app (Electron, React, TypeScript, SQLite) for planning focus sessions, recording focus time, goals and behaviour, and finding patterns in your development. It connects to AI agents through MCP. An agent can analyse your focus, goals, workflow and behaviour patterns, and help you plan and review. Your records stay in a local database, and you control what an agent can read or change. Version **3.6.0**.
 
 | Folder | Contents |
 |---|---|

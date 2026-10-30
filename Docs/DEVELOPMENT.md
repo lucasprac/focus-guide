@@ -6,7 +6,7 @@
 |---|---|
 | Desktop lifecycle | `src/main/index.ts`, `coordination.ts`: windows, IPC and serialized native operations |
 | Domain and persistence | `src/main/service.ts`, `timer.ts`, `store.ts`, `backup.ts`, `behaviour.ts`, `goal-service.ts`, `agent-service.ts`, `agent-edits.ts` |
-| Local AI agent | `src/main/agent-bridge.ts` (named pipe), `src/mcp/server.ts` (stdio MCP server), `src/shared/agent-tools.ts`. `scripts/build-mcp.cjs` bundles the server to `out/mcp/`. |
+| AI agent integration | `src/main/agent-bridge.ts` (named pipe), `src/mcp/server.ts` (stdio MCP server), `src/shared/agent-tools.ts`. `scripts/build-mcp.cjs` bundles the server to `out/mcp/`. |
 | Process boundary | `src/preload/index.ts`: restricted bridge |
 | Shared contracts | `src/shared/types.ts`, `validation.ts`, `analytics.ts`, goal planning, timer and brain display helpers |
 | Renderer | `src/renderer/src/App.tsx`, page components, `ui.tsx`, `components.tsx`, `app.css` |

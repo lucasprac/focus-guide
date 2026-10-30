@@ -47,9 +47,14 @@ desktop.ini
 # Claude Code local config
 .claude/settings.local.json
 .claude/worktrees/
+.claude/hooks/
+.claude/skills
 
 # graphify knowledge graph (local only)
 graphify-out/
 
 #backup
 Aplicativo-backup-2.0.0/
+
+#Docs
+Docs

@@ -10,13 +10,14 @@ import { BehaviourCollector } from './behaviour';
 import { ProbeScheduler } from './probes';
 import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
+import { readAgentPlugin, writeAgentPlugin } from './agent-plugin';
 import { InsightsWorker } from './insights';
 import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
 import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
 import { localDay } from '../shared/analytics';
 import { PALETTES, paletteUnlocked } from '../shared/achievements';
-import type { AppEvent, AppState, BackupFile, Command, FloatBarPosition } from '../shared/types';
+import type { AgentPluginStatus, AppEvent, AppState, BackupFile, Command, FloatBarPosition } from '../shared/types';
 import { isFloatBarPosition } from '../shared/types';
 import * as v from '../shared/validation';
 import { t, setLanguage } from '../shared/i18n';
@@ -42,6 +43,7 @@ let collector: BehaviourCollector;
 let probes: ProbeScheduler;
 let hideProbeFloat = false;
 let bridge: AgentBridge | null = null;
+let agentPlugin: AgentPluginStatus | null = null;
 let quitting = false;
 let quitPending = false;
 let backupStatus: string | null = null;
@@ -63,7 +65,7 @@ const applicationIcon = join(__dirname, '../renderer/icon.png');
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound }).show();
 }
-function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge?.status, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
+function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); layoutFloating(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : t('An unexpected error occurred.'); }
@@ -283,6 +285,11 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     case 'window.floatPointer': floatingWindow?.setIgnoreMouseEvents(input.interactive !== true, { forward: true }); return;
     case 'window.floatMove': store.setMeta('floatBarPosition', input.position); layoutFloating(); return;
     case 'backup.create': await dailyBackup(true); return status();
+    case 'agent.plugin.write': {
+      if ((store.getSettings().agentAccess ?? 'off') === 'off' || !bridge?.status.launch) throw new Error(t('Choose an agent access level first.'));
+      agentPlugin = writeAgentPlugin(store.directory, bridge.status.launch);
+      return agentPlugin;
+    }
     case 'export.sessions': case 'export.events': case 'export.backup': case 'export.activity': case 'export.goals': {
       const filePath = selectedFile;
       if (!filePath) return;
@@ -393,6 +400,7 @@ if (locked) void app.whenReady().then(async () => {
       return value;
     }) });
   bridge.sync();
+  agentPlugin = bridge.status.launch && readAgentPlugin(store.directory, bridge.status.launch);
   collector.reconcile();
   const rendererRoot = resolve(__dirname, '../renderer');
   protocol.handle('focus', async request => {

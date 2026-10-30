@@ -1,5 +1,20 @@
 # Architecture — Focus Guide 2.0
 
+## Product objective
+
+Focus Guide is local-first, and it is not only a local tool. It has three objectives:
+
+1. **Agent integration.** An AI agent reads the records through the MCP server and the agent bridge. It helps the user plan, review and adjust goals, tasks and sessions.
+2. **Pattern recognition.** The app and the agent analyse the user's development in four areas: focus, goals, workflow and behaviour.
+3. **Orientation.** The app tells the user which behaviours to keep or change, with the evidence for each pattern.
+
+Design rules that follow from these objectives:
+
+- The SQLite database on this computer is the only store of records. The agent gets data only through the tools in `src/shared/agent-tools.ts`.
+- One analysis feeds the interface and the agent. For example, `get_focus_insights` uses the same engine as the Insights tab, and `get_goal_behaviour` uses `goalBehaviourProfile()`.
+- The user sets agent access (`off`, `read`, `propose`, `edit`). The agent rules in [Agent bridge and proposals](#agent-bridge-and-proposals-schema-8) apply to every new agent feature.
+- If the client uses a cloud model, the data that the agent reads leaves this computer. The settings and the user guide must say this.
+
 ## Interface language (unreleased)
 
 The default language is English. Brazilian Portuguese is optional through `settings.language` (`en` or `pt-BR`, absent = `en`; no schema bump, see the [data dictionary](DATA-DICTIONARY.md)).
@@ -19,7 +34,7 @@ The default language is English. Brazilian Portuguese is optional through `setti
 
 ## Behaviour insights (schema 10, unreleased)
 
-Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. All data stays on this computer. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
+Schema 10 adds optional reflection answers, two activity measures and attention check-ins. A local engine turns these records into the Insights tab of Patterns. The records stay on this computer. An agent with access reads the same results through `get_focus_insights`. For the columns, see the [data dictionary](DATA-DICTIONARY.md#behaviour-insights-schema-10). The design and its Red Team check are in [Behaviour data science](BEHAVIOUR-DATA-SCIENCE-PROPOSAL.md), in Brazilian Portuguese.
 
 ```mermaid
 flowchart LR
@@ -213,6 +228,17 @@ flowchart LR
 - At the `edit` level (schema 9), `AgentEditor` (`src/main/agent-edits.ts`) runs the same validated commands at once. In one transaction it reads the changed fields, applies the change and saves an `agentChanges` record with the state before and after. The app writes the summary. The editor refuses deletion, `achieved` and `archived` goal status, step completion, and tasks without a goal, and allows 60 direct changes per hour. `agent.change.undo` puts back the earlier state through the normal commands and asks for confirmation when the record changed after the agent's change.
 - Roadmap writes carry a revision (`roadmapRevision()` and `rowsRevision()` in `goal-planning.ts`). `update_roadmap` requires the revision from `get_goal`, and the editor in `MilestoneChecklist.tsx` sends the revision of the rows that it last saved. A stale `goal.milestones.sync` fails without a change, so an edit never archives rows that the agent added. Agent roadmap writes match rows by exact title only.
 
+### Claude Code plugin (3.6.0)
+
+- `agent.plugin.write` (main process only; the preview refuses it) writes a local plugin marketplace to `claude-plugin/` in the data folder: `.claude-plugin/marketplace.json` (`focus-guide-local`) and the plugin `focus-guide/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json` and four skills. The app writes the files, not the package, because the MCP server and the hooks need the absolute path of the executable. The command needs an access level other than `off`. It removes the earlier `focus-guide/` folder first. The files hold no records.
+- The skills are Markdown in `Arquivos/agent-plugin/skills/` (`weekly-review`, `pattern-analysis`, `plan-day`, `roadmap`). `src/main/agent-plugin.ts` embeds them at build time with `?raw` imports.
+- The hooks run `focus-guide-mcp.cjs --hook <event>` with the app executable and `ELECTRON_RUN_AS_NODE=1`, through PowerShell (`"shell": "powershell"`), so that no Node.js installation is necessary. `src/mcp/hooks.ts` holds the logic and `src/mcp/client.ts` the bridge client that the server and the hooks share. The hooks match the tools of the manual `focus-guide` entry and of the plugin server (`mcp__plugin_focus-guide_focus-guide__*`).
+  - `SessionStart`: calls `get_overview` with a 3-second limit and gives the agent only the access level and counts (active goals, open proposals, planned actions today), or says that the app is not available.
+  - `PreToolUse`: an edit tool without a `rationale` is denied. `update_roadmap` is denied unless its `revision` equals the `roadmapRevision` of the last `get_goal` for that goal in the same Claude Code session (kept in `%TEMP%\focus-guide-agent-hooks`, removed after 7 days). `update_roadmap`, and `update_task` or `update_action` that archive or complete, ask the user first.
+  - `PostToolUse` and `PostToolUseFailure`: after a proposal or an edit, the agent gets a reminder to tell the user where to apply or undo it. Every Focus Guide tool call is logged to `agent-hook-log.jsonl` in the data folder (time, first 8 characters of the session id, tool, `ok`/`error`/`denied`/`asked`; never inputs or results), rotated at 1 MiB to `agent-hook-log.jsonl.1`.
+- A hook that fails for its own reasons prints nothing and exits with 0. The hooks add checks; they do not replace the validation in the app.
+- `AppState.agent.plugin` (runtime only) reports the version of the written plugin and whether it matches this app version and executable path.
+
 Invariants:
 
 - Below the `edit` level, an agent never changes records directly. At the `edit` level, every agent change has an `agentChanges` record from the same transaction, and the user can undo it.
@@ -304,7 +330,8 @@ flowchart LR
 | `src/main/backup.ts` | Versioned JSON validation, atomic exports, safe CSV cells |
 | `src/main/probes.ts` | Runtime scheduler for attention check-ins. It uses authoritative active time and a monotonic clock for expiry |
 | `src/main/agent-bridge.ts`, `agent-service.ts`, `agent-edits.ts` | Local named-pipe endpoint for the MCP server, agent read tools, proposals with apply/reject, direct edits with their audit log and undo |
-| `src/mcp/server.ts` | Stdio MCP server, bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
+| `src/mcp/server.ts`, `client.ts`, `hooks.ts` | Stdio MCP server and the Claude Code plugin hooks (`--hook <event>`), bundled by `scripts/build-mcp.cjs` into `resources/mcp/focus-guide-mcp.cjs` |
+| `src/main/agent-plugin.ts`, `agent-plugin/skills/` | Writes the Claude Code plugin (MCP server, skills, hooks) to the data folder |
 | `src/shared/behaviour-analytics.ts`, `agent-tools.ts` | Goal behaviour profile; agent tool list and bridge file contract |
 | `src/shared/focus-insights.ts`, `insight-stats.ts` | Pure insight engine with its thresholds (`INSIGHT_THRESHOLDS`), and its numerical methods (Kaplan–Meier, ridge, lasso and elastic net, correlation and variance inflation, k-means++) |
 | `native/stats/`, `src/shared/stats-wasm.ts` | Rust kernels of `insight-stats.ts`, and the generated WebAssembly module that embeds them |

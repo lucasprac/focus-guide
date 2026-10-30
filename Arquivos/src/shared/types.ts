@@ -87,7 +87,9 @@ export interface TimerSnapshot {
   pauseReason: string | null;
 }
 /* Runtime state of the local agent bridge; it never reaches settings, datasets or backups. */
-export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: string; launch: { command: string; args: string[]; env: Record<string, string> } | null }
+export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: string; launch: { command: string; args: string[]; env: Record<string, string> } | null; plugin?: AgentPluginStatus | null }
+/* The Claude Code plugin files in the data folder. current is false after an app update or move. */
+export interface AgentPluginStatus { path: string; version: string; current: boolean }
 /* Runtime state of the attention check-in that is on screen now; it never reaches settings, datasets or backups. */
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
 export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
@@ -95,7 +97,7 @@ export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVer
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
 export type Command =
   | 'goal.create' | 'goal.update' | 'goal.delete' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide' | 'goal.behaviour'
-  | 'agent.proposal.apply' | 'agent.proposal.reject' | 'agent.change.undo'
+  | 'agent.proposal.apply' | 'agent.proposal.reject' | 'agent.change.undo' | 'agent.plugin.write'
   | 'export.goals'
   | 'field.create' | 'field.update' | 'field.archive' | 'field.delete'
   | 'task.create' | 'task.update' | 'task.delete'

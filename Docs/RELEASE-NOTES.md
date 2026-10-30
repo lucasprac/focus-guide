@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased (3.6.0) — Claude Code plugin: skills and hooks for the agent
+
+- **Plugin.** **Settings > AI agent (MCP) > Create plugin files** writes a Claude Code plugin to `claude-plugin/` in the data folder, with the commands to install it. The plugin contains the MCP server, four skills and hooks. New command `agent.plugin.write` (main process only).
+- **Skills.** `weekly-review`, `pattern-analysis`, `plan-day` and `roadmap` give the agent a fixed method that uses the access level, the roadmap revision rules and the evidence rules (associations are not causes, `null` is unknown, give the sample size).
+- **Hooks.** Session start: access level and counts only. Before edits: a rationale is required, `update_roadmap` needs the revision from a `get_goal` in the same session, and roadmap replacement or archiving asks the user. After proposals and edits: a reminder to tell the user where to apply or undo. A local log `agent-hook-log.jsonl` keeps the tool name and result of each call, never the content.
+- The hooks run `focus-guide-mcp.cjs --hook <event>` with the app executable, so no Node.js installation is needed. The bridge client moved to `src/mcp/client.ts`. No change to data, schema or backups.
+
 ## Unreleased (3.5.0) — Floating bar: drag to an edge, vertical at the sides, palette colour
 
 - **Orientation.** The floating bar is horizontal at the top and bottom of the screen (it fills from left to right) and vertical at the left and right edges (it fills from bottom to top). At a side edge the check-in and the panel open beside the bar, toward the centre of the screen.

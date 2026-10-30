@@ -24,7 +24,7 @@ The profile uses finished, included sessions linked to the goal. It shows time b
 
 ### Direct changes by an AI agent
 
-When you allow **Read and edit** in **Settings > AI agent**, a local AI agent can create goals and change goals, roadmaps, roadmap step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups.
+When you allow **Read and edit** in **Settings > AI agent**, an AI agent can create goals and change goals, roadmaps, roadmap step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups.
 
 - **Agent activity** on the Goals page and on each goal's Overview lists every change with the app's summary and the agent's reason. **Undo** puts back the earlier state. A goal, task or action that the agent created is archived, not deleted. If you changed the record after the agent did, the app asks before it overwrites your later edit.
 - The agent replaces a roadmap only with the revision that it read. A row keeps its links only when its title stays the same. Rows that the agent leaves out are archived. New steps start open, and steps that you ticked stay ticked.
@@ -33,7 +33,7 @@ When you allow **Read and edit** in **Settings > AI agent**, a local AI agent ca
 
 ### Proposals from an AI agent
 
-When you allow **Read and propose** in **Settings > AI agent**, a local AI agent can propose a new goal, a revised roadmap, tasks, a weekly action or a review note. Proposals appear on the goal list (new goals) and on the goal's Overview.
+When you allow **Read and propose** in **Settings > AI agent**, an AI agent can propose a new goal, a revised roadmap, tasks, a weekly action or a review note. Proposals appear on the goal list (new goals) and on the goal's Overview.
 
 - **Apply** runs the change. **Edit then apply** lets you change the title, outcome, roadmap Markdown or note first. **Reject** keeps the proposal in the history without a change.
 - A roadmap proposal keeps the identity of each row whose title matches, so task and session links stay. Rows that the proposal leaves out are archived, not deleted. A step that you checked stays checked.

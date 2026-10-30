@@ -1,6 +1,8 @@
 # Focus Guide — user guide
 
-Version 2.0.0 · Windows x64 · English · offline
+Version 2.0.0 · Windows x64 · English · local records · AI agent support
+
+Focus Guide records your focus sessions, goals, tasks and behaviour. It finds patterns in your development, and it can connect to an AI agent. The app and the agent analyse four areas: focus, goals, workflow and behaviour. They tell you which behaviours to keep or change to get more focus time and reach more goals. Your records stay on this computer. You control what an agent can read or change. See [Connect an AI agent (MCP)](#connect-an-ai-agent-mcp).
 
 This guide describes the app in the `Aplicativo` folder. For the current interface, see [Visual design](VISUAL-DESIGN.md).
 
@@ -10,7 +12,7 @@ This guide describes the app in the `Aplicativo` folder. For the current interfa
 2. Open **Focus Guide.lnk** in the **Focus App** folder. Or, open **Aplicativo/FocusGuide.exe** directly.
 3. Keep all the files of that folder together. The executable needs its bundled resources, DLLs and locale files.
 
-The app contains its own runtime. You do not need Node.js or an account. After extraction, the app does not need an internet connection.
+The app contains its own runtime. You do not need Node.js or an account. After extraction, the app does not need an internet connection. An AI agent needs its own client. If the agent uses a cloud model, the agent needs an internet connection.
 
 This is an unsigned personal build. Thus Windows can show a warning about an unknown publisher. The checksums supplied with this release identify the files of the release.
 
@@ -64,7 +66,16 @@ For the full rules, see [Goal planning](GOAL-PLANNING.md).
 
 ## Connect an AI agent (MCP)
 
-Focus Guide can serve a local AI agent, such as Claude Code or Claude Desktop, through the Model Context Protocol (MCP). The agent can read your goals and focus records, and it can propose changes that you review.
+Focus Guide can serve an AI agent, such as Claude Code or Claude Desktop, through the Model Context Protocol (MCP). The agent can read your goals and focus records, and it can propose changes that you review.
+
+Use the agent to find patterns in your development:
+
+- **Focus:** `list_sessions` and `get_focus_insights` show when and how long you focus, and what interrupts you.
+- **Goals:** `get_goal` and `get_overview` show the progress of each goal and its roadmap.
+- **Workflow:** `get_weekly_review` shows one week of a goal: recorded time, planned action check-ins and roadmap progress.
+- **Behaviour:** `get_goal_behaviour` and `get_focus_insights` show your activity, check-in and reflection patterns.
+
+These values describe your records. They do not measure attention, and an association is not a cause. The agent can then help you plan the next week, adjust a roadmap or change a habit.
 
 1. Open **Settings > AI agent (MCP)**.
 2. Choose the access level:
@@ -87,6 +98,32 @@ The configuration starts `FocusGuide.exe` as a small MCP server. You do not need
 The tool `get_focus_insights` gives the agent the same values as the Insights tab of Patterns. They describe your records and are not scores of attention. The default range is the last 90 days. Each curve has at most 60 points.
 
 The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analyse_goal_behaviour` give the agent a ready plan for these tasks.
+
+### Claude Code plugin
+
+For Claude Code, the plugin is the easier way to connect. It contains the MCP server, four skills and hooks.
+
+1. In **Settings > AI agent (MCP)**, choose an access level, then select **Create plugin files**. Focus Guide writes the plugin to the `claude-plugin` folder in its data folder.
+2. Copy the commands that appear and run them in a terminal:
+   - `claude plugin marketplace add "<the folder>"`
+   - `claude plugin install focus-guide@focus-guide-local`
+3. Restart Claude Code. If you also added the `focus-guide` entry yourself, remove it, so that the agent does not see each tool two times.
+
+The skills give the agent a fixed method for four tasks. You can ask in your own words, or type the skill name:
+
+- `/focus-guide:weekly-review`: reviews the week of your goals and saves one small adjustment for each goal.
+- `/focus-guide:pattern-analysis`: finds patterns in focus, goals, workflow and behaviour, with the evidence for each pattern.
+- `/focus-guide:plan-day`: plans today's focus sessions from your planned actions, tasks, roadmap steps and best hours.
+- `/focus-guide:roadmap`: creates a goal with a roadmap, or splits and adjusts the roadmap of a goal.
+
+The hooks run on this computer:
+
+- At the start of a session, they tell the agent the access level and how many goals, proposals and planned actions you have. They do not send your goal titles or notes.
+- Before an edit, they require a reason from the agent. They refuse a roadmap replacement unless the agent read the current roadmap in the same session. Claude Code asks you before the agent replaces a roadmap, archives or completes a task, or archives a weekly action.
+- After a proposal or an edit, they remind the agent to tell you where to apply or undo it.
+- They log each Focus Guide tool call (time, tool name and result only) to `agent-hook-log.jsonl` in the data folder.
+
+After you update or move Focus Guide, select **Update plugin files**, then run `claude plugin marketplace update focus-guide-local` and `claude plugin update focus-guide@focus-guide-local`.
 
 ## Begin a focus session
 
