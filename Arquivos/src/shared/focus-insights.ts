@@ -4,7 +4,7 @@ import { TIME_BANDS, WEEKDAYS } from './behaviour-analytics';
 import { durationSuggestion } from './goal-planning';
 import { goalData } from './goal-types';
 import { activityModeLabel } from './labels';
-import { Z90, collinearity, differenceInterval, kMeans, kaplanMeier, meanInterval, mulberry32, penalizedFit, penalizedSelect, quantile, ridgeFit, ridgeSelect, silhouettes, t90, zUpper } from './insight-stats';
+import { Z90, collinearity, differenceInterval, kMeansStarts, kaplanMeier, meanInterval, modelBootstrap, modelFits, mulberry32, quantile, silhouettes, t90, zUpper } from './insight-stats';
 import { t, type Language } from './i18n';
 
 /* Personal insight engine: processing rules, analyses and suggestions over the selected sessions.
@@ -394,9 +394,9 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
   if (minutes.length < S.minutes || sessions < S.sessions) return unavailable(t('Needs {minutes} activity minutes with input time from {sessions} sessions ({plural} from {plural2} so far).', { minutes: S.minutes, sessions: S.sessions, plural: plural(minutes.length, 'minute'), plural2: plural(sessions, 'session') }));
   // Window switches join the clustering as a sixth column when most minutes have them; a minute without a count takes the mean.
   const dims = minutes.filter(m => !Number.isNaN(m.v[5])).length >= S.switchCoverage * minutes.length ? 6 : 5, columns = Array.from({ length: dims }, (_, j) => j);
-  const present = (j: number) => minutes.filter(m => !Number.isNaN(m.v[j]));
-  const means = columns.map(j => present(j).reduce((sum, m) => sum + m.v[j], 0) / present(j).length);
-  const sds = columns.map(j => Math.sqrt(present(j).reduce((sum, x) => sum + (x.v[j] - means[j]) ** 2, 0) / present(j).length));
+  const present = columns.map(j => minutes.filter(m => !Number.isNaN(m.v[j])));
+  const means = columns.map(j => present[j].reduce((sum, m) => sum + m.v[j], 0) / present[j].length);
+  const sds = columns.map(j => Math.sqrt(present[j].reduce((sum, x) => sum + (x.v[j] - means[j]) ** 2, 0) / present[j].length));
   const z = minutes.map(m => columns.map(j => sds[j] > 1e-9 && !Number.isNaN(m.v[j]) ? (m.v[j] - means[j]) / sds[j] : 0));
   // A seeded partial shuffle picks the training minutes; the silhouette uses the first of them.
   const random = mulberry32(42), order = minutes.map((_, i) => i), take = Math.min(order.length, S.trainMinutes);
@@ -405,12 +405,7 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
   const fits: Array<{ centroids: number[][]; labels: number[] }> = [];
   for (let k = S.minK; k <= S.maxK; k++) {
     // One k-means++ start can stop in a poor local optimum; the start with the lowest within-state spread stays.
-    let best: { centroids: number[][]; labels: number[]; spread: number } | null = null;
-    for (let start = 0; start < S.starts; start++) {
-      const fit = kMeans(train, k, random); if (fit.centroids.length < k) break;
-      let spread = 0; train.forEach((v, i) => { const c = fit.centroids[fit.labels[i]]; for (let j = 0; j < v.length; j++) spread += (v[j] - c[j]) ** 2; });
-      if (!best || spread < best.spread - 1e-9) best = { ...fit, spread };
-    }
+    const best = kMeansStarts(train, k, random, S.starts);
     if (!best) break; fits.push(best);
   }
   if (!fits.length) return unavailable(t('Your activity minutes are too similar to separate into states.'));
@@ -548,7 +543,7 @@ function estimateModel(rated: Facts[], y: number[], contexts: DayContext[], base
   let baseline = 0;
   for (let tk = n - tests; tk < n; tk++) {
     const { columns, rows } = design(tk), scale = scalerOf(rows, tk), train = rows.slice(0, tk).map(scale.apply), target = y.slice(0, tk), row = scale.apply(rows[tk]);
-    const fits = { ridge: ridgeSelect(train, target, lambdas(tk)), lasso: penalizedSelect(train, target, 1), 'elastic-net': penalizedSelect(train, target, alpha) };
+    const fits = modelFits(train, target, lambdas(tk), alpha);
     for (const id of ['ridge', 'lasso', 'elastic-net'] as const) error[id] += Math.abs(predict(fits[id], row) - y[tk]);
     for (const id of ['lasso', 'elastic-net'] as const) kept[id].push(new Set(columns.filter((_, j) => scale.sds[j] > 1e-9 && Math.abs(fits[id].coefficients[j]) > M.selectedAbove).map(c => c.name)));
     baseline += Math.abs(mean(y.slice(0, tk))! - y[tk]);
@@ -572,22 +567,22 @@ function estimateModel(rated: Facts[], y: number[], contexts: DayContext[], base
   const diagnostics: ModelDiagnostics = { maxVif, maxCorrelation, collinear, pairs: pairs.slice(0, 5) };
   const useful = !gated || (baselineMae > 0 && mae[estimator] <= (1 - M.usefulGain) * baselineMae);
   const comparison = t('{v1} vs {v2} points of error over {tests} later sessions', { v1: mae[estimator].toFixed(2), v2: baselineMae.toFixed(2), tests });
-  const ridgeFinal = ridgeSelect(x, y, lambdas(n)), lassoFinal = penalizedSelect(x, y, 1), netFinal = penalizedSelect(x, y, alpha);
+  const { ridge: ridgeFinal, lasso: lassoFinal, 'elastic-net': netFinal } = modelFits(x, y, lambdas(n), alpha);
   const chosen = estimator === 'ridge' ? ridgeFinal : estimator === 'lasso' ? lassoFinal : netFinal;
   const result = { eligible: true, n, useful, trainedOn: n, tested: tests, lambda: chosen.lambda, mae: mae[estimator], baselineMae, estimator, candidates, diagnostics, decision };
   if (!useful) return { ...result, reason: t('The model does not predict your next rating clearly better than your average rating ({comparison}), so no associations are shown.', { comparison }), features: [], zeroed: [] };
   const effects = (beta: number[]) => beta.map((b, j) => scale.sds[j] <= 1e-9 ? 0 : columns[j].kind === 'sd' ? b : b / scale.sds[j] * (columns[j].kind === 'contrast' ? 2 : 1));
   const sinAt = columns.findIndex(c => c.name === 'hourSin'), cosAt = columns.findIndex(c => c.name === 'hourCos'), merged = sinAt >= 0 && cosAt >= 0 && live[sinAt] && live[cosAt];
   const peak = (effect: number[]) => Math.hypot(effect[sinAt], effect[cosAt]);
-  const random = mulberry32(42), draws: number[][] = [], amplitudes: number[] = [], lassoCount = new Array<number>(columns.length).fill(0);
+  // Resample b refits the rows picks[b * n …]; all resamples run in one call.
+  const random = mulberry32(42), picks = new Float64Array(M.bootstrap * n).map(() => Math.floor(random() * n)), draws: number[][] = [], amplitudes: number[] = [], lassoCount = new Array<number>(columns.length).fill(0);
+  const resampled = modelBootstrap(x, y, picks, estimator, { ridge: ridgeFinal.lambda, lasso: lassoFinal.lambda, 'elastic-net': netFinal.lambda }, alpha);
   let peakCount = 0;
-  for (let b = 0; b < M.bootstrap; b++) {
-    const pick = Array.from({ length: n }, () => Math.floor(random() * n)), xb = pick.map(i => x[i]), yb = pick.map(i => y[i]);
-    const lassoDraw = penalizedFit(xb, yb, lassoFinal.lambda, 1), draw = estimator === 'lasso' ? lassoDraw : estimator === 'ridge' ? ridgeFit(xb, yb, ridgeFinal.lambda) : penalizedFit(xb, yb, netFinal.lambda, alpha);
-    const effect = effects(draw.coefficients); draws.push(effect); if (merged) amplitudes.push(peak(effect));
-    lassoDraw.coefficients.forEach((v, j) => { if (Math.abs(v) > M.selectedAbove) lassoCount[j]++; });
-    if (merged && (Math.abs(lassoDraw.coefficients[sinAt]) > M.selectedAbove || Math.abs(lassoDraw.coefficients[cosAt]) > M.selectedAbove)) peakCount++;
-  }
+  resampled.draw.forEach((coefficients, b) => {
+    const lassoDraw = resampled.lasso[b], effect = effects(coefficients); draws.push(effect); if (merged) amplitudes.push(peak(effect));
+    lassoDraw.forEach((v, j) => { if (Math.abs(v) > M.selectedAbove) lassoCount[j]++; });
+    if (merged && (Math.abs(lassoDraw[sinAt]) > M.selectedAbove || Math.abs(lassoDraw[cosAt]) > M.selectedAbove)) peakCount++;
+  });
   // Plain percentile intervals: with shrinkage they need not contain the estimate.
   const estimate = effects(chosen.coefficients), windowShare = (matches: (name: string) => boolean) => kept.lasso.filter(set => [...set].some(matches)).length / kept.lasso.length;
   const feature = (j: number): ModelFeature => { const sorted = draws.map(d => d[j]).sort((a, b) => a - b); return { name: columns[j].name, label: columns[j].label(scale.sds[j]), effect: { estimate: estimate[j], low: quantile(sorted, 0.05), high: quantile(sorted, 0.95) },

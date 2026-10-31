@@ -1644,6 +1644,7 @@ export const PT_BR: Record<string, string> = {
   'The roadmap changed since you read it, or the revision is missing. Its current roadmapRevision is {current}. Read it again with get_goal before you change it.': 'O roteiro mudou desde que você o leu, ou a revisão está ausente. A roadmapRevision atual é {current}. Leia-o novamente com get_goal antes de alterá-lo.',
   'The same figures as in Patterns, for sessions linked to this goal in the range above. {tried}': 'Os mesmos números de Padrões, para as sessões vinculadas a esta meta no período acima. {tried}',
   'The session’s time counts toward this step.': 'O tempo da sessão conta para esta etapa.',
+  'The resample indices are not valid rows.': 'Os índices da reamostragem não são linhas válidas.',
   'The shape of a session': 'O formato de uma sessão',
   'The shape of your sessions': 'O formato das suas sessões',
   'The statistics engine is still loading. Try again in a moment.': 'O motor de estatística ainda está carregando. Tente novamente em instantes.',

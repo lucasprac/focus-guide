@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased (3.10.2) — Faster insights
+
+- **Speed.** An uncached Insights read takes about 330 ms instead of 420 ms at 1 020 sessions. Three new Rust kernels (`modelFits`, `modelBootstrap`, `kMeansStarts`) run whole loops of the engine in one WebAssembly call, so each matrix is copied once. Interaction states also filter the activity minutes once per column instead of four times.
+- **Same numbers.** Every value is the same to the last bit. No schema or backup format change.
+- **Build.** Changing `native/stats` needs the `wasm32-unknown-unknown` Rust target (`rustup target add wasm32-unknown-unknown`).
+
 ## Unreleased (3.10.1) — Backups from 3.9.0 restore again
 
 - **Fix.** In 3.9.0, every JSON backup included `settings.jevAssist`, but restore did not accept that key. Each restore of such a backup stopped with "The backup contains unsupported fields." Now a backup does not include `jevAssist`, and restore accepts a backup that has it. Restore still turns TypeSafe judgments off.
