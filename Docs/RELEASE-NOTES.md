@@ -1,5 +1,10 @@
 # Release notes
 
+## Unreleased (3.10.1) — Backups from 3.9.0 restore again
+
+- **Fix.** In 3.9.0, every JSON backup included `settings.jevAssist`, but restore did not accept that key. Each restore of such a backup stopped with "The backup contains unsupported fields." Now a backup does not include `jevAssist`, and restore accepts a backup that has it. Restore still turns TypeSafe judgments off.
+- No schema change.
+
 ## Unreleased (3.10.0) — Calendar hours and a 12-hour clock
 
 - **Day and week views.** The Calendar has a **Day / Week / Month** switch. Week is the default. Day and week show the hours 00–23 on a vertical axis, as in a planner. Each recorded session is a block in the colour of its area. The block goes from the first to the last active minute of the session on that day, in the session's recording timezone. A session that continues past midnight shows on both days. Excluded sessions have a dashed, faded block. A red line marks the current time on today.

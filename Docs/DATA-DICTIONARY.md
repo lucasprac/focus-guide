@@ -703,6 +703,6 @@ No schema bump. Backups do not change.
 
 | Property | Meaning |
 |---|---|
-| `settings.jevAssist` | `true` lets the user start TypeSafe Jev checks. The default is `false`. A missing key gets `false`. Every restore sets it to `false`. |
+| `settings.jevAssist` | `true` lets the user start TypeSafe Jev checks. The default is `false`. A missing key gets `false`. Every restore sets it to `false`. `makeBackup` omits it; restore accepts it, because backups from 3.9.0 have it. |
 
 The TypeSafe API key is not a record. It is in `typesafe-key.bin` in the data folder, encrypted with Windows. It is not in the database, in backups or in exports. A main-distraction answer that the user saves from a suggestion is a normal `detractor` value, with an `edit` event that holds the old values.

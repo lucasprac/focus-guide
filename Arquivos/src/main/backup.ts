@@ -170,8 +170,8 @@ export function validateBackup(value: unknown): BackupFile {
   for (const s of sessions) if (Math.abs((totals.get(s.id) ?? 0) - s.activeMs) > 1) throw new Error(t('Recorded time does not match the active intervals.'));
   if (sessions.filter(s => s.status !== 'completed').length > 1) throw new Error(t('The backup contains multiple unfinished sessions.'));
   const settingsInput = v.object(data.settings);
-  // Appearance fields are optional in older version-1 backups.
-  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', focusVisual: 'brain', floatingStyle: 'brain', timeFormat: '24h', attentionProbes: false, language: 'en', collectedAchievements: {}, ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess', 'focusVisual', 'floatingStyle', 'timeFormat', 'attentionProbes', 'language', 'collectedAchievements']);
+  // Appearance fields are optional in older version-1 backups. Backups from 3.9.0 carry jevAssist; restore turns it off anyway.
+  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', focusVisual: 'brain', floatingStyle: 'brain', timeFormat: '24h', attentionProbes: false, jevAssist: false, language: 'en', collectedAchievements: {}, ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess', 'focusVisual', 'floatingStyle', 'timeFormat', 'attentionProbes', 'jevAssist', 'language', 'collectedAchievements']);
   const base: Dataset = { fields,tasks,sessions,events,reviews,categories,settings: v.settings(settingsInput),activity };
   const domain = validateGoalData(Object.fromEntries(GOAL_COLLECTIONS.map(key => [key,data[key]])),base);
   return { ...base,...domain,format: 'focus-guide',schemaVersion: 11,exportedAt: v.timestamp(data.exportedAt) };
@@ -183,9 +183,10 @@ export function readBackup(path: string): BackupFile {
   return validateBackup(JSON.parse(content.toString('utf8').replace(/^\uFEFF/, '')));
 }
 /* English is the default, so a backup of an English dataset has no language and stays as it was before the setting existed.
-   In the same way, a backup without collected achievements has no collectedAchievements, and a 24-hour clock has no timeFormat. */
+   In the same way, a backup without collected achievements has no collectedAchievements, and a 24-hour clock has no timeFormat.
+   jevAssist is never in a backup: restore turns TypeSafe judgments off. */
 function backupSettings(settings: Dataset['settings']): Dataset['settings'] {
-  const { language, collectedAchievements, timeFormat, ...rest } = settings;
+  const { language, collectedAchievements, timeFormat, jevAssist: _jevAssist, ...rest } = settings;
   return { ...rest, ...(language === 'pt-BR' ? { language } : {}), ...(timeFormat === '12h' ? { timeFormat } : {}), ...(collectedAchievements && Object.keys(collectedAchievements).length ? { collectedAchievements } : {}) };
 }
 export function makeBackup(data: Dataset): BackupFile {

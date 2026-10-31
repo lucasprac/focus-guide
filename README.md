@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6D4AFF"></a>
   <img alt="Platform: Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-2F62D9">
-  <img alt="Version 3.10.0" src="https://img.shields.io/badge/version-3.10.0-6D4AFF">
+  <img alt="Version 3.10.1" src="https://img.shields.io/badge/version-3.10.1-6D4AFF">
 </p>
 
 ![Goals page with an agent proposal and four goal cards](Docs/images/goals.png)
