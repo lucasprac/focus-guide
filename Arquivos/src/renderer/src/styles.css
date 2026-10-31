@@ -948,7 +948,8 @@ button:active:not(:disabled) { filter: brightness(.94); }
 .planned-row-meta { font-size: var(--text-caption); color: var(--muted); }
 .planned-row-plan { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--text-caption); line-height: 1.5; color: var(--text); }
 .planned-row-plan svg { flex-shrink: 0; color: var(--muted); }
-.day-plan-dot { position: absolute; bottom: 7px; left: 7px; width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; }
+/* Top-right, beside the session dot, so it never overlaps the duration text below the day number. */
+.day-plan-dot { position: absolute; top: 11px; right: 17px; width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; }
 @container workspace (max-width: 900px) {
   .goal-action-heading { flex-direction: column; }
   .goal-outcome-grid { gap: 12px; }

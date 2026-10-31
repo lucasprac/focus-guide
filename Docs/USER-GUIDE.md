@@ -325,7 +325,13 @@ The app saves focus time at each transition and does a checkpoint every five sec
 
 ## Calendar
 
-The monthly calendar shows before the planned actions of the selected day. The calendar and the annual heatmap can show **Recorded time**, **Sessions** or **Self-rated focus**. The field filter includes archived fields. To see the session timeline and parked thoughts of a day, select the day.
+Use **Day**, **Week** or **Month** to change the view. **Today** and the arrows move by one day, one week or one month.
+
+- **Day** and **Week** show the hours of the day. Each recorded session is a block in the colour of its area, from its first to its last active minute on that day. Select a block to see the session in **A closer look**. Select a date at the top of a column to see that day.
+- Planned actions have a date but no time. In the day and week views, they show as dashed chips in the **Plans** row above the hours. In the month view, they show as outlined dots.
+- To use 12-hour time (1:00 PM) instead of 24-hour time (13:00), go to **Settings > Appearance & feedback > Time format**.
+
+The planned actions of the selected day show below the calendar. The month view and the annual heatmap can show **Recorded time**, **Sessions** or **Self-rated focus**. The field filter includes archived fields. To see the session timeline and parked thoughts of a day, select the day.
 
 - When an active interval continues past midnight, the app divides it between the two days. It uses the saved timezone of the session.
 - Session counts and ratings belong to the start day.

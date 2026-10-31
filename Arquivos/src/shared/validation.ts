@@ -1,4 +1,4 @@
-import type { AgentAccess, FloatingStyle, FocusVisual, Settings } from './types';
+import type { AgentAccess, FloatingStyle, FocusVisual, Settings, TimeFormat } from './types';
 import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type Medication, type ProbeAnswer, type WarmUp } from './types';
 import { ACHIEVEMENT_IDS, PALETTE_IDS } from './achievements';
 import { t, isLanguage, type Language } from './i18n';
@@ -99,6 +99,7 @@ export function settings(value: unknown): Settings {
     agentAccess: agentAccess(v.agentAccess ?? 'off'),
     focusVisual: focusVisual(v.focusVisual ?? 'brain'),
     floatingStyle: floatingStyle(v.floatingStyle ?? 'brain'),
+    timeFormat: timeFormat(v.timeFormat ?? '24h'),
     attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, t('Attention check-ins')),
     jevAssist: v.jevAssist === undefined ? false : bool(v.jevAssist, t('TypeSafe judgments')),
     language: language(v.language),
@@ -121,6 +122,10 @@ function focusVisual(value: unknown): FocusVisual {
 }
 function floatingStyle(value: unknown): FloatingStyle {
   if (value !== 'brain' && value !== 'bar') throw new Error(t('Choose the brain or the bar for the floating timer.'));
+  return value;
+}
+function timeFormat(value: unknown): TimeFormat {
+  if (value !== '24h' && value !== '12h') throw new Error(t('Choose 24-hour or 12-hour time.'));
   return value;
 }
 export function agentAccess(value: unknown): AgentAccess {

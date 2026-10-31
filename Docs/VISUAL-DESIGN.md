@@ -277,6 +277,14 @@ The check-in is a prompt, not a dialog. It never takes keyboard focus, and it ne
 - Excluded and Recovered show as badges.
 - An empty day uses `EmptyState`.
 - Planned actions and the year overview use `Card`. Labels that were uppercase now use sentence case.
+- **Time grid (3.10.0).** A `Segments` control in the calendar header selects **Day**, **Week** (default) or **Month**. Day and week use `CalendarTimeGrid.tsx`; its rules are in the component layer of `app.css` (`.time-grid*`, `.time-block`).
+  - One row for every hour, `--hour-height` 48px, in a scroll area of `clamp(320px, 100vh - 360px, 620px)`. The grid opens at 07:00, or earlier when a session starts earlier. A 60px gutter holds the hour labels (`--text-badge`).
+  - Recorded time is a filled block: area colour at 22% over the panel, with a 3px area-colour left border and `--radius-chip`. Planned actions have no time of day, so they are dashed chips with an accent border in a **Plans** row above the hours. Recorded time is filled and plans are outlined, as in the month view.
+  - A block shows its title, then the time range from 50 minutes, then the recorded time from 70 minutes, so no line is cut in half. Below 110px of column width (a container query), the range shows only the start time. The full range is in the tooltip and the accessible name. Titles end in an ellipsis in narrow week columns; the full title is in the tooltip, the accessible name and **A closer look**.
+  - Selected day: accent date circle and a 4% accent tint on its column. Selected session: a 2px accent ring on the block and an accent bar on its row in **A closer look**. Current time: a 2px `--danger` line on today.
+  - Day and week give the grid more width (`2.2fr` against `1fr`). Below 900px of workspace, the layout has one column, as in the month view.
+  - Times go through `clockLabel` and `hourLabel` in `components.tsx`, which follow `settings.timeFormat`.
+- **Plan dot (3.10.0).** In the month view, `.day-plan-dot` moved from the bottom left to the top right, beside the session dot. At the bottom left it covered the recorded time in some cells.
 
 ## Page migration: Goals
 

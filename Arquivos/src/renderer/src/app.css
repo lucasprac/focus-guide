@@ -266,4 +266,43 @@
   .figure-values tbody th { font-weight: 400; }
   @container workspace (max-width: 860px) { .insights-grid { grid-template-columns: minmax(0, 1fr); } }
   @container workspace (max-width: 560px) { .forest-row { grid-template-columns: auto minmax(0, 1fr); } .forest-label { grid-column: 1 / -1; } .forest-axis > span:first-child { display: none; } }
+  /* Calendar day and week views: a 24-hour axis. Recorded sessions are filled blocks in the area colour; planned actions have no time of day, so they sit as dashed chips above the hours. */
+  .calendar-header { flex-wrap: wrap; gap: 10px 16px; }
+  /* Wider than the month view so seven day columns keep readable blocks; one column below 900px, like the legacy layout. */
+  .app-shell .calendar-layout.time-view { grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr); }
+  @container workspace (max-width: 900px) { .app-shell .calendar-layout.time-view { grid-template-columns: minmax(0, 1fr); } }
+  .time-grid { --hour-height: 48px; --gutter: 60px; display: grid; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
+  .time-grid-row { display: grid; grid-template-columns: var(--gutter) repeat(var(--days), minmax(0, 1fr)); }
+  .time-grid-gutter { padding: 6px 8px 0 0; font-size: var(--text-badge); color: var(--muted); text-align: right; }
+  .time-grid-head { border-bottom: 1px solid var(--line); }
+  .time-grid-day { display: grid; justify-items: center; gap: 2px; min-width: 0; padding: 8px 4px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--muted); font-size: var(--text-badge); text-transform: capitalize; }
+  .time-grid-day strong { display: grid; place-items: center; min-width: 30px; height: 30px; border-radius: var(--radius-pill); font-size: var(--text-title); font-weight: 500; color: var(--text); }
+  .time-grid-day:hover strong { background: var(--soft); }
+  .time-grid-day.today strong { color: var(--accent); }
+  .time-grid-day.selected strong { background: var(--accent); color: var(--on-accent); }
+  .time-grid-allday { border-bottom: 1px solid var(--line); background: var(--surface-raised, var(--background)); }
+  .time-grid-plans { display: grid; align-content: start; gap: 4px; min-width: 0; min-height: 34px; padding: 5px 4px; border-left: 1px solid var(--line); }
+  .time-grid-plan { min-width: 0; padding: 2px 6px; border: 1px dashed var(--accent); border-radius: var(--radius-chip); background: transparent; color: var(--text); font-size: var(--text-caption); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .time-grid-plan:hover { background: var(--soft); }
+  .time-grid-plan.done, .time-grid-plan.smaller { border-style: solid; color: var(--muted); }
+  .time-grid-plan.skipped { color: var(--muted); text-decoration: line-through; }
+  .time-grid-plan.more { border-color: transparent; color: var(--muted); }
+  .time-grid-scroll { height: clamp(320px, calc(100vh - 360px), 620px); overflow-y: auto; overscroll-behavior: contain; }
+  .time-grid-body { height: calc(24 * var(--hour-height)); }
+  .time-grid-hours { display: grid; grid-template-rows: repeat(24, var(--hour-height)); }
+  .time-grid-hours span { padding-right: 8px; transform: translateY(-0.7em); font-size: var(--text-badge); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .time-grid-col { position: relative; min-width: 0; container-type: inline-size; border-left: 1px solid var(--line); background-image: linear-gradient(to bottom, var(--line) 1px, transparent 1px); background-size: 100% var(--hour-height); }
+  .time-grid-col.selected { background-color: color-mix(in srgb, var(--accent) 4%, transparent); }
+  .time-block { position: absolute; top: calc(var(--start) * var(--hour-height) / 60); left: 3px; right: 3px; display: flex; flex-direction: column; gap: 0; height: max(calc(var(--span) * var(--hour-height) / 60), 22px); min-width: 0; padding: 2px 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--field, var(--blue)) 45%, transparent); border-left: 3px solid var(--field, var(--blue)); border-radius: var(--radius-chip); background: color-mix(in srgb, var(--field, var(--blue)) 22%, var(--panel)); color: var(--text); text-align: left; line-height: 1.35; }
+  .time-block:hover { background: color-mix(in srgb, var(--field, var(--blue)) 32%, var(--panel)); }
+  /* Narrow week columns show only the start time; the full range stays in the tooltip and the accessible name. */
+  @container (max-width: 110px) { .time-block-end { display: none; } }
+  .time-block.focused { box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
+  .time-block.excluded { opacity: .55; border-style: dashed; }
+  .time-block strong, .time-block span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .time-block strong { font-size: var(--text-caption); font-weight: 600; }
+  .time-block span { font-size: var(--text-badge); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .time-grid-now { position: absolute; top: calc(var(--start) * var(--hour-height) / 60); left: 0; right: 0; z-index: 2; height: 2px; background: var(--danger); pointer-events: none; }
+  .time-grid-now::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+  .timeline-session.focused { box-shadow: inset 3px 0 0 var(--accent); padding-left: 10px; }
 }

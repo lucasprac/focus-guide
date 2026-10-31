@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased (3.10.0) — Calendar hours and a 12-hour clock
+
+- **Day and week views.** The Calendar has a **Day / Week / Month** switch. Week is the default. Day and week show the hours 00–23 on a vertical axis, as in a planner. Each recorded session is a block in the colour of its area. The block goes from the first to the last active minute of the session on that day, in the session's recording timezone. A session that continues past midnight shows on both days. Excluded sessions have a dashed, faded block. A red line marks the current time on today.
+- **Planned actions** have a date but no time of day. They show as dashed chips in a **Plans** row above the hours. A done or smaller action has a solid border, and a skipped one is struck through. The month view keeps the outlined dots.
+- **Session actions.** Select a block to open its session in **A closer look**, with **Edit**, **Exclude** and **Delete** as before.
+- **Time format.** **Settings > Appearance & feedback > Time format** selects 24-hour (13:00) or 12-hour (1:00 PM) time. It applies to the hour axis, the block times and the session times on the Calendar.
+- **Fix.** In the month view, the planned-action dot moved to the top right of the day cell, beside the session dot. It no longer covers the recorded time.
+- New optional setting `timeFormat` (`24h` or `12h`, default `24h`). No schema change. A backup has `timeFormat` only when it is `12h`, so a 24-hour backup is the same as before.
+
 ## Unreleased (3.9.0) — TypeSafe Jev judgments
 
 - **Fill missing reflections.** With **Settings > TypeSafe judgments (Jev)** on and an API key saved, **Patterns > Overview** has a check. It reads up to 50 sessions of the last 90 days that have a note, parked thoughts or interruption notes but no answer to "What got in the way most?". TypeSafe Jev suggests an answer for each session. Nothing changes until you pick **Use suggestion** or another answer. If the text does not settle the answer, the app makes no suggestion.

@@ -6,6 +6,7 @@ import { Icon, type IconName } from './icons';
 import NeuralVisual from './NeuralVisual';
 import { brainFormation } from '../../shared/timer-display';
 import { t, dateLocale } from '../../shared/i18n';
+import type { TimeFormat } from '../../shared/types';
 
 export { Icon, type IconName };
 export function time(ms: number): string { const seconds = Math.ceil(Math.max(0, ms) / 1000); return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`; }
@@ -15,6 +16,9 @@ export function planComparison(plannedMinutes: number, differenceMinutes: number
   const base = t('Planned {minutesLabel} · recorded {minutesLabel2}', { minutesLabel: minutesLabel(plannedMinutes), minutesLabel2: minutesLabel(plannedMinutes + differenceMinutes) });
   return Math.abs(differenceMinutes) < 1 ? t('{base} · on plan', { base }) : t('{base} · {minutesLabel} {v3} than planned', { base, minutesLabel: minutesLabel(Math.abs(differenceMinutes)), v3: differenceMinutes > 0 ? t('more') : t('less') });
 }
+/* Times of day follow the user's clock setting: 24-hour (13:05) or 12-hour (1:05 PM). */
+export function clockLabel(time: number | string, timeZone: string, format: TimeFormat = '24h'): string { return new Date(time).toLocaleTimeString(dateLocale(), { timeZone, hour: format === '12h' ? 'numeric' : '2-digit', minute: '2-digit', hourCycle: format === '12h' ? 'h12' : 'h23' }); }
+export function hourLabel(hour: number, format: TimeFormat = '24h'): string { return format === '12h' ? new Date(Date.UTC(2000, 0, 1, hour)).toLocaleTimeString(dateLocale(), { timeZone: 'UTC', hour: 'numeric', hourCycle: 'h12' }) : `${String(hour).padStart(2, '0')}:00`; }
 export function displayDay(day: string, short = false): string { return new Date(`${day}T12:00:00Z`).toLocaleDateString(dateLocale(), { timeZone: 'UTC', month: short ? 'short' : 'long', day: 'numeric', ...(short ? {} : { weekday: 'long' }) }); }
 export function useMotionEnabled(animation: boolean) {
   const [visible, setVisible] = useState(document.visibilityState !== 'hidden');

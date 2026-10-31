@@ -24,6 +24,7 @@ export type ProbeAnswer = typeof PROBE_ANSWERS[number];
 export type FocusVisual = 'brain' | 'instrument';
 /* How the floating timer looks: the brain constellation or a thin bar that fills as time passes. Appearance only. */
 export type FloatingStyle = 'brain' | 'bar';
+export type TimeFormat = '24h' | '12h';
 /* Where the floating bar sits: the middle of one screen edge. Window placement, kept with the window bounds, not in settings. */
 export const FLOAT_BAR_POSITIONS = ['top', 'bottom', 'left', 'right'] as const;
 export type FloatBarPosition = typeof FLOAT_BAR_POSITIONS[number];
@@ -69,6 +70,8 @@ export interface Settings {
   agentAccess?: AgentAccess;
   focusVisual?: FocusVisual;
   floatingStyle?: FloatingStyle;
+  /* Clock style for times of day; absent in older data and backups, which means 24-hour. */
+  timeFormat?: TimeFormat;
   attentionProbes?: boolean;
   /* Opt-in TypeSafe Jev judgments. Off by default and after restore; the API key is never part of settings. */
   jevAssist?: boolean;

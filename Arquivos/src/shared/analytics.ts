@@ -8,6 +8,14 @@ export function parts(time: number | string, zone: string): { day: string; hour:
   const p = Object.fromEntries(fmt.formatToParts(new Date(time)).map(v => [v.type, v.value]));
   return { day: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour), weekday: p.weekday };
 }
+const clockFormatters = new Map<string, Intl.DateTimeFormat>();
+/* Minutes since local midnight in a timezone, for placing a moment on a 24-hour axis. */
+export function minuteOfDay(time: number | string, zone: string): number {
+  let fmt = clockFormatters.get(zone);
+  if (!fmt) { fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); clockFormatters.set(zone, fmt); }
+  const p = Object.fromEntries(fmt.formatToParts(new Date(time)).map(v => [v.type, v.value]));
+  return Number(p.hour) * 60 + Number(p.minute) + Number(p.second) / 60;
+}
 export function localDay(time: number | string, zone: string): string { return parts(time, zone).day; }
 export function addDays(day: string, n: number): string { return new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10); }
 export function monday(day: string): string { const weekday = new Date(`${day}T12:00:00Z`).getUTCDay(); return addDays(day, -(weekday === 0 ? 6 : weekday - 1)); }
