@@ -1,7 +1,7 @@
 import { Button, CheckControl, Hint, IconButton, cn } from './ui';
 import { useEffect, useRef, useState } from 'react';
 import { animate, createScope } from 'animejs';
-import type { AppState, Challenge, Command, CommandResult, Detractor, FocusSession, Goal, GoalOccurrence, ActivityMode } from '../../shared/types';
+import type { AppState, Challenge, Command, CommandResult, Detractor, FocusSession, Goal, GoalOccurrence, ActivityMode, Task } from '../../shared/types';
 import GoalsPage from './GoalsPage';
 import type { GoalFocusOptions } from './GoalWorkspace';
 import { ActionCheckIn } from './GoalForms';
@@ -9,7 +9,7 @@ import { MIN_INCLUDED_SESSION_MS } from '../../shared/types';
 import { brainColorProgress } from '../../shared/brain-progress';
 import { totalMinutes, localDay, planDifferenceMinutes } from '../../shared/analytics';
 import { FloatingNetwork, Icon, Modal, Rating, time, minutesLabel, planComparison, type IconName, useMotionEnabled } from './components';
-import TasksPage from './TasksPage';
+import { TaskPanel, dueTaskCount } from './TaskPanel';
 import { displayedTime, timerLabel, visualDuration } from '../../shared/timer-display';
 import FocusPage from './FocusPage';
 import CalendarPage from './CalendarPage';
@@ -25,9 +25,9 @@ import { t, dateLocale, setLanguage } from '../../shared/i18n';
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
 export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
 export interface ViewProps { data: AppState; act: Action }
-type Page = 'Goals' | 'Tasks' | 'Focus' | 'Calendar' | 'Patterns' | 'Neural World' | 'Settings';
+type Page = 'Goals' | 'Focus' | 'Calendar' | 'Patterns' | 'Neural World' | 'Settings';
 const navigation: Array<{ page: Page; icon: IconName }> = [
-  { page: 'Goals', icon: 'spark' }, { page: 'Focus', icon: 'focus' }, { page: 'Tasks', icon: 'check' }, { page: 'Calendar', icon: 'calendar' }, { page: 'Patterns', icon: 'patterns' }, { page: 'Neural World', icon: 'world' }, { page: 'Settings', icon: 'settings' }
+  { page: 'Goals', icon: 'spark' }, { page: 'Focus', icon: 'focus' }, { page: 'Calendar', icon: 'calendar' }, { page: 'Patterns', icon: 'patterns' }, { page: 'Neural World', icon: 'world' }, { page: 'Settings', icon: 'settings' }
 ];
 export default function App() {
   const mini = new URLSearchParams(window.location.search).has('mini');
@@ -36,7 +36,7 @@ export default function App() {
   const language = data?.settings.language ?? 'en';
   setLanguage(language);
   const [settingsVisited, setSettingsVisited] = useState(false), [tutorialOpen, setTutorialOpen] = useState(false);
-  const [taskGoalId,setTaskGoalId] = useState<string | null>(null), [activeGoalId,setActiveGoalId] = useState<string | null>(null);
+  const [tasksOpen,setTasksOpen] = useState(false), [activeGoalId,setActiveGoalId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('Goals'), [review, setReview] = useState<FocusSession | null>(null), [focus, setFocus] = useState<number | null>(null), [note, setNote] = useState('');
   const [detractor, setDetractor] = useState<Detractor | null>(null), [challenge, setChallenge] = useState<Challenge | null>(null);
   const [preparation, setPreparation] = useState<SessionPreparation>({ fieldId: '', checklistIds: [], primaryTaskId: null });
@@ -89,6 +89,13 @@ export default function App() {
     const scope = createScope({ root }).add(() => { animate('.page-heading', { opacity: [0, 1], y: [8, 0], duration: 280, ease: 'outQuad' }); });
     return () => scope.revert();
   }, [page, motion, mini]);
+  // Ctrl+Shift+T opens the task panel; it is a key of this window only, not a global shortcut.
+  useEffect(() => {
+    if (mini) return;
+    const key = (e: KeyboardEvent) => { if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyT') { e.preventDefault(); setTasksOpen(open => !open); } };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [mini]);
   useEffect(() => { if (!notice) return; const timeout = window.setTimeout(() => setNotice(''), 5000); return () => window.clearTimeout(timeout); }, [notice]);
   const act: Action = async (command, input = {}) => {
     try {
@@ -135,7 +142,15 @@ export default function App() {
     setPreparation({ fieldId: goal.fieldId,checklistIds: options.taskId ? [options.taskId] : [],primaryTaskId: options.taskId ?? null,goalId: goal.id,milestoneId: options.milestoneId ?? null,occurrenceId: null,intention: options.intention ?? '',durationMinutes: data.settings.defaultMinutes,activityMode: latest?.activityMode ?? data.settings.activityModes?.[goal.fieldId] ?? 'Unspecified',preparedAt: crypto.randomUUID() });
     setPage('Focus');
   };
-  const openGoalTasks = (goal: Goal) => { setTaskGoalId(goal.id); if (data.timer.mode === 'idle') setPreparation({ fieldId: goal.fieldId,checklistIds: [],primaryTaskId: null }); setPage('Tasks'); };
+  // Focus on one task from the panel: the session takes the task's area and the task as its primary task.
+  const focusTask = (task: Task) => {
+    setTasksOpen(false);
+    if (data.timer.mode !== 'idle') { setPage('Focus'); return; }
+    if (!data.fields.some(f => f.id === task.fieldId && !f.archived)) return;
+    setPreparation({ fieldId: task.fieldId,checklistIds: [task.id],primaryTaskId: task.id,goalId: null,milestoneId: null,occurrenceId: null,intention: task.title,durationMinutes: data.settings.defaultMinutes,activityMode: data.settings.activityModes?.[task.fieldId] ?? 'Unspecified',preparedAt: crypto.randomUUID() });
+    setPage('Focus');
+  };
+  const dueTasks = dueTaskCount(data);
   return <div className="app-shell" key={language} ref={root} data-page={page}>
     <aside className={`sidebar ${data.settings.sidebarCollapsed ? 'collapsed' : ''}`} id="side-panel"><div className="brand"><span className="brand-mark"><img src={`${import.meta.env.BASE_URL}icon.png`} alt="" draggable={false} /></span><div>Focus Guide</div><Hint label={data.settings.sidebarCollapsed ? t('Expand side panel') : t('Collapse side panel')}><button className="sidebar-toggle" aria-label={data.settings.sidebarCollapsed ? t('Expand side panel') : t('Collapse side panel')} title={data.settings.sidebarCollapsed ? t('Expand side panel') : t('Collapse side panel')} aria-expanded={!data.settings.sidebarCollapsed} aria-controls="side-panel" onClick={() => void act('settings.update', { ...data.settings, sidebarCollapsed: !data.settings.sidebarCollapsed })}><Icon name="chevron" size={16} /></button></Hint></div>
       <nav aria-label={t('Main navigation')}>{navigation.map(item => <Hint key={item.page} label={t(item.page)} enabled={data.settings.sidebarCollapsed}><button className={cn('nav-item rounded-control text-label transition-colors duration-150 ease-standard', page === item.page ? 'active border-transparent bg-accent-soft font-medium text-accent' : 'text-ink hover:bg-accent-soft')} onClick={() => setPage(item.page)} aria-label={t(item.page)} title={t(item.page)} aria-current={page === item.page ? 'page' : undefined}><Icon name={item.icon} /><span>{t(item.page)}</span></button></Hint>)}</nav>
@@ -147,6 +162,7 @@ export default function App() {
           <button className="timer-chip inline-flex items-center gap-2 rounded-pill border border-line bg-surface px-3 py-1.5 text-caption text-ink tabular-nums transition-colors duration-150 ease-standard hover:bg-accent-soft" onClick={() => setPage('Focus')} aria-label={t('Open Focus. {timerLabel}', { timerLabel: timerLabel(data.timer) })}><span className={`status-light m-0 ${data.timer.running ? 'running' : ''}`} />{data.timer.phase === 'overtime' ? '+' : ''}{time(displayedTime(data.timer))}<span className="text-ink-muted">{!data.timer.running ? t('paused') : data.timer.phase === 'overtime' ? t('overtime') : data.timer.phase === 'stopwatch' ? t('stopwatch') : data.timer.mode === 'break' ? t('break') : t('focusing')}</span></button>
           <IconButton icon={data.timer.running ? 'pause' : 'play'} label={data.timer.running ? t('Pause timer') : t('Resume timer')} onClick={() => void act(data.timer.running ? 'session.pause' : 'session.resume')} />
         </div>}
+        <Button variant="ghost" size="sm" icon="check" aria-haspopup="dialog" aria-expanded={tasksOpen} title={t('Tasks (Ctrl+Shift+T)')} onClick={() => setTasksOpen(true)}>{t('Tasks')}{dueTasks > 0 && <span className="task-due-count" aria-label={t('{length} due', { length: dueTasks })}>{dueTasks}</span>}</Button>
         <IconButton className="theme-toggle" icon={data.settings.theme === 'dark' ? 'sun' : 'moon'} label={data.settings.theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')} onClick={() => void act('settings.update', { ...data.settings, theme: data.settings.theme === 'dark' ? 'light' : 'dark' })} />
         <Button variant="ghost" size="sm" icon="float" onClick={() => void act('window.float')}>{t('Floating timer')}</Button>
       </div>{data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} />}</div>
@@ -155,13 +171,13 @@ export default function App() {
       {data.timer.mode === 'focus' && <ProbeAnnouncer probe={data.probe} />}
       <div className="page-content">
         <div hidden={page !== 'Focus'}><FocusPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} visible={page === 'Focus'} /></div>
-        {page === 'Goals' && <GoalsPage data={data} act={act} startAction={startAction} openTasks={openGoalTasks} focusGoal={focusGoal} activeGoalId={activeGoalId} openGoal={setActiveGoalId} />}
-        {page === 'Tasks' && <TasksPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} initialGoalId={taskGoalId} openFocus={() => setPage('Focus')} />}
+        {page === 'Goals' && <GoalsPage data={data} act={act} startAction={startAction} focusGoal={focusGoal} activeGoalId={activeGoalId} openGoal={setActiveGoalId} />}
         {page === 'Calendar' && <CalendarPage data={data} act={act} />}
         {page === 'Patterns' && <PatternsPage data={data} act={act} openTutorial={() => setTutorialOpen(true)} />}
         {page === 'Neural World' && <WorldPage data={data} act={act} openGoal={id => { setActiveGoalId(id); setPage('Goals'); }} focusGoal={focusGoal} />}
         {settingsVisited && <div hidden={page !== 'Settings'}><SettingsPage data={data} act={act} visible={page === 'Settings'} openTutorial={() => setTutorialOpen(true)} /></div>}
       </div>
+      <TaskPanel data={data} act={act} open={tasksOpen} onClose={() => setTasksOpen(false)} focusTask={focusTask} />
     </main>
     <BehaviourTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} goTo={setPage} />
     <Modal open={!!(review && reviewed)} title={t('A moment to notice.')} onClose={() => setReview(null)}>{review && reviewed && <><div className="completion-symbol"><Icon name="spark" size={28} /></div><p className="modal-intro">{t('You made room for')}{' '}<strong>{minutesLabel(review.activeMs / 60000)}</strong>{' '}{t('of {v1}. What was it like?', { v1: data.goals?.find(g => g.id === reviewed.goalId)?.title ?? data.fields.find(f => f.id === review.fieldId)?.name.toLowerCase() ?? t('focus') })}</p>{planDifferenceMinutes(review) !== null && <p className="hint">{planComparison(review.plannedMs! / 60000, planDifferenceMinutes(review)!)}</p>}<div className="session-inclusion"><label><CheckControl aria-label={t('Exclude this session from insights')} checked={reviewed.excluded} onChange={e => void act('session.exclude', { id: review.id, excluded: e.target.checked })} />{t('Exclude this session from insights')}</label><p className="hint">{t('{v1} Recorded time stays in history and exports.', { v1: reviewed.excluded ? reviewed.activeMs < MIN_INCLUDED_SESSION_MS ? t('Sessions below 2 minutes of active time are excluded automatically. Uncheck to include this one.') : t('Excluded from insights. Uncheck to include it again.') : t('Included in your focus insights.') })}</p></div><Rating value={focus} onChange={setFocus} label={t('How focused did you feel?')} low={t('Scattered')} high={t('Very focused')} /><ReflectionQuestions detractor={detractor} challenge={challenge} onDetractor={setDetractor} onChallenge={setChallenge} /><label className="form-label">{t('A note to your future self')}<span className="optional">{t('optional')}</span><textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder={t('What helped? What got in the way?')} rows={3} /></label>

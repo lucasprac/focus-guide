@@ -42,7 +42,7 @@ The app opens on **Goals**. A goal is the place where you learn something, for e
 1. Select **New goal**. Choose its area (for example Mathematics), a title and an outcome.
 2. Open the goal. In **Roadmap**, write stages as headings and steps as to-dos. Open **Details** on a step to add an estimate, a target date, notes and links.
 3. Select **Focus on this goal** or **Focus on this step**. Focus opens with the goal, its area and the step. Select **Begin focus**.
-4. In **Tasks**, add one-off steps. In **Plan & review**, add weekly actions and write your weekly review.
+4. In the goal's **Tasks** tab, add one-off steps for the goal. In **Plan & review**, add weekly actions and write your weekly review. For small tasks without a goal, use the task panel (see [Use tasks](#use-tasks)).
 5. In **Behaviour**, see how you study this goal: time by activity mode and roadmap step, planned actions, and the same Insights figures as in Patterns for this goal.
 
 Areas are the former focus fields. They group goals. You manage them in **Settings > Your areas**. You can still start a session without a goal: select **Free focus** on the Focus page.
@@ -80,8 +80,8 @@ These values describe your records. They do not measure attention, and an associ
 1. Open **Settings > AI agent (MCP)**.
 2. Choose the access level:
    - **Off** (default): no agent can connect.
-   - **Read only**: the agent can read areas, goals, roadmaps, tasks, sessions, weekly reviews, behaviour summaries and focus insights.
-   - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions and review notes. Nothing changes until you apply a proposal.
+   - **Read only**: the agent can read areas, goals, roadmaps, tasks (also tasks without a goal), sessions, weekly reviews, behaviour summaries and focus insights.
+   - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions and review notes. Nothing changes until you apply a proposal. Proposed tasks without a goal appear in the task panel.
    - **Read and edit**: the agent can also change goals, roadmaps, step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page, where you can undo it.
 3. Select **Copy configuration**.
 4. Add the configuration to your client:
@@ -150,35 +150,24 @@ After you update or move Focus Guide, select **Update plugin files**, then run `
    - Both answers are optional. To clear an answer, click it again or select **Clear**. You cannot change them after the session starts.
    - If you collapse this section, the app keeps your draft.
 
-The field, timing and intention stay visible together. Preparation from Goals or Tasks shows as a compact linked summary.
+The field, timing and intention stay visible together. Preparation from Goals or from the task panel shows as a compact linked summary.
 
 Below the duration, Focus can show up to three hints from the last 90 days. They come from the prepared goal, or from the area if you chose no goal. Each hint comes from a different group. One hint suggests a session length or a pause. Select the button on it, for example **Use 25 min**, to set the timer. One hint suggests a time of day. One hint tells you what to do before you start, for example to write the first small step. If you saved an adjustment for this week, Focus shows it above the hints. Hints use the same rules as the Insights tab, so they appear only when you have enough records. If the app cannot read them, it shows none.
 
 ### Use tasks
 
-To create and edit next steps, open **Tasks** in the sidebar.
+Tasks are your next small steps. Open them from any page: select **Tasks** at the top of the window, or press **Ctrl+Shift+T**. The task panel opens at the right side.
 
-- Each task has a focus field for time tracking. A task can also have a separate category, notes, a priority and a due date.
-- The due date of a new task is today (your local date). The **Task details** label shows it. To use a different day, open **Task details** and choose a date. To have no due date, select **No due date**. To edit the due date of an existing task, use **Edit task**.
-- You can change the names and colors of categories.
-- You can search titles and notes. You can filter by field, category, status and priority. You can sort by date, due date, priority or title.
-- The app saves your views locally.
-
-To prepare a session from Tasks:
-
-1. Select a session field.
-2. Select up to 100 tasks.
-3. Optionally, select a primary task.
-4. Click **Go to Focus**.
-
-The selection and the Focus draft stay when you change pages. During focus, you can go back to Tasks. There you can link existing open tasks from the current field, or mark tasks as complete.
-
-- **Archive** and **Restore** keep the task IDs and the historical links.
-- When you archive a category, its assignments stay.
+- Write a task and press Enter. Choose its area, or **No area**. Choose its due date: **Due today** (the default), **Due tomorrow**, **No due date** or **Choose a day**.
+- A task without an area goes to the **General** area. The app makes this area the first time. You can rename or delete it in Settings, but you cannot archive it. Focus time on these tasks counts as time in the General area.
+- The panel groups the tasks by date: **Overdue**, **Today**, **Upcoming** and **No due date**. **Completed** and **Archived** are folded at the bottom.
+- The chips at the top show the tasks of one area, or of **No area**.
+- Select a task to change its title, notes, area, due date and priority. Select the check box to complete it. Select **Archive** to hide it; **Restore** brings it back with its history.
+- Select **Focus** on a task. Focus opens with the task's area, and the task title as the intention. Then select **Begin focus**.
+- Tasks with a due date also show on the **Calendar**.
 - Due dates do not schedule notifications.
-- Each session records its time one time only. The number of tasks in the session does not change this.
 
-The Tasks page starts with creation, search and the task list. Expand the optional task details, the advanced filters or the category management when you need them. In wide windows, session preparation is next to the list. In narrow windows, it is below the list.
+The panel shows only tasks that belong to no goal. The tasks of a goal are in the goal's **Tasks** tab. There you add a task, link it to a roadmap step, edit it, focus on it, or select **Move out of this goal**. Then the task moves to the panel.
 
 ### Run the session
 

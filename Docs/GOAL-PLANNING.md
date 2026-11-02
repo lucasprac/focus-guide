@@ -56,7 +56,7 @@ When you allow **Read and propose** in **Settings > AI agent**, an AI agent can 
    - **Start focus** prepares the existing timer. **Begin focus** starts the timer.
    - For an activity away from the computer, check in manually. A manual check-in does not create focus minutes.
 4. To link one-off work, use **Manage goal tasks**.
-   - Create and edit tasks, and their goal and milestone links, on the Tasks page.
+   - Create and edit goal tasks and their milestone links in the goal's Tasks tab. **Move out of this goal** removes the goal link; the task then shows in the task panel.
    - When you finish a task, the app does not complete its milestone or goal automatically.
 5. Record each numeric outcome as an absolute observation with a date.
    - A new observation does not add to the earlier values.
@@ -208,7 +208,7 @@ The checklist is a light block editor. Each row has a kind:
 - The **Row type** buttons above the list change the kind of the row you last focused.
 - When you paste several lines into a row, each line becomes a row. Plain lines keep the kind of a to-do, bullet or numbered row; in a heading or text row they become text. In the **Add** field, plain lines become to-dos.
 - On the goal page, ticking a saved to-do saves only that milestone. Other edits save the whole checklist with `goal.milestones.sync` when you press Enter or Backspace, change a kind, move or remove a row, or move focus to another row or out of the checklist. Saves run one at a time. Empty rows are not saved. A removed row is archived and can be restored from **Archived milestones**.
-- You cannot change a to-do that has linked tasks into another kind. Unlink its tasks on the Tasks page first. The Tasks page lists only to-dos as milestones.
+- You cannot change a to-do that has linked tasks into another kind. Unlink its tasks in the goal's Tasks tab first. The tab lists only to-dos as milestones.
 - In Markdown mode, each line is one row, with the syntax in the table above. A title that would read as a marker starts with a backslash (for example, `\- not a bullet`). Because Markdown has no identifiers, the app keeps a row's identity when its title is unchanged, or when a changed title stays on the same line with the same kind.
 
 ### Migration and restore

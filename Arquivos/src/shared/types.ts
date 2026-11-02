@@ -41,6 +41,8 @@ export interface ActivitySample {
 }
 export interface CollectorStatus { state: 'recording' | 'disabled' | 'waiting' | 'unavailable'; shortcut: 'ready' | 'unavailable' | 'conflict'; requestedShortcut?: string; effectiveShortcut?: string; shortcutError?: string; message: string }
 export interface Field { id: string; name: string; color: string; archived: boolean; createdAt: string }
+/* The area of tasks that have no area of their own. task.create makes it the first time; it is an ordinary area record. */
+export const GENERAL_FIELD_ID = 'general';
 export interface TaskCategory { id: string; name: string; color: string; archived: boolean; createdAt: string }
 export interface Task { id: string; fieldId: string; title: string; completed: boolean; archived: boolean; createdAt: string; updatedAt: string; categoryId: string | null; notes: string; priority: 'low' | 'normal' | 'high'; dueDate: string | null; goalId?: string | null; milestoneId?: string | null }
 export type TimingMode = 'countdown' | 'stopwatch';

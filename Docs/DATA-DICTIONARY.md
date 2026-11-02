@@ -111,7 +111,7 @@ The file has one row for each interval or marker. The app updates an active inte
 | Property | Meaning |
 |---|---|
 | `id` | Stable identifier. |
-| `fieldId` | Identifier of the field that owns the task. |
+| `fieldId` | Identifier of the field that owns the task. A task without an area belongs to the field with the fixed id `general` (3.12.0), which `task.create` makes the first time. |
 | `title` | Task text that you can edit, 1–200 characters. |
 | `completed` | Current completion state in the checklist. It is not a historical outcome for each session. |
 | `archived` | Soft removal from future preparation lists. History links stay valid. |
@@ -245,7 +245,7 @@ The app rejects these problems before it replaces the data:
 - A task edit cannot change the field of the task. This keeps the session links correct.
 - `settings.autoOvertime` is `true` by default for new sessions. Old session records keep `false`.
 - When you remove a category, the app archives it (soft archive).
-- The search, filter and sort preferences of the Tasks view are in local renderer storage. Dataset backups do not include them.
+- The last area chosen in the task panel is in local renderer storage. Dataset backups do not include it. (Before 3.12.0, the search, filter and sort preferences of the Tasks view were there.)
 - Stopwatch sessions have a null planned time. The app excludes them only from comparisons with planned duration. Recorded-time totals include them.
 
 ## Version 3 behaviour records
@@ -354,7 +354,7 @@ These items stay. Their links are set to `null`:
 
 - Only a `todo` row can have `completed: true`. Validation rejects a done row of another kind.
 - Only `todo` rows count for progress (the goal summary, the **N of M done** text and the **milestones remain unchecked** count).
-- A task's `milestoneId` can refer only to a `todo` row. The service refuses to change a linked to-do to another kind. The error names the row and tells you to unlink its tasks on the Tasks page first. JSON import rejects a task that links to a row of another kind.
+- A task's `milestoneId` can refer only to a `todo` row. The service refuses to change a linked to-do to another kind. The error names the row and tells you to unlink its tasks in the goal's Tasks tab first. JSON import rejects a task that links to a row of another kind.
 - `numbered` rows have no stored number. The app counts from 1 in each run of consecutive numbered rows.
 - The migration and the JSON import of versions 1–5 give every milestone `kind: 'todo'`, because every earlier milestone was a to-do. JSON exports are version 6. The app rejects JSON versions above 6.
 - `goal.milestones.sync` accepts a new row with an identifier that the editor made. If no milestone has that identifier, the service creates the milestone with it. If a milestone of another goal has it, the service refuses the save. So a repeated save does not create duplicates.

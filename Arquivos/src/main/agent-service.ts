@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Store } from './store';
-import type { Command } from '../shared/types';
+import { GENERAL_FIELD_ID, type Command } from '../shared/types';
 import { goalData, sortMilestones, type AgentProposal, type ProposalKind } from '../shared/goal-types';
 import * as v from '../shared/validation';
 import { goalDate, goalPlan, whyTags, GOAL_LIMITS, PROPOSAL_LIMITS, validateGoalRecord } from '../shared/goal-validation';
@@ -74,7 +74,11 @@ export class AgentService {
       goals: domain.goals.map(g => { const s = goalSummary(data, g.id, addDays(today, -27), today); return { id: g.id, title: g.title, status: g.status, areaId: g.fieldId, outcome: g.outcome, deadline: g.deadline, roadmap: { done: s.completedMilestones, total: s.milestones.length }, recordedMinutesLast28Days: round(s.minutes), openProposals: domain.agentProposals.filter(p => p.goalId === g.id && open(p)).length }; }),
       todaysActions: todaysOccurrences(data, Date.parse(now)).map(o => ({ goalId: o.goalId, action: domain.goalActions.find(a => a.id === o.actionId)?.title, date: o.date, status: o.status, normal: o.plan.normal, smaller: o.plan.smaller })),
       recordedMinutesThisWeek: round(data.sessions.filter(s => s.status === 'completed' && !s.excluded && localDay(s.startedAt, s.timezone) >= week).reduce((sum, s) => sum + s.activeMs / 60000, 0)),
-      openNewGoalProposals: domain.agentProposals.filter(p => p.goalId === null && open(p)).length
+      openNewGoalProposals: domain.agentProposals.filter(p => p.goalId === null && p.kind === 'goal.create' && open(p)).length,
+      openTaskProposals: domain.agentProposals.filter(p => p.goalId === null && p.kind === 'tasks.add' && open(p)).length,
+      // Tasks without a goal: open ones and the ones completed in the last 14 days. areaId null means no area (the General area).
+      tasks: data.tasks.filter(tk => !tk.goalId && !tk.archived && (!tk.completed || tk.updatedAt.slice(0, 10) >= addDays(today, -14))).slice(-200)
+        .map(tk => ({ id: tk.id, title: tk.title, notes: tk.notes, areaId: tk.fieldId === GENERAL_FIELD_ID ? null : tk.fieldId, area: tk.fieldId === GENERAL_FIELD_ID ? null : data.fields.find(f => f.id === tk.fieldId)?.name ?? null, dueDate: tk.dueDate, priority: tk.priority, completed: tk.completed }))
     };
   }
 
@@ -157,6 +161,13 @@ export class AgentService {
       if (!Array.isArray(actions) || actions.length > 10) throw new Error(t('Propose up to 10 weekly actions.'));
       return { goalId: null, payload: { areaId: field.id, title: v.text(input.title, t('Goal title'), 200, true), outcome: v.text(input.outcome ?? '', t('Outcome'), 2000), why: v.text(input.why ?? '', t('Why this matters'), 2000), whyTags: whyTags(input.whyTags ?? []), deadline: v.date(input.deadline ?? null), roadmapMarkdown: this.markdown(input.roadmapMarkdown, false), actions: actions.map(a => this.actionDraft(a, now)) } };
     }
+    if (kind === 'tasks.add' && (input.goalId === undefined || input.goalId === null)) {
+      // Tasks without a goal: in an area, or without an area (null, or the General area).
+      const areaId = input.areaId === undefined || input.areaId === null || input.areaId === GENERAL_FIELD_ID ? null : v.id(input.areaId);
+      if (areaId) { const field = this.store.field(areaId); if (!field || field.archived) throw new Error(t('Choose an active area. Use get_overview to find area identifiers.')); }
+      if (!Array.isArray(input.tasks) || !input.tasks.length || input.tasks.length > 50) throw new Error(t('Propose from 1 to 50 tasks.'));
+      return { goalId: null, payload: { areaId, tasks: input.tasks.map(item => { const tk = v.object(item); if (tk.step !== undefined && tk.step !== '') throw new Error(t('A roadmap step needs a goal. Leave out step for tasks without a goal.')); return { title: v.text(tk.title, t('Task title'), 200, true), notes: v.text(tk.notes ?? '', t('Task notes'), 2000), priority: v.priority(tk.priority ?? 'normal'), dueDate: v.date(tk.dueDate ?? null) }; }) } };
+    }
     const goal = this.goal(input.goalId);
     if (kind === 'roadmap.replace') return { goalId: goal.id, payload: { goalId: goal.id, markdown: this.markdown(input.markdown, true) } };
     if (kind === 'tasks.add') {
@@ -197,6 +208,7 @@ export class AgentService {
         return { goalId: payload.goalId };
       }
       case 'tasks.add': {
+        if (!proposal.goalId) return { taskIds: (payload.tasks as Array<Record<string, unknown>>).map(tk => this.command('task.create', { fieldId: payload.areaId ?? null, title: tk.title, notes: tk.notes, priority: tk.priority, dueDate: tk.dueDate, categoryId: null })) };
         const goal = this.goal(payload.goalId), steps = records.milestones.filter(m => m.goalId === goal.id && m.kind === 'todo' && !m.archived);
         const ids = (payload.tasks as Array<Record<string, unknown>>).map(tk => this.command('task.create', { fieldId: goal.fieldId, title: tk.title, notes: tk.notes, priority: tk.priority, dueDate: tk.dueDate, categoryId: null, goalId: goal.id, milestoneId: steps.find(m => tk.step && m.title.toLocaleLowerCase() === String(tk.step).toLocaleLowerCase())?.id ?? null }));
         return { goalId: goal.id, taskIds: ids };

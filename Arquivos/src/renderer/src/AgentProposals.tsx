@@ -52,6 +52,7 @@ function ProposalCard({ data, act, proposal, onApplied }: ViewProps & { proposal
     </div> : <>
       {proposal.kind === 'goal.create' && <><p><strong>{text(p.title)}</strong>{p.outcome ? ` — ${text(p.outcome)}` : ''}</p><p className="hint">{t('Area: {v1}{v2}', { v1: data.fields.find(f => f.id === p.areaId)?.name ?? t('unknown area'), v2: p.deadline ? t(' · Due {text}', { text: text(p.deadline) }) : '' })}</p>{text(p.roadmapMarkdown) && <MarkdownRows markdown={text(p.roadmapMarkdown)} />}</>}
       {proposal.kind === 'roadmap.replace' && proposal.goalId && <RoadmapDiff data={data} goalId={proposal.goalId} markdown={text(p.markdown)} />}
+      {proposal.kind === 'tasks.add' && !proposal.goalId && <p className="hint">{t('Area: {v1}{v2}', { v1: p.areaId ? data.fields.find(f => f.id === p.areaId)?.name ?? t('unknown area') : t('No area'), v2: '' })}</p>}
       {proposal.kind === 'tasks.add' && <ul className="proposal-rows">{(p.tasks as Array<Record<string, unknown>>).map((tk, i) => <li key={i}>{text(tk.title)}{tk.step ? <span className="hint"> · {text(tk.step)}</span> : null}{tk.dueDate ? <span className="hint">{' '}{t('· due {text}', { text: text(tk.dueDate) })}</span> : null}</li>)}</ul>}
       {proposal.kind === 'review.note' && <aside className="goal-evidence"><strong>{t('Week of {text}', { text: text(p.week) })}</strong><p>{text(p.text)}</p></aside>}
     </>}
@@ -67,12 +68,13 @@ function ProposalCard({ data, act, proposal, onApplied }: ViewProps & { proposal
   </article>;
 }
 
-/* Proposals for one goal, or new-goal proposals when goalId is null. Applied and rejected proposals stay as an audit trail. */
-export function AgentProposals({ data, act, goalId, onApplied }: ViewProps & { goalId: string | null; onApplied?: (value: unknown) => void }) {
-  const rows = goalData(data).agentProposals.filter(p => p.goalId === goalId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+/* Proposals for one goal, or proposals without a goal when goalId is null (new goals on the goal list, tasks in the task panel).
+   Applied and rejected proposals stay as an audit trail. */
+export function AgentProposals({ data, act, goalId, kinds, onApplied }: ViewProps & { goalId: string | null; kinds?: readonly ProposalKind[]; onApplied?: (value: unknown) => void }) {
+  const rows = goalData(data).agentProposals.filter(p => p.goalId === goalId && (!kinds || kinds.includes(p.kind))).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const open = rows.filter(p => p.status === 'pending' || p.status === 'stale'), decided = rows.filter(p => p.status === 'applied' || p.status === 'rejected');
   if (!open.length && !decided.length) return null;
-  return <Card className="agent-proposals" title={goalId ? t('Proposals from your AI agent') : t('New goals proposed by your AI agent')} icon="spark" actions={<span className="hint">{t('{length} to review', { length: open.length })}</span>}>
+  return <Card className="agent-proposals" title={goalId ? t('Proposals from your AI agent') : kinds?.includes('tasks.add') ? t('Tasks proposed by your AI agent') : t('New goals proposed by your AI agent')} icon="spark" actions={<span className="hint">{t('{length} to review', { length: open.length })}</span>}>
     {open.map(p => <ProposalCard key={`${p.id}_${p.status}`} data={data} act={act} proposal={p} onApplied={onApplied} />)}
     {!open.length && <p className="hint">{t('Nothing to review. Your agent saves proposals here; nothing changes until you apply one.')}</p>}
     {!!decided.length && <Fold title={t('Agent history')}><div className="goal-history">{decided.slice(0, 20).map(p => <div className="goal-history-row" key={p.id}><span>{p.decidedAt?.slice(0, 10)} · {p.status === 'applied' ? t('applied') : t('rejected')}</span><strong>{KIND_LABELS[p.kind]} · {p.summary}</strong>{p.rationale && <p className="hint">{p.rationale}</p>}</div>)}</div></Fold>}

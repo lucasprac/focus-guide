@@ -57,7 +57,8 @@ export function validateGoalRecord(key: keyof GoalData, value: unknown): GoalDat
     if (typeof r.kind !== 'string' || !(PROPOSAL_KINDS as readonly string[]).includes(r.kind) || typeof r.status !== 'string' || !['pending','applied','rejected','stale'].includes(r.status)) throw new Error(t('Invalid agent proposal kind or status.'));
     const payload = v.object(r.payload);
     if (JSON.stringify(payload).length > PROPOSAL_LIMITS.payload) throw new Error(t('An agent proposal is too large.'));
-    if ((r.kind === 'goal.create') !== (r.goalId === null)) throw new Error(t('Only a new-goal proposal has no goal.'));
+    // A new goal has no goal yet; tasks can be proposed without a goal. Every other kind belongs to a goal.
+    if (r.kind === 'goal.create' ? r.goalId !== null : r.goalId === null && r.kind !== 'tasks.add') throw new Error(t('Only a new-goal or task proposal has no goal.'));
     const decidedAt = r.decidedAt === null ? null : v.timestamp(r.decidedAt);
     if ((r.status === 'applied' || r.status === 'rejected') !== (decidedAt !== null)) throw new Error(t('Invalid agent proposal decision time.'));
     return { id, goalId: r.goalId === null ? null : v.id(r.goalId), kind: r.kind, summary: v.text(r.summary,t('Proposal summary'),PROPOSAL_LIMITS.summary,true), rationale: v.text(r.rationale,t('Proposal rationale'),PROPOSAL_LIMITS.rationale), source: v.text(r.source,t('Proposal source'),PROPOSAL_LIMITS.source), payload, basis: r.basis === null ? null : v.text(r.basis,t('Proposal basis'),PROPOSAL_LIMITS.basis), status: r.status, createdAt: v.timestamp(r.createdAt), decidedAt } as AgentProposal;

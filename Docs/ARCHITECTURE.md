@@ -16,6 +16,16 @@ Design rules that follow from these objectives:
 - If the client uses a cloud model, the data that the agent reads leaves this computer. The settings and the user guide must say this.
 - The app makes one outbound call of its own: TypeSafe Jev judgments (3.9.0). It is off by default, runs only when the user starts a check, and only suggests answers that the user then saves. See [TypeSafe Jev](#typesafe-jev-judgments-390).
 
+## Task panel (3.12.0, unreleased)
+
+Tasks is no longer a page. `TaskPanel.tsx` is a side sheet (Radix `Dialog`) that the **Tasks** button in the top bar and `Ctrl+Shift+T` (a window key, not a global shortcut) open on every page. It lists only tasks without a goal, grouped by due date (overdue, today, upcoming, no due date; completed and archived are folded). Goal tasks, roadmap steps and session planning stay in the goal workspace, which now also edits a goal task (title, notes, step, priority, due date) and can move it out of its goal.
+
+- **No area.** A task without an area is stored in the area with the fixed id `general` (`GENERAL_FIELD_ID`). `task.create` and `task.update` with `fieldId: null` create that area the first time, in the same transaction as the task. It is an ordinary `fields` row: it can be renamed or deleted (with the recovery backup), but not archived. The panel shows it as "No area"; the other pages show its name. No schema or backup format change.
+- **Area changes.** `task.update` accepts `fieldId`, except for a goal task (it keeps its goal's area) and a task in the current session's checklist.
+- **Focus.** **Focus** on a task prepares the Focus page with the task's area, the task as primary task and its title as the intention. The checklist, the primary-task choice and the categories are no longer in the interface; `session.tasks` and `category.*` stay for compatibility and keep their data.
+- **Calendar.** Tasks with a due date (with or without a goal) show as a mark on the day, a chip in the Plans row of the day and week views, and in a **Tasks due** card for the selected day. The area and goal filters apply.
+- **Agent.** `get_overview` returns `tasks` (tasks without a goal: open, and completed in the last 14 days, at most 200; `areaId` is null for no area) and `openTaskProposals`. `propose_tasks` without `goalId` saves a `tasks.add` proposal with `goalId: null` and `payload { areaId, tasks }`; the user applies it in the task panel. `create_tasks` and `update_task` stay goal-only, because `agentChanges.goalId` is `NOT NULL`. A backup with a goal-less task proposal cannot be restored by 3.11.0 or earlier.
+
 ## TypeSafe Jev judgments (3.9.0)
 
 TypeSafe Jev reads free text and answers typed questions with probabilities. The use cases, the rules and the phases are in [TypeSafe Jev in Focus Guide](JEV-USE-CASES.md). Phase 1 fills empty main-distraction answers from the text of a session.
@@ -281,7 +291,7 @@ Shared goal-planning functions:
 - Summarize effort separately from action records and outcome records.
 - Apply the documented gates for duration and barrier suggestions.
 
-The renderer uses the existing Radix controls and semantic tokens. Goals owns repeatable plans and their reviews. Tasks continues to be the editor for one-off tasks. Calendar shows planned actions as outlines, separately from the heat of recorded time. Patterns can filter sessions by goal. The isolated preview runs the same `GoalService` with atomic synthetic storage.
+The renderer uses the existing Radix controls and semantic tokens. Goals owns repeatable plans and their reviews. The task panel (3.12.0) holds one-off tasks without a goal; the goal workspace edits goal tasks. Calendar shows planned actions as outlines, separately from the heat of recorded time. Patterns can filter sessions by goal. The isolated preview runs the same `GoalService` with atomic synthetic storage.
 
 The migration takes a snapshot of the old SQLite database before its transaction starts. Backup format 4:
 
@@ -306,7 +316,7 @@ The browser demo saves an activity cursor for each session. The cursors are opti
 
 ```mermaid
 flowchart LR
-    MainUI[React main window<br/>Focus / Goals / Tasks / Calendar / Patterns / World / Settings]
+    MainUI[React main window<br/>Goals / Focus / Calendar / Patterns / World / Settings<br/>Task panel on every page]
     FloatUI[Compact React floating window<br/>Black brain / purple progress curves<br/>Countdown and controls on hover or keyboard focus]
     Bridge[Sandboxed preload<br/>Typed state and named commands]
     Queue[Electron main process<br/>Sender validation and command queue]
@@ -485,7 +495,7 @@ Existing sessions keep their IDs, times and links. Their overtime is disabled. J
 
 ### Tasks and Focus
 
-The Tasks page owns creation, editing, categories, links and completion. `App` keeps the shared pending session selection. Focus stays mounted, so its preparation drafts stay. Its animation stops when the view is hidden. When you archive or complete a task, the app removes it from the pending choices. Active and historical links stay.
+Until 3.12.0, the Tasks page owned creation, editing, categories, links and completion (see [Task panel](#task-panel-3120-unreleased) for the current design). `App` keeps the shared pending session selection. Focus stays mounted, so its preparation drafts stay. Its animation stops when the view is hidden. When you archive or complete a task, the app removes it from the pending choices. Active and historical links stay.
 
 ### Preview
 

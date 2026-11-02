@@ -77,7 +77,7 @@ export class GoalService {
   private keepLinkedTodo(old: GoalMilestone | undefined, kind: MilestoneKind) {
     if (old?.kind !== 'todo' || kind === 'todo') return;
     const data = this.store.all();
-    if (data.tasks.some(t => t.milestoneId === old.id)) throw new Error(t('“{title}” has linked tasks. Unlink them on the Tasks page before you change it from a to-do.', { title: old.title }));
+    if (data.tasks.some(t => t.milestoneId === old.id)) throw new Error(t('“{title}” has linked tasks. Unlink them in the goal’s Tasks tab before you change it from a to-do.', { title: old.title }));
     if (data.sessions.some(s => s.milestoneId === old.id)) throw new Error(t('“{title}” has focus sessions linked to it, so it stays a to-do.', { title: old.title }));
   }
   // Details survive edits of the title, order and state. A row that stops being a to-do loses its estimate and date.

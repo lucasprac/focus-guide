@@ -52,8 +52,8 @@ Neural World is a 2D overview on one canvas (`WorldCanvas.ts`). `world-map.ts` b
 
 ## UX decisions
 
-- **Focus** starts with the field, timing mode, duration and an optional intention. Goal, activity mode and energy are in **Optional details**. Preparation that already exists from Goals or Tasks shows as a compact linked summary.
-- **Tasks** starts with creation, search and the list. Task details, advanced filters and category management are disclosures. On wide layouts, session preparation is next to the list. On smaller layouts, it is below the list.
+- **Focus** starts with the field, timing mode, duration and an optional intention. Goal, activity mode and energy are in **Optional details**. Preparation that already exists from Goals or the task panel shows as a compact linked summary.
+- **Task panel** (3.12.0) is a side sheet on the right, 440 px wide or the full width on narrow windows, opened by **Tasks** in the top bar or `Ctrl+Shift+T`. It starts with quick capture (title, area, due date), then area chips, then the date groups. Completed and archived tasks are folds. A row opens an inline editor; its actions are the **Focus** and **Archive** / **Restore** icon buttons. The top-bar button shows a count of open tasks that are due today or earlier.
 - **Calendar** shows the calendar before the planned actions of the selected day. Plans and the heat of recorded time keep different meanings.
 - **Goals** empty states use less vertical space.
 - **Patterns** keeps its chart hierarchy. Its filters wrap.
@@ -179,7 +179,7 @@ During an attention check-in only, a banner shows below the bar. See [Attention 
 
 ### Page headers
 
-Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one-line description at caption size. Tasks, Calendar and Settings have no description, to give more space to their content. The headings keep their names because tests and the entrance animation use them.
+Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one-line description at caption size. Calendar and Settings have no description, to give more space to their content. The headings keep their names because tests and the entrance animation use them.
 
 ## Page migration: Focus
 
@@ -189,6 +189,8 @@ Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one
 - Fix: the separator in the prepared summary had an invalid Latin-1 byte from an earlier version. It showed as a replacement character. It is now a UTF-8 middle dot.
 
 ## Page migration: Tasks
+
+The Tasks page was replaced by the task panel in 3.12.0. This section records the earlier page.
 
 - One toolbar contains search, status, sort and a **More filters** toggle.
   - The toggle shows a count badge for the active goal, field, category and priority filters.

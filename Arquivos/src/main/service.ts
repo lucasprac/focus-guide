@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Store } from './store';
 import { TimerEngine } from './timer';
-import { MIN_INCLUDED_SESSION_MS, type ActivitySample, type Command, type Dataset, type Task } from '../shared/types';
+import { GENERAL_FIELD_ID, MIN_INCLUDED_SESSION_MS, type ActivitySample, type Command, type Dataset, type Field, type Task } from '../shared/types';
 import * as v from '../shared/validation';
 import { addDays, selectedSessions } from '../shared/analytics';
 import { ACHIEVEMENT_IDS, PALETTES, evaluateAchievements, paletteUnlocked, paletteUnlockLabel } from '../shared/achievements';
@@ -20,6 +20,18 @@ export class FocusService {
     if (value === null || value === undefined || value === '') return null;
     const id = v.id(value), category = this.store.category(id);
     if (!category || category.archived) throw new Error(t('Choose an active category.')); return id;
+  }
+  /* The area of a task. null means no area: the task goes to the General area, which is created here the first time. */
+  private taskField(value: unknown, now: string): Field {
+    if (value === null) {
+      const general = this.store.field(GENERAL_FIELD_ID);
+      if (general) { if (general.archived) throw new Error(t('Choose an active area.')); return general; }
+      if (this.store.allFields().length >= 1000) throw new Error(t('The area limit has been reached.'));
+      const created: Field = { id: GENERAL_FIELD_ID, name: t('General'), color: '#8A94A6', archived: false, createdAt: now };
+      this.store.putField(created); return created;
+    }
+    const field = this.store.field(v.id(value)); if (!field || field.archived) throw new Error(t('Choose an active area.'));
+    return field;
   }
   private taskSelection(input: Record<string, unknown>, fieldId: string, active = false): { primaryTaskId: string | null; checklistIds: string[] } {
     if (!Array.isArray(input.checklistIds) || input.checklistIds.length > 100) throw new Error(t('Select up to 100 tasks.'));
@@ -90,7 +102,7 @@ export class FocusService {
       }
       case 'field.update': case 'field.archive': {
         const f = this.store.field(v.id(input.id)); if (!f) throw new Error(t('This area no longer exists.'));
-        if (command === 'field.archive') { f.archived = v.bool(input.archived, t('Archived')); }
+        if (command === 'field.archive') { f.archived = v.bool(input.archived, t('Archived')); if (f.archived && f.id === GENERAL_FIELD_ID) throw new Error(t('The General area holds tasks without an area. You cannot archive it.')); }
         else { f.name = v.text(input.name, t('Field name'), 60, true); f.color = v.color(input.color); }
         this.store.putField(f); return;
       }
@@ -114,17 +126,26 @@ export class FocusService {
         this.store.putCategory(c); return;
       }
       case 'task.create': {
-        const field = this.store.field(v.id(input.fieldId)); if (!field || field.archived) throw new Error(t('Choose an active area.'));
-        const tk: Task = { categoryId: this.categoryInput(input.categoryId), notes: v.text(input.notes ?? '', t('Task notes'), 2000), priority: v.priority(input.priority ?? 'normal'), dueDate: v.date(input.dueDate ?? null), id: randomUUID(), fieldId: field.id, title: v.text(input.title, t('Task title'), 200, true), completed: false, archived: false, createdAt: now, updatedAt: now };
-        Object.assign(tk,goals.taskLinks(tk,input));
-        this.store.db.transaction(() => { this.store.putTask(tk); if (input.attachToSession === true && this.timer.current?.fieldId === field.id) this.timer.addTask(tk.id); })(); return tk.id;
+        return this.store.db.transaction(() => {
+          const field = this.taskField(input.fieldId ?? null, now);
+          const tk: Task = { categoryId: this.categoryInput(input.categoryId), notes: v.text(input.notes ?? '', t('Task notes'), 2000), priority: v.priority(input.priority ?? 'normal'), dueDate: v.date(input.dueDate ?? null), id: randomUUID(), fieldId: field.id, title: v.text(input.title, t('Task title'), 200, true), completed: false, archived: false, createdAt: now, updatedAt: now };
+          Object.assign(tk,goals.taskLinks(tk,input));
+          this.store.putTask(tk); if (input.attachToSession === true && this.timer.current?.fieldId === field.id) this.timer.addTask(tk.id);
+          return tk.id;
+        })();
       }
       case 'task.update': case 'task.delete': {
         const tk = this.store.task(v.id(input.id)); if (!tk) throw new Error(t('This task no longer exists.'));
         if (command === 'task.delete') tk.archived = true;
         else { if ('archived' in input) tk.archived = v.bool(input.archived, t('Archived')); if ('notes' in input) tk.notes = v.text(input.notes, t('Task notes'), 2000); if ('priority' in input) tk.priority = v.priority(input.priority); if ('dueDate' in input) tk.dueDate = v.date(input.dueDate); if ('categoryId' in input && input.categoryId !== tk.categoryId) tk.categoryId = this.categoryInput(input.categoryId); if ('title' in input) tk.title = v.text(input.title, t('Task title'), 200, true); if ('completed' in input) tk.completed = v.bool(input.completed, t('Completed')); }
-        Object.assign(tk,goals.taskLinks(tk,input));
-        tk.updatedAt = now; this.store.putTask(tk); return;
+        // A goal task keeps its goal's area, and a task in the current session keeps the session's area.
+        const moves = command === 'task.update' && 'fieldId' in input && (input.fieldId ?? GENERAL_FIELD_ID) !== tk.fieldId;
+        if (moves && (tk.goalId || this.timer.current?.checklistIds.includes(tk.id))) throw new Error(t('This task keeps its area while it belongs to a goal or to the current session.'));
+        this.store.db.transaction(() => {
+          if (moves) tk.fieldId = this.taskField(input.fieldId ?? null, now).id;
+          Object.assign(tk,goals.taskLinks(tk,input));
+          tk.updatedAt = now; this.store.putTask(tk);
+        })(); return;
       }
       case 'session.tasks': {
         if (!this.timer.current) throw new Error(t('Start a session first.'));

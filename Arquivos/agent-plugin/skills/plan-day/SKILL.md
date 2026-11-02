@@ -9,7 +9,7 @@ Answer in the language of the user.
 
 ## Steps
 
-1. Call `get_overview`. Note `today`, `access`, `todaysActions` (with `status`, `normal` and `smaller`) and the active goals.
+1. Call `get_overview`. Note `today`, `access`, `todaysActions` (with `status`, `normal` and `smaller`), the active goals, and `tasks` (the tasks that belong to no goal). From `tasks`, note the open tasks that are due today or earlier.
 2. Select at most 5 active goals: goals with a planned action today first, then goals with a near deadline, then goals with the most `recordedMinutesLast28Days`.
 3. For each selected goal, call `get_goal`. Note:
    - Open tasks that are due today or earlier, and tasks with high priority.
@@ -21,8 +21,8 @@ Answer in the language of the user.
    - Make each session a little shorter than the median time to the first drift. Put a break after each session.
    - Give each planned action its normal version. Give the smaller version as the plan for a difficult day.
    - Do not plan more time than the user has free.
-7. Show the plan. Tell the user how to start each session in Focus Guide: on the Focus page, choose the goal and the roadmap step, and write the intention.
-8. If the plan needs new one-off tasks and the user agrees, save them. With access `edit`, use `create_tasks`. With access `propose`, use `propose_tasks`. Set `step` to the exact title of the roadmap step. Do not make other changes.
+7. Show the plan. Tell the user how to start each session in Focus Guide: on the Focus page, choose the goal and the roadmap step, and write the intention. For a task without a goal, the user selects **Focus** on the task in the task panel (the **Tasks** button at the top, or Ctrl+Shift+T).
+8. If the plan needs new one-off tasks and the user agrees, save them. With access `edit`, use `create_tasks`. With access `propose`, use `propose_tasks`. Set `step` to the exact title of the roadmap step. For a task that belongs to no goal, use `propose_tasks` without `goalId` and without `step` (with `areaId`, or without it for no area), also with access `edit`. Do not make other changes.
 
 ## Rules
 

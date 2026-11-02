@@ -1,5 +1,15 @@
 # Release notes
 
+## Unreleased (3.12.0) — Tasks as a quick panel
+
+- **Tasks on every page.** Tasks is no longer a page in the menu. Select **Tasks** at the top of the window, or press **Ctrl+Shift+T**, to open the task panel. Write a task and press Enter. Choose an area or **No area**, and a due date (today by default).
+- **A direct list.** The panel groups the tasks by date: **Overdue**, **Today**, **Upcoming** and **No due date**. **Completed** and **Archived** are folded below. The area chips at the top show the tasks of one area. Select a task to edit its title, notes, area, due date and priority. **Focus** on a task opens Focus with its area and the task as the intention.
+- **Goals keep the workflow.** The panel shows only tasks without a goal. Tasks of a goal, their roadmap steps and session planning stay in the goal's **Tasks** tab, which can now edit a goal task and move it out of its goal. Categories, search, filters and the session checklist are no longer in the interface. Their data stays in the database and in backups.
+- **No area.** A task without an area goes to a new area, **General**, which the app makes the first time. You can rename or delete it, but not archive it. Its focus time counts as time in the General area.
+- **Calendar.** Tasks with a due date show on their day, in the Plans row of the day and week views and in the new **Tasks due** card. **Show tasks** hides them.
+- **AI agent.** `get_overview` also returns the tasks without a goal. `propose_tasks` can propose tasks without a goal (in an area, or without an area); you apply them in the task panel. At the `edit` level, the agent still changes only goal tasks directly.
+- No schema change. The backup format stays at version 11, but a backup that holds a task proposal without a goal cannot be restored by 3.11.0 or earlier.
+
 ## Unreleased (3.11.0) — TypeSafe window check
 
 - **New, off by default.** **Settings > TypeSafe judgments > Window check during focus**: every 5 minutes of focus, TypeSafe Jev rates how closely the window in front matches the session's area (0–3) and its goal, task and intention (0–3), with a confidence for each, and whether the window shows what you are doing. Choose **Title** (window title and program name) or **Title and capture** (also a picture of the window).
