@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { ActivitySample, Dataset, Field, FocusSession, SessionEvent, Settings, Task, TaskCategory, WeeklyReview } from '../shared/types';
 import { settings } from '../shared/validation';
 import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalMilestone } from '../shared/goal-types';
+import type { WindowJudgment } from '../shared/jev-decisions';
 import { t } from '../shared/i18n';
 
 export const defaultSettings: Settings = {
@@ -19,7 +20,7 @@ export class Store {
     this.path = join(directory, 'focus-guide.sqlite');
     this.db = new Database(this.path);
     const originalVersion = Number(this.db.pragma('user_version', { simple: true }));
-    if (originalVersion > 11) { this.db.close(); throw new Error(t('This dataset was created by a newer Focus Guide version.')); }
+    if (originalVersion > 12) { this.db.close(); throw new Error(t('This dataset was created by a newer Focus Guide version.')); }
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('synchronous = FULL');
@@ -192,6 +193,20 @@ export class Store {
         this.db.pragma('user_version = 11');
       })();
     }
+    if (originalVersion < 12) {
+      // Schema 12 adds the TypeSafe window checks, kept apart from the user's records. The check starts off.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v12-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        this.db.exec(`CREATE TABLE IF NOT EXISTS windowJudgments (id TEXT PRIMARY KEY, sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, body TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS judgment_session ON windowJudgments(sessionId);`);
+        const previous = this.getMeta<Settings>('settings');
+        if (previous) this.setMeta('settings', { ...settings(previous), jevWindowCheck: 'off' });
+        this.db.pragma('user_version = 12');
+      })();
+    }
     if (!this.getMeta('settings')) {
       this.db.transaction(() => {
         this.setMeta('settings', defaultSettings);
@@ -301,16 +316,25 @@ export class Store {
     } else this.db.prepare('INSERT INTO activity (id,sessionId,startMs,endMs,observedMs,keys,clicks,scrolls,movementMs,status,inputMs,switches) VALUES (@id,@sessionId,@startMs,@endMs,@observedMs,@keys,@clicks,@scrolls,@movementMs,@status,@inputMs,@switches)').run({ ...sample, inputMs: sample.inputMs ?? null, switches: sample.switches ?? null });
   }
   removeActivity(): void { this.db.prepare('DELETE FROM activity').run(); }
+  /* Window checks are not part of all(): their titles never reach the renderer state, the insights or the agent. */
+  windowJudgments(limit?: number): WindowJudgment[] {
+    const rows = (limit === undefined ? this.db.prepare("SELECT body FROM windowJudgments ORDER BY json_extract(body, '$.at') DESC").all() : this.db.prepare("SELECT body FROM windowJudgments ORDER BY json_extract(body, '$.at') DESC LIMIT ?").all(limit)) as Array<{ body: string }>;
+    return rows.map(row => JSON.parse(row.body) as WindowJudgment);
+  }
+  putWindowJudgment(judgment: WindowJudgment): void {
+    this.db.prepare('INSERT INTO windowJudgments (id,sessionId,body) VALUES (?,?,?)').run(judgment.id, judgment.sessionId, JSON.stringify(judgment));
+  }
+  removeWindowJudgments(): void { this.db.prepare('DELETE FROM windowJudgments').run(); }
   removeReturn(id: string): void { this.db.prepare("DELETE FROM events WHERE id=? AND kind='attention-return'").run(id); }
   restore(data: Dataset): void {
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM events; DELETE FROM sessions; DELETE FROM tasks; DELETE FROM agentProposals; DELETE FROM agentChanges; DELETE FROM goals; DELETE FROM fields; DELETE FROM categories; DELETE FROM reviews;');
+      this.db.exec('DELETE FROM windowJudgments; DELETE FROM events; DELETE FROM sessions; DELETE FROM tasks; DELETE FROM agentProposals; DELETE FROM agentChanges; DELETE FROM goals; DELETE FROM fields; DELETE FROM categories; DELETE FROM reviews;');
       data.fields.forEach(f => this.putField(f)); data.categories.forEach(c => this.putCategory(c));
       for (const key of GOAL_COLLECTIONS) for (const row of data[key] ?? []) this.putGoalRecord(key,row);
       data.tasks.forEach(t => this.putTask(t));
       data.sessions.forEach(s => this.putSession(s)); data.events.forEach(e => this.putEvent(e));
       (data.activity ?? []).forEach(sample => this.putActivity(sample));
-      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off', attentionProbes: false, jevAssist: false });
+      data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off', attentionProbes: false, jevAssist: false, jevWindowCheck: 'off' });
     })();
   }
   async backup(path: string): Promise<void> { await this.db.backup(path); }

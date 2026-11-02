@@ -16,7 +16,7 @@ export function saveJevKey(directory: string, key: string): void {
   atomicWrite(keyFile(directory), safeStorage.encryptString(key).toString('base64'));
 }
 export function clearJevKey(directory: string): void { rmSync(keyFile(directory), { force: true }); }
-function readJevKey(directory: string): string {
+export function readJevKey(directory: string): string {
   if (!jevKeyStored(directory)) throw new Error(t('Save a TypeSafe API key in Settings first.'));
   return safeStorage.decryptString(Buffer.from(readFileSync(keyFile(directory), 'utf8'), 'base64'));
 }
@@ -32,7 +32,7 @@ export async function scanReflectionGaps(directory: string, candidates: Reflecti
   const worker = async () => {
     while (!stopped && next < candidates.length) {
       const index = next++, { text, ...gap } = candidates[index];
-      try { results[index] = { ...gap, ...decideDetractor(readReflection(await askJev(key, REFLECTION_QUESTION_SET, reflectionRequest(text)))) }; }
+      try { results[index] = { ...gap, ...decideDetractor(readReflection((await askJev(key, REFLECTION_QUESTION_SET, reflectionRequest(text))).answers)) }; }
       catch (error) {
         if (error instanceof JevError && error.status === 401) { stopped = true; throw error; }
         results[index] = { ...gap, status: 'error', error: error instanceof Error ? error.message : String(error) };

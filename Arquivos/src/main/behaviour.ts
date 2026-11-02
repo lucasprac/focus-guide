@@ -7,6 +7,8 @@ import { object, number, shortcut } from '../shared/validation';
 import { t } from '../shared/i18n';
 
 type Packet = Omit<ActivitySample, 'id' | 'sessionId' | 'status'>;
+/* The foreground window at one moment, for the TypeSafe window check. Focus Guide's own windows carry no title. */
+export type ForegroundWindow = { kind: 'none' } | { kind: 'own' } | { kind: 'other'; hwnd: string; app: string; title: string };
 interface Span { sessionId: string; epoch: number; start: number; cursor: number; enabled: boolean; ready: boolean; startRequested: boolean; packets: Packet[] }
 
 /** Aggregates cross the process boundary; raw input never enters Electron. */
@@ -19,6 +21,7 @@ export class BehaviourCollector {
   private heartbeat = 0;
   private ready = false;
   private requests = new Map<number, (ok: boolean) => void>();
+  private windowRequests = new Map<number, { resolve: (value: ForegroundWindow) => void; reject: (error: Error) => void }>();
   private requestId = 0;
   private stopReply: (() => void) | null = null;
   private readyReply: (() => void) | null = null;
@@ -39,6 +42,7 @@ export class BehaviourCollector {
     this.appliedShortcut = ''; this.status = { ...this.status, effectiveShortcut: '' };
     this.ready = false; this.readyReply?.(); this.stopReply?.();
     for (const reply of this.requests.values()) reply(false); this.requests.clear();
+    for (const reply of this.windowRequests.values()) reply.reject(new Error(t('Local input helper unavailable.'))); this.windowRequests.clear();
     this.setStatus('unavailable', t('Local input helper unavailable. Timer and floating return control remain usable.'), 'unavailable');
     this.child?.kill(); this.child = null;
   }
@@ -53,11 +57,19 @@ export class BehaviourCollector {
     while ((newline = this.buffer.indexOf('\n')) >= 0) {
       const line = this.buffer.slice(0, newline); this.buffer = this.buffer.slice(newline + 1);
       try {
-        if (line.length > 1024) throw new Error(t('Oversized helper message.'));
+        // A window reply carries a title of up to 256 characters, so it gets more room than the counters.
+        if (line.length > (line.startsWith('{"type":"window"') ? 4096 : 1024)) throw new Error(t('Oversized helper message.'));
         const value = object(JSON.parse(line));
         if (value.type === 'ready') { this.ready = true; this.heartbeat = Date.now(); this.readyReply?.(); }
         else if (value.type === 'heartbeat') this.heartbeat = Date.now();
         else if (value.type === 'hotkey') { if (typeof value.ok !== 'boolean') throw new Error(t('Invalid shortcut reply.')); this.requests.get(Number(value.request))?.(value.ok); }
+        else if (value.type === 'window') {
+          const reply = this.windowRequests.get(Number(value.request));
+          if (value.found !== true) reply?.resolve({ kind: 'none' });
+          else if (value.own === true) reply?.resolve({ kind: 'own' });
+          else if (typeof value.hwnd === 'string' && /^\d{1,20}$/.test(value.hwnd) && typeof value.app === 'string' && typeof value.title === 'string') reply?.resolve({ kind: 'other', hwnd: value.hwnd, app: value.app, title: value.title });
+          else throw new Error(t('Invalid window reply.'));
+        }
         else if (value.type === 'stopped') { this.stopReply?.(); }
         else if (value.type === 'return') this.onReturn();
         else if (value.type === 'started' && value.epoch === this.span?.epoch) {
@@ -107,6 +119,17 @@ export class BehaviourCollector {
     this.status = { ...this.status, effectiveShortcut: validated, shortcutError: undefined };
     this.onStatus();
     this.setStatus(this.status.state, this.status.message, validated ? 'ready' : 'unavailable');
+  }
+  /** Reads the foreground window once. It works also when activity collection is off. */
+  async foregroundWindow(): Promise<ForegroundWindow> {
+    if (!this.ready) throw new Error(t('Local input helper unavailable.'));
+    const request = ++this.requestId;
+    return new Promise<ForegroundWindow>((resolve, reject) => {
+      const timeout = setTimeout(() => { this.windowRequests.delete(request); reject(new Error(t('Local input helper unavailable.'))); }, 1500);
+      const done = () => { clearTimeout(timeout); this.windowRequests.delete(request); };
+      this.windowRequests.set(request, { resolve: value => { done(); resolve(value); }, reject: error => { done(); reject(error); } });
+      this.write(`window ${request}`);
+    });
   }
   reconcile(): void {
     if (this.stopping || this.closed) return;

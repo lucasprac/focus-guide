@@ -37,6 +37,15 @@ The default language is English. Brazilian Portuguese is optional through `setti
 - Module-level texts are functions or getters, because `t()` must run after the language is set. Validation messages are translated in main; `ROADMAP_CHANGED` stays an English sentinel because callers compare it by value.
 - Not translated: IPC and MCP names and texts, backup keys, CSV headers, persisted values.
 
+## TypeSafe window checks (schema 12, unreleased)
+
+- `WindowJudgeScheduler` (`src/main/window-judge.ts`) runs in the 250 ms update tick. It reads only `timer.snapshot()`: one look for each 5 minutes of active focus time (`JEV_WINDOW_LIMITS.everyMs`). Pause, breaks and Offline sessions do not count. `FOCUS_GUIDE_TEST_MODE=1` with `FOCUS_GUIDE_WINDOW_CHECK_MS` (10 000 or more) shortens the interval for tests.
+- The activity helper answers a `window <request>` command with the top-level foreground window: its handle, program name and title (at most 256 characters). It answers also when activity collection is off. Focus Guide's own windows come back only as `own`.
+- With `title-image`, the main process captures that window with `desktopCapturer` (`window:<HWND>:0`), scales it into the TypeSafe limits (280–1568 px per side) and encodes it as JPEG. A blank picture is not sent. The picture stays in memory for one request; the request log keeps only its size.
+- The request to TypeSafe runs outside the command queue. One look runs at a time. The row is written inside the queue with `store.untracked`, because no insight reads it.
+- A rejected key (status 401) stops the check until a new key is saved. Any other failure is an `error` row.
+- The table is not part of `store.all()`, so the window titles never reach the renderer state, Insights, the agent bridge or backups. `jev.window.read` returns the newest 200 rows only to the main window.
+
 ## Session preparation answers (schema 11, unreleased)
 
 - A session has the optional `warmUp` (`yes`, `kind-of`, `no`) and `medication` (`yes`, `no`) answers. The renderer sends them with `session.start`. The main process validates them in `src/shared/validation.ts`.

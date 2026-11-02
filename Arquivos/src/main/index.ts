@@ -12,14 +12,16 @@ import { CommandQueue, TransitionCoordinator } from './coordination';
 import { AgentBridge } from './agent-bridge';
 import { readAgentPlugin, writeAgentLauncher, writeAgentPlugin } from './agent-plugin';
 import { InsightsWorker } from './insights';
-import { clearJevKey, jevKeyStored, saveJevKey, scanReflectionGaps } from './jev';
+import { clearJevKey, jevKeyStored, readJevKey, saveJevKey, scanReflectionGaps } from './jev';
+import { WindowJudgeScheduler, judgeWindow } from './window-judge';
+import { JEV_WINDOW_LIMITS } from '../shared/jev-decisions';
 import { jevLog } from './jev-client';
 import { loadStats } from '../shared/insight-stats';
 import { AGENT_TOOLS, isAgentTool } from '../shared/agent-tools';
-import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV } from './backup';
+import { atomicWrite, activityCSV, goalCSV, eventCSV, serializeBackup, saveDailyBackup, readBackup, sessionCSV, windowJudgmentCSV } from './backup';
 import { localDay } from '../shared/analytics';
 import { PALETTES, paletteUnlocked } from '../shared/achievements';
-import type { AgentPluginStatus, AppEvent, AppState, BackupFile, Command, FloatBarPosition } from '../shared/types';
+import type { AgentPluginStatus, AppEvent, AppState, BackupFile, Command, FloatBarPosition, JevStatus } from '../shared/types';
 import { isFloatBarPosition } from '../shared/types';
 import * as v from '../shared/validation';
 import { t, setLanguage } from '../shared/i18n';
@@ -43,6 +45,10 @@ let timer: TimerEngine;
 let service: FocusService;
 let collector: BehaviourCollector;
 let probes: ProbeScheduler;
+let windowJudge: WindowJudgeScheduler;
+/* One window check at a time. A rejected key stops the check until a new key is saved; the reason shows in Settings. */
+let windowJudgeBusy = false;
+let windowCheckStopped = '';
 let hideProbeFloat = false;
 let bridge: AgentBridge | null = null;
 let agentPlugin: AgentPluginStatus | null = null;
@@ -68,7 +74,36 @@ const applicationIcon = join(__dirname, '../renderer/icon.ico');
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound, icon: applicationIcon }).show();
 }
-function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, jev: { keyStored: jevKeyStored(store.directory), encryption: safeStorage.isEncryptionAvailable() }, dataPath: store.directory, backupStatus: status(), graphicsMode }; }
+function windowCheckMode() {
+  const settings = store.getSettings();
+  return settings.jevAssist && !windowCheckStopped && jevKeyStored(store.directory) ? settings.jevWindowCheck ?? 'off' : 'off';
+}
+function jevStatus(): JevStatus {
+  const keyStored = jevKeyStored(store.directory), mode = windowCheckMode();
+  return { keyStored, encryption: safeStorage.isEncryptionAvailable(),
+    windowCheck: windowCheckStopped ? { state: 'stopped', message: windowCheckStopped } : mode === 'off' ? { state: 'off', message: t('The window check is off.') } : { state: 'ready', message: t('Jev checks the window every {minutes} minutes of focus.', { minutes: Math.round(JEV_WINDOW_LIMITS.everyMs / 60000) }) } };
+}
+/* The window check reads the foreground window when its active-time interval is due, asks Jev outside the command queue,
+   and saves the row inside it. The row never moves the insights revision: no insight reads it. */
+function pollWindowCheck(): void {
+  if (windowJudgeBusy) return;
+  const mode = windowCheckMode(), activeOffsetMs = windowJudge.tick(timer.snapshot(), timer.current, mode !== 'off');
+  const session = timer.current;
+  if (activeOffsetMs === null || mode === 'off' || !session) return;
+  windowJudgeBusy = true;
+  void (async () => {
+    try {
+      const goal = session.goalId ? store.goalData().goals.find(item => item.id === session.goalId) : undefined;
+      const context = { area: store.field(session.fieldId)?.name ?? '', goal: goal ? [goal.title, goal.outcome].filter(Boolean).join(': ') : '', task: session.primaryTaskId ? store.task(session.primaryTaskId)?.title ?? '' : '', intention: session.intention };
+      const { judgment, rejectedKey } = await judgeWindow({ key: readJevKey(store.directory), sessionId: session.id, activeOffsetMs, mode, context, readWindow: () => collector.foregroundWindow() });
+      if (rejectedKey) windowCheckStopped = judgment.error ?? t('TypeSafe rejected the API key. Enter a new key in Settings.');
+      await commandQueue.run(async () => { if (store.session(judgment.sessionId)) store.untracked(() => store.putWindowJudgment(judgment)); });
+      if (rejectedKey) changed();
+    } catch (error) { report(error); }
+    finally { windowJudgeBusy = false; }
+  })();
+}
+function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, jev: jevStatus(), dataPath: store.directory, backupStatus: status(), graphicsMode }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); layoutFloating(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : t('An unexpected error occurred.'); }
@@ -257,7 +292,7 @@ function acknowledgeReturn(value: unknown): void {
 }
 async function prepare(command: Command): Promise<string | undefined> {
   if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
-  if (['export.sessions', 'export.events', 'export.backup', 'export.activity', 'export.goals'].includes(command)) {
+  if (['export.sessions', 'export.events', 'export.backup', 'export.activity', 'export.goals', 'export.windowJudgments'].includes(command)) {
     const kind = command.split('.')[1], extension = kind === 'backup' ? 'json' : 'csv';
     const name = `focus-guide-${kind}-${new Date().toISOString().slice(0, 10)}.${extension}`;
     return (await dialog.showSaveDialog(mainWindow!, { title: t('Export your focus data'), defaultPath: join(app.getPath('documents'), name), filters: [{ name: extension === 'json' ? t('Focus Guide backup') : t('CSV dataset'), extensions: [extension] }] })).filePath;
@@ -292,6 +327,11 @@ async function handle(command: Command, input: Record<string, unknown>, selected
       if ((store.getSettings().agentAccess ?? 'off') === 'off' || !bridge?.status.launch) throw new Error(t('Choose an agent access level first.'));
       agentPlugin = writeAgentPlugin(store.directory, bridge.status.launch);
       return agentPlugin;
+    }
+    case 'export.windowJudgments': {
+      if (!selectedFile) return;
+      atomicWrite(selectedFile, windowJudgmentCSV(store.windowJudgments()));
+      return selectedFile;
     }
     case 'export.sessions': case 'export.events': case 'export.backup': case 'export.activity': case 'export.goals': {
       const filePath = selectedFile;
@@ -343,9 +383,11 @@ async function readInsights(input: Record<string, unknown>): Promise<unknown> {
    candidates inside the queue and waits for the network outside it, as insights.read does. A scan writes nothing. */
 async function jevCommand(command: string, input: Record<string, unknown>): Promise<unknown> {
   if (quitPending) throw new Error(t('Focus Guide is saving and closing.'));
-  if (command === 'jev.key.set') { saveJevKey(store.directory, v.jevKey(input.key)); changed(); return; }
+  if (command === 'jev.key.set') { saveJevKey(store.directory, v.jevKey(input.key)); windowCheckStopped = ''; changed(); return; }
   if (command === 'jev.key.clear') { clearJevKey(store.directory); changed(); return; }
   if (command === 'jev.log.read') return jevLog();
+  if (command === 'jev.window.read') return commandQueue.run(async () => store.windowJudgments(JEV_WINDOW_LIMITS.shown));
+  if (command === 'jev.window.clear') { await commandQueue.run(async () => store.untracked(() => store.removeWindowJudgments())); return; }
   const candidates = await commandQueue.run(() => service.jevReflectionGaps());
   return scanReflectionGaps(store.directory, candidates);
 }
@@ -382,6 +424,9 @@ if (locked) void app.whenReady().then(async () => {
   setLanguage(store.getSettings().language);
   timer = new TimerEngine(store, undefined, notify);
   probes = new ProbeScheduler();
+  // Test mode can shorten the window-check interval to try it without waiting five minutes of focus.
+  const windowEveryMs = Number(process.env.FOCUS_GUIDE_WINDOW_CHECK_MS);
+  windowJudge = new WindowJudgeScheduler(testing && Number.isFinite(windowEveryMs) && windowEveryMs >= 10000 ? windowEveryMs : undefined);
   service = new FocusService(store, timer, kind => {
     const directory = join(store.directory, 'backups');
     mkdirSync(directory, { recursive: true });
@@ -450,7 +495,7 @@ if (locked) void app.whenReady().then(async () => {
       trustedSender(event); const args = v.object(input);
       if (JSON.stringify(args).length > 30000 || typeof command !== 'string') throw new Error(t('Invalid command input.'));
       if (command === 'insights.read') return { ok: true, value: await readInsights(args) };
-      if (typeof command === 'string' && command.startsWith('jev.')) { if (!['jev.key.set', 'jev.key.clear', 'jev.log.read', 'jev.gaps.scan'].includes(command) || event.sender !== mainWindow?.webContents) throw new Error(t('Invalid command input.')); return { ok: true, value: await jevCommand(command, args) }; }
+      if (typeof command === 'string' && command.startsWith('jev.')) { if (!['jev.key.set', 'jev.key.clear', 'jev.log.read', 'jev.gaps.scan', 'jev.window.read', 'jev.window.clear'].includes(command) || event.sender !== mainWindow?.webContents) throw new Error(t('Invalid command input.')); return { ok: true, value: await jevCommand(command, args) }; }
       return await commandQueue.prepared(() => prepare(command as Command), async selectedFile => {
         trustedSender(event);
         if (command === 'probe.answer') args.source = event.sender === floatingWindow?.webContents ? 'floating' : 'main';
@@ -476,6 +521,7 @@ if (locked) void app.whenReady().then(async () => {
       } else if (timer.tick()) changed();
       collector.reconcile(); publish({ type: 'timer', timer: timer.snapshot() });
       pollProbes();
+      pollWindowCheck();
     } catch (e) { report(e); changed(); }
   }, 250);
   // The periodic checkpoint writes only the running session and its activity, which no insight reads, so it keeps the insights cache valid.

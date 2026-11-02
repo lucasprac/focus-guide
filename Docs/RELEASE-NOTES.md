@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased (3.11.0) — TypeSafe window check
+
+- **New, off by default.** **Settings > TypeSafe judgments > Window check during focus**: every 5 minutes of focus, TypeSafe Jev rates how closely the window in front matches the session's area (0–3) and its goal, task and intention (0–3), with a confidence for each, and whether the window shows what you are doing. Choose **Title** (window title and program name) or **Title and capture** (also a picture of the window).
+- **Kept apart.** The ratings and window titles go to a new table and are not used in Patterns, backups or the AI agent tools yet. **Patterns > Window checks (review)** lists them, exports them as CSV and deletes them.
+- **Privacy.** The title, the program name, the session's area, goal, task and intention, and with **Title and capture** the picture, leave this computer and go to TypeSafe. The picture is never stored. Focus Guide's own windows and private browsing windows are skipped. Restore turns the check off and deletes the ratings.
+- **Schema 12.** The migration saves a `before-schema-v12-<timestamp>.sqlite` snapshot first. The backup format does not change (version 11). The previous app cannot open a schema 12 database.
+- **Helper.** The activity helper has a new `window` command. Rebuild it with `npm.cmd run build`.
+- **Retries.** A TypeSafe request that gets status 503 (service briefly unavailable) is now tried again, like 429 and 529, before it becomes an error.
+
 ## Unreleased (3.10.2) — Faster insights
 
 - **Speed.** An uncached Insights read takes about 330 ms instead of 420 ms at 1 020 sessions. Three new Rust kernels (`modelFits`, `modelBootstrap`, `kMeansStarts`) run whole loops of the engine in one WebAssembly call, so each matrix is copied once. Interaction states also filter the activity minutes once per column instead of four times.

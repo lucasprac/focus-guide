@@ -1,5 +1,5 @@
 import type { AgentAccess, FloatingStyle, FocusVisual, Settings, TimeFormat } from './types';
-import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type Medication, type ProbeAnswer, type WarmUp } from './types';
+import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, JEV_WINDOW_CHECKS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type JevWindowCheck, type Medication, type ProbeAnswer, type WarmUp } from './types';
 import { ACHIEVEMENT_IDS, PALETTE_IDS } from './achievements';
 import { t, isLanguage, type Language } from './i18n';
 
@@ -102,6 +102,7 @@ export function settings(value: unknown): Settings {
     timeFormat: timeFormat(v.timeFormat ?? '24h'),
     attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, t('Attention check-ins')),
     jevAssist: v.jevAssist === undefined ? false : bool(v.jevAssist, t('TypeSafe judgments')),
+    jevWindowCheck: jevWindowCheck(v.jevWindowCheck ?? 'off'),
     language: language(v.language),
     collectedAchievements: Object.fromEntries(collected.map(([key, at]) => [key, timestamp(at)]))
   };
@@ -127,6 +128,10 @@ function floatingStyle(value: unknown): FloatingStyle {
 function timeFormat(value: unknown): TimeFormat {
   if (value !== '24h' && value !== '12h') throw new Error(t('Choose 24-hour or 12-hour time.'));
   return value;
+}
+function jevWindowCheck(value: unknown): JevWindowCheck {
+  if (!(JEV_WINDOW_CHECKS as readonly unknown[]).includes(value)) throw new Error(t('Choose Off, Title, or Title and capture for the window check.'));
+  return value as JevWindowCheck;
 }
 export function agentAccess(value: unknown): AgentAccess {
   if (value !== 'off' && value !== 'read' && value !== 'propose' && value !== 'edit') throw new Error(t('Choose Off, Read only, Read and propose, or Read and edit for the AI agent.'));

@@ -44,3 +44,25 @@ export function decideDetractor(answers: DetractorAnswers): DetractorDecision {
   }
   return { status: 'unclear', suggestion: null, alternatives: [] };
 }
+
+/* UC-S1 window check: one judgment every this much active focus time. The panel shows at most this many of the newest rows. */
+export const JEV_WINDOW_LIMITS = { everyMs: 5 * 60000, shown: 200 } as const;
+
+/* A Score answer: the probability-weighted level (0 = unrelated … 3 = the work itself), how concentrated the
+   distribution is (0–1, from TypeSafe), and each level's probability in level order. */
+export interface JevScore { score: number; confidence: number; probabilities: number[] }
+
+/* One window check (schema 12). It is kept apart from the user's records: no insight, backup or agent tool reads it,
+   so its quality can be judged before it joins the analysis. No decision is made from it yet. */
+export interface WindowJudgment {
+  id: string; sessionId: string; at: string; activeOffsetMs: number;
+  model: string; questionSet: string;
+  /* skipped: no request was sent; error: the request failed, which is never read as "not aligned". */
+  status: 'ok' | 'skipped' | 'error';
+  reason?: 'own-window' | 'no-window' | 'private-window' | 'no-title';
+  error?: string;
+  app: string; title: string;
+  image: 'sent' | 'unusable' | 'off';
+  area: JevScore | null; plan: JevScore | null; readable: number | null;
+  inputTokens: number | null;
+}

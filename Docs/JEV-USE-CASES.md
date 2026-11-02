@@ -1,6 +1,6 @@
 # TypeSafe Jev in Focus Guide
 
-This document describes where TypeSafe Jev helps Focus Guide collect, process and check data. Phase 1 is in the app (3.9.0). The other use cases are designs. Each use case gives the decision table, the state, the questions, the data that leaves the computer, and the phase.
+This document describes where TypeSafe Jev helps Focus Guide collect, process and check data. Phase 1 is in the app (3.9.0). UC-S1 is in the app as a data collection for review (3.11.0). The other use cases are designs. Each use case gives the decision table, the state, the questions, the data that leaves the computer, and the phase.
 
 Jev answers typed questions about text that the app sends. A Noul is the probability that a statement is true. A Choice picks one option from a list and gives a probability for each option. A Score places an answer on levels. See the [TypeSafe documentation](https://docs.typesafe.ai/llms.txt).
 
@@ -23,7 +23,7 @@ Data goes through three stages. Jev has a different role in each stage.
 ## Rules for every use case
 
 1. **Two keys.** Jev suggests. The user decides. A Jev answer becomes a record only through a user action. The action runs the normal command, so validation and the edit history do not change. This is the same contract as agent proposals.
-2. **Judge at capture, never at compute.** `insights.read` stays offline and deterministic. Jev runs only when the user starts a check. From Phase 4, statistics read stored judgments; they never call the network.
+2. **Judge at capture, never at compute.** `insights.read` stays offline and deterministic. Jev runs only when the user starts a check, or, for UC-S1, while a focus session runs after the user turns the window check on. From Phase 4, statistics read stored judgments; they never call the network.
 3. **Judgments in Jev, decisions in code.** Each use case has a truth table in a pure function. A Noul above 0.7 is yes. A Noul below 0.3 is no. Between them, the answer is "unclear" and the app makes no suggestion. A failed call is an error. It is never a "no".
 4. **Select, never generate.** Code makes the list of candidates (fixed answers, open tasks of the area, roadmap steps). Jev picks one. A second question (a Noul) says whether any candidate fits.
 5. **Visible requests.** The app keeps the last 20 requests and answers in memory. **Settings > TypeSafe judgments > What was sent** shows them.
@@ -36,6 +36,7 @@ Data goes through three stages. Jev has a different role in each stage.
 - The API key is encrypted with Windows (Electron `safeStorage`) in `typesafe-key.bin` in the data folder. It is not in settings, datasets, backups, the request log or the renderer.
 - The request goes from the main process. The renderer CSP keeps `connect-src 'self'`.
 - The state holds only the text that a person needs to answer. It holds no ids, dates, ratings or names of other records.
+- UC-S1 sends the window title and program name and, with **Title and capture**, a picture of the window. A picture can show private content. The setting `jevWindowCheck` is off by default, after the schema 12 migration and after restore. TypeSafe marks images as not yet ready for production (header `TypeSafe-Danger-Zone-Images`).
 
 ## Use cases
 
@@ -120,9 +121,30 @@ Code compares the checklist with the completion of planned actions. This feeds p
 
 These need a `judgments` table (schema bump and migration). Each row keeps the model and the question set. The rows can be computed again. They are not in backups.
 
-### UC-S1 Window title relevance (Phase 5)
+### UC-S1 Window alignment (in the app as data collection, 3.11.0)
 
-A Noul: "Is `window_title` related to `intention`?" This could measure attention on the task without check-ins. It needs new collection in the native activity helper, and it has the highest privacy risk. The app must never store window titles. This phase needs its own Red Team review.
+**Purpose.** Measure attention on the planned work without asking the user. For now the answers are only collected, in their own table `windowJudgments` (see the [data dictionary](DATA-DICTIONARY.md#typesafe-window-checks-schema-12)), so their quality can be judged. No decision and no insight uses them yet.
+
+**When.** Every 5 minutes of active focus time while the setting **Window check during focus** is `title` or `title-image`, TypeSafe judgments are on and a key is saved. Offline sessions, pauses and breaks are not checked. Focus Guide's own windows and private browsing windows are skipped without a request.
+
+**State.** Empty parts are left out. `screenshot` is the reference of the image asset.
+
+```json
+{ "focus": { "area": "…", "goal": "title: outcome", "task": "…", "intention": "…" },
+  "window": { "program": "Code", "title": "…", "screenshot": "<uuid>" } }
+```
+
+**Questions** (wording in `src/main/jev-questions.ts`, question set `window-alignment@1`, model `jev-1.14.0`):
+
+- `area_alignment` (Score, 4 levels): unrelated subject or entertainment → a general tool with no visible subject → a near subject → work that belongs to the area.
+- `plan_alignment` (Score, the same levels against the goal, task and intention). Asked only when the session has one of them.
+- `window_readable` (Noul, the null case): does the window show what the person is working on or looking at?
+
+**Stored.** For each Score: `score`, `confidence` and the probability of each level, because the mean can hide two peaks. For the Noul: its value. Also the title, the program name, whether a picture was sent, and the billed input tokens. The picture is never stored.
+
+**Review.** **Patterns > Window checks (review)** lists the newest 200 rows and exports all rows as CSV. `session_id` and `active_offset_ms` join a row to the attention check-ins (`probe` events), which are the first reference for quality. Before the answers join the analysis, a truth table goes into `jev-decisions.ts`.
+
+**Limits.** Text in the window can try to change the answer (prompt injection). The effect is limited while no decision reads the answers. A generic area name (for example "Deep work") gives the area question little to work with; the plan question covers it. The cost of an image is not published; `inputTokens` measures it.
 
 ## Phases
 
@@ -130,7 +152,7 @@ A Noul: "Is `window_title` related to `intention`?" This could measure attention
 2. UC-L1, UC-L2, UC-C2, UC-C3, UC-C4.
 3. Auditors.
 4. Featurizers.
-5. Sensor.
+5. Sensor (UC-S1 collection in 3.11.0; its use in the analysis is still to do).
 
 ## Test a question change
 
@@ -138,4 +160,4 @@ A Noul: "Is `window_title` related to `intention`?" This could measure attention
 2. Read each answer, not only totals.
 3. Change the wording only to make the definition clearer. Do not add a clause for one failed case.
 4. Check the change on cases that you did not use to tune it.
-5. Change `REFLECTION_QUESTION_SET` when the wording changes.
+5. Change `REFLECTION_QUESTION_SET` or `WINDOW_QUESTION_SET` when the wording changes.

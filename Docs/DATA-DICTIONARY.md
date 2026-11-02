@@ -511,6 +511,32 @@ Schema 11 adds two optional answers that you give before a session starts. Old r
 - A version 10 backup becomes version 11 with `null` for `warmUp` and `medication`.
 - Focus Guide 3.1.0 and earlier cannot restore a version 11 backup.
 
+## TypeSafe window checks (schema 12)
+
+Schema 12 adds the table `windowJudgments`. Each row is one look by TypeSafe Jev at the window in front during a focus session (UC-S1 in [JEV-USE-CASES.md](JEV-USE-CASES.md)). The table is kept apart from the other records so that the quality of the ratings can be judged first: `store.all()`, the renderer state, Insights, the AI agent tools and backups do not read it.
+
+The columns are `id`, `sessionId` (deleted with its session) and `body`, a JSON object with these properties:
+
+| Property | Meaning |
+|---|---|
+| `at` | UTC time of the look. |
+| `activeOffsetMs` | Active time of the session at the look, from the timer. It joins the row to `events.activeOffsetMs` of the attention check-ins. |
+| `model`, `questionSet` | The Jev model and the version of the question wording (`window-alignment@1`). |
+| `status` | `ok`, `skipped` (no request was sent) or `error` (the request failed). An error is never a low rating. |
+| `reason` | For `skipped`: `own-window` (Focus Guide was in front), `no-window`, `private-window` (a private browsing title; the title is not kept) or `no-title`. |
+| `error` | The error message for `error`. |
+| `app`, `title` | Program name (file name without `.exe`) and window title, as sent. Empty for a skipped private window. |
+| `image` | `sent`, `unusable` (no usable picture; only the title was sent) or `off`. The picture itself is never stored. |
+| `area`, `plan` | Score answers: `score` (0 to 3, probability-weighted), `confidence` (0 to 1, from TypeSafe) and `probabilities` (one per level). Level 0 is unrelated, 1 a general tool with no visible subject, 2 a near subject, 3 the work itself. `plan` is `null` when the session has no goal, task or intention. |
+| `readable` | Probability that the window shows what the person is working on or looking at. |
+| `inputTokens` | Input tokens billed for the request, or `null`. |
+
+- Setting `settings.jevWindowCheck`: `off`, `title` or `title-image`. The default is `off`. The migration and every restore set it to `off`. Backups never include it.
+- The migration saves a `before-schema-v12-<timestamp>.sqlite` snapshot with `VACUUM INTO`, except for an empty new database. Then one transaction adds the table and sets `user_version` to 12.
+- Restore deletes every row. **Patterns > Window checks (review) > Delete all** does the same at any time.
+- Export: **Export CSV** in the same card writes `focus-guide-windowJudgments-<date>.csv`, oldest first, with one column for each level probability.
+- The previous app rejects a schema 12 database. A rollback needs the matching snapshot.
+
 ## Calculation rules for insights
 
 The Insights tab and the agent tool `get_focus_insights` use the engine in `src/shared/focus-insights.ts`. The constants are in `INSIGHT_THRESHOLDS` in the same file. Every interval is a 90% interval. The engine is deterministic. A fixed seed (42) drives the random choices.

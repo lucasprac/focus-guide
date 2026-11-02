@@ -1,5 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <cstdint>
+#include <cstdio>
+#include <cwchar>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -7,7 +10,8 @@
 #include <array>
 #include <vector>
 
-// No raw records leave this process. Key state is transient and used only to suppress repeats.
+// No raw input leaves this process. Key state is transient and used only to suppress repeats.
+// The foreground window's title and program name leave only in reply to a "window" command (TypeSafe window check).
 static HWND window;
 static HANDLE parentProcess;
 static DWORD parentPid;
@@ -37,6 +41,45 @@ static void sampleForeground() {
   if (!pid || pid == parentPid) return;
   if (lastForeground && lastForeground != root) ++switches;
   lastForeground = root;
+}
+// UTF-16 text as a JSON string value in UTF-8.
+static std::string jsonText(const wchar_t *text, int length) {
+  std::string utf8, out = "\"";
+  if (length > 0) {
+    int size = WideCharToMultiByte(CP_UTF8, 0, text, length, nullptr, 0, nullptr, nullptr);
+    if (size > 0) { utf8.resize(size); WideCharToMultiByte(CP_UTF8, 0, text, length, utf8.data(), size, nullptr, nullptr); }
+  }
+  for (unsigned char c : utf8) {
+    if (c == '"' || c == '\\') { out += '\\'; out += static_cast<char>(c); }
+    else if (c < 0x20) { char escape[8]; snprintf(escape, sizeof escape, "\\u%04x", c); out += escape; }
+    else out += static_cast<char>(c);
+  }
+  return out + "\"";
+}
+// The top-level foreground window: its handle (to find its capture), title and program name. Focus Guide's own windows are only flagged.
+static std::string describeForeground(unsigned int request) {
+  std::string reply = "{\"type\":\"window\",\"request\":" + std::to_string(request);
+  HWND foreground = GetForegroundWindow();
+  HWND root = foreground ? GetAncestor(foreground, GA_ROOT) : nullptr;
+  DWORD pid = 0;
+  if (root) GetWindowThreadProcessId(root, &pid);
+  if (!root || !pid) return reply + ",\"found\":false}";
+  if (pid == parentPid) return reply + ",\"found\":true,\"own\":true}";
+  wchar_t title[257]{};
+  int titleLength = GetWindowTextW(root, title, 257);
+  wchar_t path[MAX_PATH]{}; DWORD pathLength = MAX_PATH;
+  const wchar_t *name = L""; int nameLength = 0;
+  if (HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+    if (QueryFullProcessImageNameW(process, 0, path, &pathLength)) {
+      const wchar_t *slash = wcsrchr(path, L'\\');
+      name = slash ? slash + 1 : path; nameLength = static_cast<int>(wcslen(name));
+      if (nameLength > 4 && _wcsicmp(name + nameLength - 4, L".exe") == 0) nameLength -= 4;
+      if (nameLength > 64) nameLength = 64;
+    }
+    CloseHandle(process);
+  }
+  return reply + ",\"found\":true,\"own\":false,\"hwnd\":\"" + std::to_string(reinterpret_cast<uintptr_t>(root))
+    + "\",\"app\":" + jsonText(name, nameLength) + ",\"title\":" + jsonText(title, titleLength) + "}";
 }
 static bool monitor(bool enable) {
   const DWORD flags = enable ? RIDEV_INPUTSINK : RIDEV_REMOVE;
@@ -74,6 +117,9 @@ static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
         }
       }
       std::cout << "{\"type\":\"hotkey\",\"request\":" << request << ",\"ok\":" << (ok ? "true" : "false") << "}" << std::endl;
+    } else if (action == "window") {
+      unsigned int request = 0; input >> request;
+      std::cout << describeForeground(request) << std::endl;
     }
     return 0;
   }

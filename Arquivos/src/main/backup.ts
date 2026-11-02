@@ -8,6 +8,7 @@ import type { Store } from './store';
 import { GOAL_COLLECTIONS, LEGACY_GOAL_COLLECTIONS, V8_GOAL_COLLECTIONS, goalData, upgradeGoalRecords } from '../shared/goal-types';
 import { GOAL_LIMITS, validateGoalData } from '../shared/goal-validation';
 import { t } from '../shared/i18n';
+import type { JevScore, WindowJudgment } from '../shared/jev-decisions';
 
 export const BACKUP_LIMITS = { bytes: 64 * 1024 * 1024, fields: 1000, tasks: 100000, categories: 1000, sessions: 50000, events: 500000, reviews: 5000, activity: 2000000 } as const;
 const capacityMessage = () => t('JSON backups support up to 64 MiB. This file exceeds that capacity; your existing backups have been kept. Use CSV exports or a SQLite snapshot for this dataset.');
@@ -184,9 +185,9 @@ export function readBackup(path: string): BackupFile {
 }
 /* English is the default, so a backup of an English dataset has no language and stays as it was before the setting existed.
    In the same way, a backup without collected achievements has no collectedAchievements, and a 24-hour clock has no timeFormat.
-   jevAssist is never in a backup: restore turns TypeSafe judgments off. */
+   jevAssist and jevWindowCheck are never in a backup: restore turns TypeSafe judgments off. Window checks are not in a backup either. */
 function backupSettings(settings: Dataset['settings']): Dataset['settings'] {
-  const { language, collectedAchievements, timeFormat, jevAssist: _jevAssist, ...rest } = settings;
+  const { language, collectedAchievements, timeFormat, jevAssist: _jevAssist, jevWindowCheck: _jevWindowCheck, ...rest } = settings;
   return { ...rest, ...(language === 'pt-BR' ? { language } : {}), ...(timeFormat === '12h' ? { timeFormat } : {}), ...(collectedAchievements && Object.keys(collectedAchievements).length ? { collectedAchievements } : {}) };
 }
 export function makeBackup(data: Dataset): BackupFile {
@@ -247,4 +248,16 @@ export function goalCSV(data: Dataset): string {
     const r = row as unknown as Record<string,unknown>;
     return [key,r.id,key === 'goals' ? r.id : r.goalId,r.fieldId,r.date ?? r.week,r.status,r.value,JSON.stringify(row)];
   })));
+}
+
+/* The TypeSafe window checks, for judging their quality. session_id and active_offset_ms join them to the sessions and
+   to the attention check-ins in the events export. */
+export function windowJudgmentCSV(judgments: WindowJudgment[]): string {
+  const levels = (score: JevScore | null) => [score?.score ?? null, score?.confidence ?? null, ...[0, 1, 2, 3].map(level => score?.probabilities[level] ?? null)];
+  return csv(['id', 'session_id', 'at_utc', 'active_offset_ms', 'status', 'reason', 'error', 'app', 'window_title', 'image',
+    'area_score_0_3', 'area_confidence', 'area_p_unrelated', 'area_p_general_tool', 'area_p_near', 'area_p_the_work',
+    'plan_score_0_3', 'plan_confidence', 'plan_p_unrelated', 'plan_p_general_tool', 'plan_p_near', 'plan_p_the_work',
+    'readable_probability', 'input_tokens', 'model', 'question_set'],
+  [...judgments].reverse().map(j => [j.id, j.sessionId, j.at, j.activeOffsetMs, j.status, j.reason ?? null, j.error ?? null, j.app, j.title, j.image,
+    ...levels(j.area), ...levels(j.plan), j.readable, j.inputTokens, j.model, j.questionSet]));
 }

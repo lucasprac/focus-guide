@@ -20,6 +20,9 @@ export type Medication = typeof MEDICATION_ANSWERS[number];
 /* A probe event stores one of these answers, or 'missed', in its category. */
 export const PROBE_ANSWERS = ['on-task', 'drifting', 'elsewhere'] as const;
 export type ProbeAnswer = typeof PROBE_ANSWERS[number];
+/* The TypeSafe window check during focus (schema 12): off, the window title only, or the title and a capture of the window. */
+export const JEV_WINDOW_CHECKS = ['off', 'title', 'title-image'] as const;
+export type JevWindowCheck = typeof JEV_WINDOW_CHECKS[number];
 /* What the Focus stage draws: the 3D brain or the isometric session gauge. Appearance only; timing is unchanged. */
 export type FocusVisual = 'brain' | 'instrument';
 /* How the floating timer looks: the brain constellation or a thin bar that fills as time passes. Appearance only. */
@@ -75,6 +78,8 @@ export interface Settings {
   attentionProbes?: boolean;
   /* Opt-in TypeSafe Jev judgments. Off by default and after restore; the API key is never part of settings. */
   jevAssist?: boolean;
+  /* Opt-in window check during focus. Off by default and after restore; never in a backup. */
+  jevWindowCheck?: JevWindowCheck;
   /* Interface language; absent in older data and backups, which means English. */
   language?: Language;
 }
@@ -98,7 +103,7 @@ export interface AgentPluginStatus { path: string; version: string; current: boo
 /* Runtime state of the attention check-in that is on screen now; it never reaches settings, datasets or backups. */
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
 /* Runtime state of TypeSafe Jev; it never reaches settings, datasets or backups. The key itself never leaves the main process. */
-export interface JevStatus { keyStored: boolean; encryption: boolean }
+export interface JevStatus { keyStored: boolean; encryption: boolean; windowCheck?: { state: 'off' | 'ready' | 'stopped'; message: string } }
 export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
 export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 11; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
@@ -115,9 +120,9 @@ export type Command =
   | 'settings.update' | 'review.save' | 'achievements.collect'
   | 'attention.return' | 'attention.remove' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
   | 'probe.answer' | 'insights.read'
-  | 'jev.key.set' | 'jev.key.clear' | 'jev.log.read' | 'jev.gaps.scan'
+  | 'jev.key.set' | 'jev.key.clear' | 'jev.log.read' | 'jev.gaps.scan' | 'jev.window.read' | 'jev.window.clear'
   | 'window.float' | 'window.main' | 'window.hide' | 'window.floatPointer' | 'window.floatMove'
-  | 'export.sessions' | 'export.events' | 'export.backup'
+  | 'export.sessions' | 'export.events' | 'export.backup' | 'export.windowJudgments'
   | 'backup.preview' | 'backup.restore' | 'backup.create';
 export type AppEvent = { type: 'state'; state: AppState } | { type: 'timer'; timer: TimerSnapshot } | { type: 'error'; message: string } | { type: 'notice'; message: string } | { type: 'visibility'; visible: boolean } | { type: 'attention-return'; sessionId: string; eventId: string; savedAt: string } | { type: 'shortcut-captured'; shortcut: string };
 export type CommandResult = { ok: true; value?: unknown } | { ok: false; error: string };
