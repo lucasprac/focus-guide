@@ -21,7 +21,7 @@ Three processes with a strict boundary, plus the MCP server process for agent in
    - `index.ts`: windows (main + transparent floating timer), tray, power events, local protocol, IPC sender checks.
    - `coordination.ts`: `CommandQueue` serializes all mutations; `TransitionCoordinator` drains activity collection, checkpoints the timer, commits, then reconciles. File dialogs are prepared *outside* the queue and only the commit runs inside it.
    - `timer.ts`: monotonic-clock session engine (countdown, stopwatch, overtime, breaks, recovery). Recorded `activeMs` always equals the sum of durable active intervals.
-   - `service.ts` (`FocusService`) and `goal-service.ts` (`GoalService`): validated commands and business rules.
+   - `service.ts` (`FocusService`), `goal-service.ts` (`GoalService`) and `commitment-service.ts` (`CommitmentService`, calendar commitments): validated commands and business rules.
    - `store.ts`: prepared SQLite statements, schema version (`user_version`) and migrations. Every migration takes a `VACUUM INTO` snapshot first and runs in one transaction.
    - `backup.ts`: versioned JSON backup/restore validation, atomic file publication, CSV export, daily SQLite + JSON backups.
    - `behaviour.ts`: optional keyboard/mouse aggregates from the native helper, tied to authoritative active time.
@@ -46,7 +46,7 @@ A new user action usually touches, in order: the command name and payload types 
 - Restore replaces data (never merges), is validated and previewed first, and keeps a rollback snapshot.
 - Runtime-only fields such as `AppState.graphicsMode` must not reach persisted settings, datasets, or backups.
 - The preview must never read the personal SQLite database.
-- AI agent writes: below `edit`, an agent never changes records directly. At `edit`, every change is audited in `agentChanges` in the same transaction and can be undone. An agent never deletes, marks a goal achieved or archived, or ticks a roadmap step. Roadmap writes (agent and editor) carry a revision, and a stale one fails. Agent access is `off` after migration and restore.
+- AI agent writes: below `edit`, an agent never changes records directly. At `edit`, every change is audited in `agentChanges` in the same transaction and can be undone. An agent never deletes, marks a goal achieved or archived, ticks a roadmap step, or marks a calendar commitment done or skipped. Roadmap writes (agent and editor) carry a revision, and a stale one fails. Agent access is `off` after migration and restore.
 
 ## Docs to consult
 

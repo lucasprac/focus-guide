@@ -404,10 +404,10 @@ One record for each change that an agent made directly, at the `edit` access lev
 | Field | Meaning |
 |---|---|
 | `id` | Change identifier. |
-| `goalId` | The goal that the change belongs to. A change always belongs to a goal. |
+| `goalId` | The goal that the change belongs to. From schema 13, `null` for a calendar change (target `commitment`). |
 | `at` | UTC time of the change. |
 | `source`, `tool` | The client label and the tool, for example `update_roadmap`. |
-| `target` | `goal`, `roadmap`, `step`, `task`, `action` or `review`. |
+| `target` | `goal`, `roadmap`, `step`, `task`, `action`, `review` or (schema 13) `commitment`. |
 | `summary` | Text that the app writes, up to 500 characters. It does not come from the agent. |
 | `rationale` | The agent's reason, up to 4000 characters. |
 | `before`, `after` | For each changed record, its changed fields before and after the change. `null` in `before` means that the change created the record. Each side holds up to 60,000 characters. |
@@ -536,6 +536,41 @@ The columns are `id`, `sessionId` (deleted with its session) and `body`, a JSON 
 - Restore deletes every row. **Patterns > Window checks (review) > Delete all** does the same at any time.
 - Export: **Export CSV** in the same card writes `focus-guide-windowJudgments-<date>.csv`, oldest first, with one column for each level probability.
 - The previous app rejects a schema 12 database. A rollback needs the matching snapshot.
+
+## Calendar commitments (schema 13)
+
+Schema 13 adds the table `commitments`. Each row is one block of planned focus time.
+
+| Column | Meaning |
+|---|---|
+| `id` | Commitment identifier. |
+| `title` | Up to 200 characters. Without a title, the app uses the name of the task, step, goal or area, or "Focus block". |
+| `notes` | Up to 2000 characters. |
+| `date` | Local date of the block (`YYYY-MM-DD`). |
+| `startMinute`, `durationMinutes` | Start as minutes after midnight, and length in whole minutes (5 to 720). A block ends on the day it starts. |
+| `timezone` | IANA timezone of the plan: the default timezone when the block was made. |
+| `fieldId` | Area, or `null`. Deleted with its area. |
+| `goalId`, `milestoneId` | Goal and roadmap step, or `null`. A goal block has the goal's area; a step needs its goal. Set to `null` when the goal or step is deleted. |
+| `taskId` | Task, or `null`. Set to `null` when the task is deleted. |
+| `activityMode` | Activity mode for the session, as in sessions. |
+| `status` | `planned`, `done` (the user says it happened), `skipped` (the user did not do it) or `cancelled` (out of the plan, kept for history). |
+| `origin` | `user` or `agent`: who planned the block. |
+| `rescheduleCount` | How often a planned block was moved to another date or start. |
+| `createdAt`, `updatedAt` | UTC times. |
+
+- Blocks that are `planned` or `done` do not overlap on the same date.
+- The calendar shows a derived state: `active` (a linked session runs), `done` (a stored `done`, or a completed linked session), `missed` (planned, no session, and its end has passed), or the stored status.
+- `sessions.commitmentId`: the commitment that the session started from, or `null`. Deleting the commitment sets it to `null`; the session keeps its time. A linked session has the commitment's area when the commitment has one.
+- `agentChanges.goalId` can now be `null`: a change with target `commitment` belongs to no goal, and every other change still belongs to a goal. Its `before` and `after` hold title, notes, date, startMinute, durationMinutes, the four links, activityMode and status.
+- `agentProposals.kind` adds `commitments.add`, with `goalId: null` and `payload { commitments }`. Each item has `date`, `start` (`HH:MM`), `durationMinutes`, optional `title`, `notes` and `activityMode`, and the target `areaId`, `goalId`, `step` (title) and `taskId`.
+- The migration saves a `before-schema-v13-<timestamp>.sqlite` snapshot first. The previous app rejects a schema 13 database. A rollback needs the matching snapshot.
+
+### Backup version 12
+
+- Export writes `schemaVersion` 12, with the new `commitments` collection and `commitmentId` on each session.
+- Import accepts versions 1 to 12. A version 11 backup becomes version 12 with no commitments and `commitmentId: null`.
+- Restore checks that the links of each commitment exist, that a goal block has the goal's area, that a step belongs to the goal, and that each linked session refers to a known commitment of its own area. Overlaps are not checked on restore.
+- Focus Guide 3.12.0 and earlier cannot restore a version 12 backup.
 
 ## Calculation rules for insights
 

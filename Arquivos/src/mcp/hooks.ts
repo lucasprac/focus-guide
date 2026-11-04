@@ -14,7 +14,7 @@ interface HookInput { session_id?: string; hook_event_name?: string; tool_name?:
 interface SessionState { revisions: Record<string, string> }
 
 const LOG_FILE = 'agent-hook-log.jsonl', LOG_LIMIT = 1024 * 1024, STATE_DAYS = 7;
-const SKILLS = 'focus-guide:weekly-review, focus-guide:pattern-analysis, focus-guide:plan-day and focus-guide:roadmap';
+const SKILLS = 'focus-guide:weekly-review, focus-guide:pattern-analysis, focus-guide:plan-day, focus-guide:commitments and focus-guide:roadmap';
 const stateDirectory = join(tmpdir(), 'focus-guide-agent-hooks');
 
 /* A tool of the manual "focus-guide" MCP entry, or of the MCP server that the plugin starts. */
@@ -65,13 +65,13 @@ function output(hookEventName: string, fields: Record<string, unknown>): string 
 async function sessionStart(): Promise<string> {
   pruneStates();
   try {
-    const overview = await call('get_overview', {}, { client: 'Claude Code hook', timeoutMs: 3000 }) as { access?: string; goals?: { status?: string; openProposals?: number }[]; todaysActions?: unknown[]; openNewGoalProposals?: number };
+    const overview = await call('get_overview', {}, { client: 'Claude Code hook', timeoutMs: 3000 }) as { access?: string; goals?: { status?: string; openProposals?: number }[]; todaysActions?: unknown[]; todaysCommitments?: unknown[]; openNewGoalProposals?: number };
     const goals = overview.goals ?? [], access = overview.access ?? 'off';
     const proposals = goals.reduce((sum, goal) => sum + (goal.openProposals ?? 0), overview.openNewGoalProposals ?? 0);
     const rule = access === 'edit' ? 'Edit tools apply changes at once. Focus Guide records each change in Agent activity, and the user can undo it. Ask the user before a large change.'
       : access === 'propose' ? 'Edit tools are refused. Use the propose tools: the user applies or rejects each proposal in Focus Guide.'
         : 'Only read tools work. Give suggestions in the chat, and do not call propose or edit tools.';
-    return output('SessionStart', { additionalContext: `Focus Guide is open. Agent access: ${access}. Active goals: ${goals.filter(goal => goal.status === 'active').length}. Open proposals: ${proposals}. Planned actions today: ${overview.todaysActions?.length ?? 0}. ${rule} When the user asks about focus, goals, tasks or study habits, use the skills ${SKILLS}.` });
+    return output('SessionStart', { additionalContext: `Focus Guide is open. Agent access: ${access}. Active goals: ${goals.filter(goal => goal.status === 'active').length}. Open proposals: ${proposals}. Planned actions today: ${overview.todaysActions?.length ?? 0}. Calendar commitments today: ${overview.todaysCommitments?.length ?? 0}. ${rule} When the user asks about focus, goals, tasks or study habits, use the skills ${SKILLS}. Before you plan, move or cancel calendar commitments, follow focus-guide:commitments.` });
   } catch (error) {
     return output('SessionStart', { additionalContext: `Focus Guide is not available: ${error instanceof Error ? error.message : String(error)} Mention this only if the user asks about Focus Guide, focus sessions or goals.` });
   }
@@ -90,7 +90,8 @@ function preToolUse(input: HookInput, tool: AgentTool): string {
   const change = tool === 'update_roadmap' ? 'replace the roadmap of a goal. Rows that the new Markdown leaves out are archived'
     : tool === 'update_task' && args.archived === true ? 'archive a task'
       : tool === 'update_task' && args.completed === true ? 'mark a task as complete'
-        : tool === 'update_action' && args.archived === true ? 'archive a weekly action' : '';
+        : tool === 'update_action' && args.archived === true ? 'archive a weekly action'
+          : tool === 'update_commitment' && args.status === 'cancelled' ? 'cancel a commitment in the calendar' : '';
   if (!change) return '';
   log(input, tool, 'asked');
   return output('PreToolUse', { permissionDecision: 'ask', permissionDecisionReason: `The agent wants to ${change}. Focus Guide records the change in Agent activity, and you can undo it there.` });

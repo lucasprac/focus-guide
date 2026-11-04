@@ -37,7 +37,7 @@ export interface GoalReview {
 }
 /* Schema 8: a change that a local AI agent proposes. Nothing in it changes the user's records until the user applies it in the app.
    A goal.create proposal has no goal yet, so its goalId is null. The records form the audit trail of agent changes. */
-export const PROPOSAL_KINDS = ['goal.create', 'roadmap.replace', 'tasks.add', 'action.add', 'review.note'] as const;
+export const PROPOSAL_KINDS = ['goal.create', 'roadmap.replace', 'tasks.add', 'action.add', 'review.note', 'commitments.add'] as const;
 export type ProposalKind = typeof PROPOSAL_KINDS[number];
 export type ProposalStatus = 'pending' | 'applied' | 'rejected' | 'stale';
 export interface AgentProposal {
@@ -47,11 +47,12 @@ export interface AgentProposal {
 export type AgentAccess = 'off' | 'read' | 'propose' | 'edit';
 /* Schema 9: one change that a local AI agent made directly, at the 'edit' access level. It is saved in the same
    transaction as the change. `before` and `after` map each target identifier to the changed fields (null: the record
-   did not exist). The user can undo a change; the undo sets `undoneAt`. */
-export type AgentChangeTarget = 'goal' | 'roadmap' | 'step' | 'task' | 'action' | 'review';
-export const AGENT_CHANGE_TARGETS: readonly AgentChangeTarget[] = ['goal', 'roadmap', 'step', 'task', 'action', 'review'];
+   did not exist). The user can undo a change; the undo sets `undoneAt`. Schema 13: a change of the calendar
+   (target 'commitment') belongs to no goal, so its goalId is null; every other change belongs to a goal. */
+export type AgentChangeTarget = 'goal' | 'roadmap' | 'step' | 'task' | 'action' | 'review' | 'commitment';
+export const AGENT_CHANGE_TARGETS: readonly AgentChangeTarget[] = ['goal', 'roadmap', 'step', 'task', 'action', 'review', 'commitment'];
 export interface AgentChange {
-  id: string; goalId: string; at: string; source: string; tool: string; target: AgentChangeTarget; summary: string; rationale: string;
+  id: string; goalId: string | null; at: string; source: string; tool: string; target: AgentChangeTarget; summary: string; rationale: string;
   before: Record<string, unknown>; after: Record<string, unknown>; undoneAt: string | null;
 }
 export interface GoalData {

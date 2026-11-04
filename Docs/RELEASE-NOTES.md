@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased (3.13.0) — Commitments in the Calendar
+
+- **Plan your day.** A commitment is a block of focus time on the Calendar: a day, a start time and minutes. It can be for a task, a goal or one of its roadmap steps, an area, or a free focus block. In the day and week views, click an empty time to plan a block, and drag a block to move it. The **Commitments** card lists the blocks of the selected day. The month view marks days with planned blocks.
+- **From plan to session.** **Start focus** on a block of today prepares the Focus page with its goal, step, task and minutes, and links the session to the block. A block with a finished session shows as done; a block whose time passed without a session shows as missed. You can also mark a block done, skipped or cancelled.
+- **Agents plan the calendar.** New MCP tools: `get_calendar` reads a range of days with busy time (commitments, sessions, planned actions, due tasks) and compares the last four weeks of plans with what happened. `propose_commitments` proposes blocks; you apply them on the Calendar page. At the `edit` level, `create_commitments` plans up to 50 blocks in one change and `update_commitment` moves, retargets or cancels a block. Every change shows in **Agent activity**, and **Undo** cancels the planned blocks. The agent never deletes a block, never marks one done or skipped, and never changes a block with sessions. The `plan-day` skill now saves its plan as commitments.
+- **Agent playbook.** The new plugin skill `focus-guide:commitments` tells agents how to plan blocks: length from your warm-up, sustain and fatigue phases, short and long rests as you prefer them (the agent asks when it does not know), and the order of areas and activities from deadline, invested effort and your preferences. Install the plugin again after the update to get it.
+- **Schema 13.** New `commitments` table and `sessions.commitmentId`. The agent change log accepts changes that belong to no goal. The migration saves a `before-schema-v13-<timestamp>.sqlite` snapshot first. The previous app cannot open a schema 13 database.
+- **Backup version 12.** Backups include the commitments and the session links. Versions 1 to 11 still restore. Focus Guide 3.12.0 and earlier cannot restore a version 12 backup.
+
 ## Unreleased (3.12.0) — Tasks as a quick panel
 
 - **Tasks on every page.** Tasks is no longer a page in the menu. Select **Tasks** at the top of the window, or press **Ctrl+Shift+T**, to open the task panel. Write a task and press Enter. Choose an area or **No area**, and a due date (today by default).

@@ -8,10 +8,18 @@ import { MILESTONE_LIMITS, parseMilestoneMarkdown, reconnectMilestones } from '.
 import { addDays, localDay, monday } from '../shared/analytics';
 import { roadmapRevision } from '../shared/goal-planning';
 import { t } from '../shared/i18n';
+import { COMMITMENT_LIMITS, clockText, commitmentSessions } from '../shared/commitments';
 
 type Run = (command: Command, input: Record<string, unknown>) => unknown;
 type State = Record<string, unknown> | null;
-interface Drafts { actionDraft(value: unknown, now: string): Record<string, unknown>; markdown(value: unknown, required: boolean): string }
+interface Drafts {
+  actionDraft(value: unknown, now: string): Record<string, unknown>; markdown(value: unknown, required: boolean): string;
+  commitmentItem(value: unknown, partial?: boolean): Record<string, unknown>; commitmentInput(item: Record<string, unknown>): Record<string, unknown>;
+  commitmentAhead(date: string, startMinute: number, durationMinutes: number, now: string): void;
+}
+const COMMITMENT_STATE_KEYS = ['title', 'notes', 'date', 'startMinute', 'durationMinutes', 'fieldId', 'goalId', 'milestoneId', 'taskId', 'activityMode', 'status'];
+// An agent plans and cancels; whether a block was done or skipped is the user's report.
+const AGENT_COMMITMENT_STATUSES = ['planned', 'cancelled'];
 const GOAL_KEYS = ['title', 'outcome', 'why', 'whyTags', 'deadline', 'status'], STEP_KEYS = ['title', 'estimatedMinutes', 'targetDate', 'notes', 'resources'];
 const TASK_KEYS = ['title', 'notes', 'priority', 'dueDate', 'milestoneId', 'completed', 'archived'], PLAN_KEYS = ['weekdays', 'cue', 'normal', 'smaller', 'obstacle', 'response', 'estimatedMinutes', 'activityMode'];
 const AGENT_STATUSES: GoalStatus[] = ['draft', 'active', 'paused'];
@@ -55,10 +63,11 @@ export class AgentEditor {
       case 'task': { const task = data.tasks.find(t => t.id === id); return task ? pick(task, TASK_KEYS) : null; }
       case 'action': { const action = domain.goalActions.find(a => a.id === id); return action ? { title: action.title, archived: action.archived, plan: action.plans.at(-1) } : null; }
       case 'review': return { adjustment: domain.goalReviews.find(r => r.id === id)?.adjustment ?? '' };
+      case 'commitment': { const row = this.store.commitment(id); return row ? pick(row, COMMITMENT_STATE_KEYS) : null; }
     }
   }
 
-  private change(now: string, source: string, tool: string, target: AgentChangeTarget, existing: string[], input: Record<string, unknown>, apply: () => { value: Record<string, unknown>; goalId: string; created?: string[]; summary: string }) {
+  private change(now: string, source: string, tool: string, target: AgentChangeTarget, existing: string[], input: Record<string, unknown>, apply: () => { value: Record<string, unknown>; goalId: string | null; created?: string[]; summary: string }) {
     const records = this.records();
     if (records.agentChanges.filter(c => Date.parse(c.at) > Date.parse(now) - 3600000).length >= CHANGE_LIMITS.perHour) throw new Error(t('The agent reached the limit of {perHour} direct changes per hour. Wait, or use the propose tools.', { perHour: CHANGE_LIMITS.perHour }));
     const rationale = v.text(input.rationale ?? '', t('Rationale'), CHANGE_LIMITS.rationale);
@@ -170,6 +179,32 @@ export class AgentEditor {
           return { value: { goalId: goal.id, week }, goalId: goal.id, summary: t('Added a review note for the week of {week} to “{title}”', { week, title: goal.title }) };
         });
       }
+      case 'create_commitments': {
+        if (!Array.isArray(input.commitments) || !input.commitments.length || input.commitments.length > COMMITMENT_LIMITS.batch) throw new Error(t('Add from 1 to {batch} commitments.', { batch: COMMITMENT_LIMITS.batch }));
+        const drafts = input.commitments.map(item => this.drafts.commitmentInput(this.drafts.commitmentItem(item)));
+        drafts.forEach(d => this.drafts.commitmentAhead(String(d.date), Number(d.startMinute), Number(d.durationMinutes), now));
+        // One change for the whole plan: every block is saved, or none (a clash between them stops the transaction).
+        return this.change(now, source, name, 'commitment', [], input, () => {
+          const created = drafts.map((d, i) => { try { return this.command('commitment.save', { ...d, origin: 'agent' }) as string; } catch (error) { throw new Error(t('Commitment {n}: {message}', { n: i + 1, message: error instanceof Error ? error.message : String(error) })); } });
+          const rows = created.map(id => this.store.commitment(id)!);
+          return { value: { commitmentIds: created }, goalId: null, created, summary: t('Planned {v1}: {v2}', { v1: created.length === 1 ? t('1 commitment') : t('{length} commitments', { length: created.length }), v2: rows.map(c => `${c.date} ${clockText(c.startMinute)} ${c.title}`).join(' · ') }) };
+        });
+      }
+      case 'update_commitment': {
+        const row = this.store.commitment(v.id(input.commitmentId));
+        if (!row) throw new Error(t('This commitment does not exist. Use get_calendar to find commitment identifiers.'));
+        if (!AGENT_COMMITMENT_STATUSES.includes(row.status)) throw new Error(t('This commitment is {status}. Only the user changes it in Focus Guide.', { status: row.status }));
+        if (commitmentSessions(this.store.all().sessions, row.id).length) throw new Error(t('Focus sessions started from this commitment, so it is part of the record. Only the user changes it in Focus Guide.'));
+        const item = this.drafts.commitmentItem(input, true), fields = Object.keys(item).filter(k => k !== 'goalId' && k !== 'taskId' && k !== 'step').map(k => k === 'areaId' ? 'target' : k);
+        if (input.status !== undefined) { if (!AGENT_COMMITMENT_STATUSES.includes(String(input.status))) throw new Error(t('An agent can set a commitment to planned or cancelled. Only the user marks it done or skipped.')); fields.push('status'); }
+        if (!fields.length) throw new Error(t('Change at least one of: title, notes, date, start, durationMinutes, activityMode, the target (areaId, goalId, step, taskId) or status.'));
+        const change = this.drafts.commitmentInput(item), status = input.status === undefined ? row.status : String(input.status);
+        if (status === 'planned' && (change.date !== undefined || change.startMinute !== undefined || change.durationMinutes !== undefined || row.status === 'cancelled')) this.drafts.commitmentAhead(String(change.date ?? row.date), Number(change.startMinute ?? row.startMinute), Number(change.durationMinutes ?? row.durationMinutes), now);
+        return this.change(now, source, name, 'commitment', [row.id], input, () => {
+          this.command('commitment.save', { id: row.id, ...change, status });
+          return { value: { commitmentId: row.id }, goalId: null, summary: status === 'cancelled' && row.status !== 'cancelled' ? t('Cancelled commitment “{title}” on {date}', { title: row.title, date: row.date }) : t('Updated commitment “{title}” on {date}: {fields}', { title: row.title, date: row.date, fields: fields.join(', ') }) };
+        });
+      }
       default: throw new Error(t('This tool is not available.'));
     }
   }
@@ -211,6 +246,13 @@ export class AgentEditor {
           case 'review': {
             const week = id.slice(-10), review = this.records().goalReviews.find(r => r.id === id);
             this.command('goal.review.save', { goalId: change.goalId, week, adjustment: before?.adjustment ?? '', previousOutcome: review?.previousOutcome ?? 'undecided' });
+            break;
+          }
+          case 'commitment': {
+            const row = this.store.commitment(id);
+            if (!row) break;
+            if (before === null) { if (row.status !== 'cancelled') this.command('commitment.save', { id, status: 'cancelled' }); }
+            else this.command('commitment.save', { id, ...before });
             break;
           }
         }

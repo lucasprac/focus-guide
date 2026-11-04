@@ -303,6 +303,19 @@
   .time-block strong, .time-block span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .time-block strong { font-size: var(--text-caption); font-weight: 600; }
   .time-block span { font-size: var(--text-badge); color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* Commitments: planned blocks drawn under the recorded sessions, dashed until something happens. */
+  .time-grid-col { cursor: cell; }
+  .time-commitment { position: absolute; top: calc(var(--start) * var(--hour-height) / 60); left: 3px; right: 3px; display: flex; flex-direction: column; height: max(calc(var(--span) * var(--hour-height) / 60), 20px); min-width: 0; padding: 2px 6px; overflow: hidden; border: 1px dashed color-mix(in srgb, var(--field, var(--accent)) 75%, transparent); border-radius: var(--radius-chip); background: color-mix(in srgb, var(--field, var(--accent)) 9%, var(--panel)); color: var(--text); text-align: left; line-height: 1.35; cursor: pointer; touch-action: none; user-select: none; }
+  .time-commitment:hover { background: color-mix(in srgb, var(--field, var(--accent)) 16%, var(--panel)); }
+  .time-commitment.movable { cursor: grab; }
+  .time-commitment.dragging { z-index: 3; cursor: grabbing; pointer-events: none; box-shadow: var(--shadow-lift); }
+  .time-commitment.done, .time-commitment.active { border-style: solid; }
+  .time-commitment.missed, .time-commitment.skipped { opacity: .6; }
+  .time-commitment.skipped strong { text-decoration: line-through; }
+  .time-commitment strong, .time-commitment span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .time-commitment strong { font-size: var(--text-caption); font-weight: 600; }
+  .time-commitment span { font-size: var(--text-badge); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .time-block.over-commitment { left: 14px; }
   .time-grid-now { position: absolute; top: calc(var(--start) * var(--hour-height) / 60); left: 0; right: 0; z-index: 2; height: 2px; background: var(--danger); pointer-events: none; }
   .time-grid-now::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   .timeline-session.focused { box-shadow: inset 3px 0 0 var(--accent); padding-left: 10px; }

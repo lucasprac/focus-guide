@@ -9,6 +9,7 @@ import { INSIGHT_THRESHOLDS, focusInsights, type InsightOptions } from '../share
 import type { ProbeScheduler } from './probes';
 import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
+import { CommitmentService } from './commitment-service';
 import { t, getLanguage } from '../shared/i18n';
 import { JEV_GAP_LIMITS, type JevReflectionGap, type ReflectionText } from '../shared/jev-decisions';
 
@@ -47,7 +48,7 @@ export class FocusService {
   }
   // Agent code runs commands through this; permanent deletion stays a user command only.
   private agentCommand = (command: Command, input: Record<string, unknown>): unknown => {
-    if (command === 'goal.delete' || command === 'field.delete') throw new Error(t('An agent cannot delete records.'));
+    if (command === 'goal.delete' || command === 'field.delete' || command === 'commitment.delete') throw new Error(t('An agent cannot delete records.'));
     return this.run(command, input);
   };
   // The local agent bridge calls only this method; it never reaches the renderer commands directly.
@@ -94,6 +95,7 @@ export class FocusService {
     if (command === 'goal.delete') { goals.remove(input, this.timer.current?.goalId ?? null, this.beforeDelete); return; }
     if (command.startsWith('goal.')) return goals.run(command,input,now);
     if (command.startsWith('agent.')) return new AgentService(this.store,this.agentCommand).run(command,input,now);
+    if (command.startsWith('commitment.')) return new CommitmentService(this.store).run(command,input,now);
     switch (command) {
       case 'field.create': {
         if (this.store.allFields().length >= 1000) throw new Error(t('The area limit has been reached.'));
@@ -159,12 +161,12 @@ export class FocusService {
         const timingMode = input.timingMode ?? 'countdown';
         if (timingMode !== 'countdown' && timingMode !== 'stopwatch') throw new Error(t('Choose Timer or Stopwatch.'));
         const activityMode = v.activityMode(input.activityMode ?? this.store.getSettings().activityModes?.[f.id] ?? 'Unspecified');
-        const links = goals.sessionLinks(f.id,primaryTaskId,input,now);
+        const links = goals.sessionLinks(f.id,primaryTaskId,input,now), commitmentId = new CommitmentService(this.store).sessionLink(input,f.id,now);
         const intention = v.text(input.intention ?? '', t('Intention'), 500), energy = v.rating(input.energy), warmUp = v.warmUp(input.warmUp), medication = v.medication(input.medication);
         const plannedMs = timingMode === 'stopwatch' ? null : v.number(input.durationMinutes,t('Duration'),1,1440) * 60000;
         try { this.store.db.transaction(() => {
           if (links.occurrence) this.store.putGoalRecord('goalOccurrences',links.occurrence);
-          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication });
+          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,commitmentId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication });
           this.store.setMeta('settings',{ ...this.store.getSettings(),activityModes: { ...this.store.getSettings().activityModes,[f.id]: activityMode } });
         })(); } catch (error) { this.timer.recover(); throw error; }
         return this.timer.current!.id;
@@ -183,7 +185,7 @@ export class FocusService {
           if ('challenge' in input) s.challenge = v.challenge(input.challenge);
           if (command === 'session.edit') {
             const f = this.store.field(v.id(input.fieldId)); if (!f) throw new Error(t('Choose an existing area.'));
-            if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; s.milestoneId = null; }
+            if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; s.milestoneId = null; s.commitmentId = null; }
             s.fieldId = f.id; s.intention = v.text(input.intention ?? '', t('Intention'), 500); s.energy = v.rating(input.energy);
           }
         }

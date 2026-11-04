@@ -3,7 +3,7 @@ import { FocusService } from '../../main/service';
 import { DEFAULT_PROBE_OPTIONS, FAST_PROBE_OPTIONS, ProbeScheduler } from '../../main/probes';
 import type { Store } from '../../main/store';
 import { GOAL_COLLECTIONS, goalData, milestoneDefaults, upgradeGoalRecords, type GoalData } from '../../shared/goal-types';
-import type { Dataset, FocusGuideAPI, AppEvent, FocusSession, SessionEvent, Task, Field, TaskCategory, WeeklyReview, ActivitySample } from '../../shared/types';
+import type { Dataset, FocusGuideAPI, AppEvent, FocusSession, SessionEvent, Task, Field, TaskCategory, WeeklyReview, ActivitySample, Commitment } from '../../shared/types';
 import { exampleDataset } from '../../shared/demo';
 import { settings } from '../../shared/validation';
 import { addDays, localDay } from '../../shared/analytics';
@@ -54,6 +54,16 @@ function seed(): Dataset {
   // A synthetic direct change: the demo agent added one task, which Undo archives.
   data.agentChanges = [{ id: 'demo-change-task', goalId, at: now, source: t('Demo agent'), tool: 'create_tasks', target: 'task', summary: t('Added 1 task to “Learn linear algebra”'), rationale: t('A short practice set for the current step.'), before: { 'demo-agent-task': null }, after: { 'demo-agent-task': { title: t('Do 5 practice problems on matrix products'), notes: '', priority: 'normal', dueDate: null, milestoneId: 'demo-step-2', completed: false, archived: false } }, undoneAt: null }];
   data.tasks = [{ id: 'demo-agent-task', title: t('Do 5 practice problems on matrix products'), fieldId: study, categoryId: null, notes: '', priority: 'normal', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now, goalId, milestoneId: 'demo-step-2' }, { id: 'demo-paper', title: t('Read one paper'), fieldId: study, categoryId: 'demo-study', notes: t('Capture three useful ideas.'), priority: 'high', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now, goalId, milestoneId: 'demo-step-2' }, { id: 'demo-outline', title: t('Draft the outline'), fieldId: data.fields[1].id, categoryId: null, notes: '', priority: 'normal', dueDate: null, completed: false, archived: false, createdAt: now, updatedAt: now }];
+  // Synthetic commitments: today, tomorrow and a missed one yesterday, planned by the user and by the demo agent.
+  const block = (id: string, date: string, startMinute: number, durationMinutes: number, title: string, links: Partial<Pick<Commitment, 'fieldId' | 'goalId' | 'milestoneId' | 'taskId'>>, origin: Commitment['origin']): Commitment => ({ id, title, notes: '', date, startMinute, durationMinutes, timezone: zone, fieldId: null, goalId: null, milestoneId: null, taskId: null, ...links, activityMode: 'Unspecified', status: 'planned', origin, rescheduleCount: 0, createdAt: now, updatedAt: now });
+  data.commitments = [
+    block('demo-commitment-step', today, 9 * 60, 50, t('Matrix multiplication'), { fieldId: study, goalId, milestoneId: 'demo-step-2' }, 'agent'),
+    block('demo-commitment-free', today, 14 * 60, 25, t('Focus block'), {}, 'user'),
+    block('demo-commitment-task', addDays(today, 1), 10 * 60, 45, t('Read one paper'), { fieldId: study, goalId, milestoneId: 'demo-step-2', taskId: 'demo-paper' }, 'agent'),
+    block('demo-commitment-missed', addDays(today, -1), 16 * 60, 40, data.fields[1].name, { fieldId: work }, 'user')
+  ];
+  data.agentProposals.push({ ...proposal, id: 'demo-proposal-commitments', goalId: null, kind: 'commitments.add', summary: t('2 new commitments'), rationale: t('Your longest sessions start in the morning, so the harder step goes there.'), basis: null,
+    payload: { commitments: [{ date: addDays(today, 1), start: '15:00', durationMinutes: 30, areaId: create, goalId: null, taskId: null, step: '' }, { date: addDays(today, 2), start: '09:30', durationMinutes: 50, areaId: null, goalId, taskId: null, step: t('Determinants') }] } });
   return data;
 }
 class PreviewStore {
@@ -72,7 +82,7 @@ class PreviewStore {
     try {
       const saved = JSON.parse(localStorage.getItem(key) ?? 'null');
       if ((saved?.version === 2 || saved?.version === 3) && ['fields', 'tasks', 'sessions', 'events', 'reviews', 'categories'].every(k => Array.isArray(saved.data?.[k]))) {
-        this.data = { ...saved.data, ...upgradeGoalRecords(goalData(saved.data)), settings: settings(saved.data.settings) };
+        this.data = { commitments: [], ...saved.data, ...upgradeGoalRecords(goalData(saved.data)), settings: settings(saved.data.settings) };
         const sessions = new Set(this.data.sessions.map(s => s.id));
         this.data.activity = (this.data.activity ?? []).filter(a => sessions.has(a.sessionId));
         for (const session of this.data.sessions) {
@@ -126,6 +136,14 @@ class PreviewStore {
     if (index < 0) collection.push(structuredClone(value)); else collection[index] = structuredClone(value);
   }
   putTask(t: Task) { this.put(this.data.tasks, t); this.save(); }
+  commitments() { return structuredClone(this.data.commitments ?? []).sort((a, b) => a.date.localeCompare(b.date) || a.startMinute - b.startMinute || a.id.localeCompare(b.id)); }
+  commitment(id: string) { return structuredClone((this.data.commitments ?? []).find(c => c.id === id)); }
+  putCommitment(c: Commitment) { this.put(this.data.commitments ??= [], c); this.save(); }
+  removeCommitment(id: string) { this.db.transaction(() => {
+    this.data.commitments = (this.data.commitments ?? []).filter(c => c.id !== id);
+    this.data.sessions = this.data.sessions.map(s => s.commitmentId === id ? { ...s, commitmentId: null } : s);
+    this.save();
+  })(); }
   putField(f: Field) { this.put(this.data.fields, f); this.save(); }
   removeField(id: string) {
     this.db.transaction(() => {
@@ -135,6 +153,7 @@ class PreviewStore {
       this.data.activity = (this.data.activity ?? []).filter(a => !removed.has(a.sessionId));
       for (const sessionId of removed) delete this.activityCursors[sessionId];
       this.data.tasks = this.data.tasks.filter(t => t.fieldId !== id);
+      this.data.commitments = (this.data.commitments ?? []).filter(c => c.fieldId !== id);
       const domain = goalData(this.data), goals = new Set(domain.goals.filter(g => g.fieldId === id).map(g => g.id));
       this.data.goals = domain.goals.filter(g => !goals.has(g.id));
       for (const name of GOAL_COLLECTIONS.filter(k => k !== 'goals')) (this.data[name] as Array<{ goalId: string | null }>) = domain[name].filter(row => row.goalId === null || !goals.has(row.goalId));
@@ -148,6 +167,7 @@ class PreviewStore {
       const domain = goalData(this.data), steps = new Set(domain.milestones.filter(m => m.goalId === id).map(m => m.id)), planned = new Set(domain.goalOccurrences.filter(o => o.goalId === id).map(o => o.id));
       this.data.sessions = this.data.sessions.map(s => s.goalId === id || (s.occurrenceId && planned.has(s.occurrenceId)) || (s.milestoneId && steps.has(s.milestoneId)) ? { ...s, goalId: null, occurrenceId: null, milestoneId: null } : s);
       this.data.tasks = this.data.tasks.map(t => t.goalId === id || (t.milestoneId && steps.has(t.milestoneId)) ? { ...t, goalId: null, milestoneId: null } : t);
+      this.data.commitments = (this.data.commitments ?? []).map(c => c.goalId === id ? { ...c, goalId: null, milestoneId: null } : c);
       this.data.goals = domain.goals.filter(g => g.id !== id);
       for (const name of GOAL_COLLECTIONS.filter(k => k !== 'goals')) (this.data[name] as Array<{ goalId: string | null }>) = domain[name].filter(row => row.goalId !== id);
       this.save();
@@ -182,7 +202,7 @@ export function installPreview(): void {
   const probes = new ProbeScheduler(Math.random, new URLSearchParams(location.search).get('probes') === 'fast' ? FAST_PROBE_OPTIONS : DEFAULT_PROBE_OPTIONS);
   const service = new FocusService(store as unknown as Store, timer, kind => {
     const data = store.all();
-    const backup = { ...data,...goalData(data),format: 'focus-guide',schemaVersion: 11,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null,warmUp: s.warmUp ?? null,medication: s.medication ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
+    const backup = { ...data,...goalData(data),commitments: data.commitments ?? [],format: 'focus-guide',schemaVersion: 12,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null,warmUp: s.warmUp ?? null,medication: s.medication ?? null,commitmentId: s.commitmentId ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
     localStorage.setItem(`${key}-before-${kind}-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
   }, probes);
   const simulate = () => {

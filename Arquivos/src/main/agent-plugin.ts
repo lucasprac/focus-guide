@@ -7,14 +7,15 @@ import weeklyReview from '../../agent-plugin/skills/weekly-review/SKILL.md?raw';
 import patternAnalysis from '../../agent-plugin/skills/pattern-analysis/SKILL.md?raw';
 import planDay from '../../agent-plugin/skills/plan-day/SKILL.md?raw';
 import roadmap from '../../agent-plugin/skills/roadmap/SKILL.md?raw';
+import commitments from '../../agent-plugin/skills/commitments/SKILL.md?raw';
 
-/* A Claude Code plugin for Focus Guide: the MCP server, four skills and the hooks in src/mcp/hooks.ts. The app
+/* A Claude Code plugin for Focus Guide: the MCP server, five skills and the hooks in src/mcp/hooks.ts. The app
    writes it to the "claude-plugin" folder of its data folder as a local marketplace, because the MCP server and
    the hooks need the absolute path of this executable. Claude Code copies the plugin when the user installs it,
    so the user installs again after an app update or move. The files hold no personal records. */
 const PLUGIN = 'focus-guide', MARKETPLACE = 'focus-guide-local';
-const DESCRIPTION = 'Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan and roadmaps.';
-const SKILLS: Record<string, string> = { 'weekly-review': weeklyReview, 'pattern-analysis': patternAnalysis, 'plan-day': planDay, roadmap };
+const DESCRIPTION = 'Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan, calendar commitments and roadmaps.';
+const SKILLS: Record<string, string> = { 'weekly-review': weeklyReview, 'pattern-analysis': patternAnalysis, 'plan-day': planDay, roadmap, commitments };
 type Launch = NonNullable<AgentBridgeStatus['launch']>;
 
 const folder = (dataDirectory: string) => join(dataDirectory, 'claude-plugin');

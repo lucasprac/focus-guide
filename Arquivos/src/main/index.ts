@@ -346,7 +346,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
       const file = selectedFile;
       if (!file) return;
       const data = readBackup(file); const token = randomUUID(); pendingRestore = { token, data, expires: Date.now() + 300000 };
-      return { token, exportedAt: data.exportedAt, sessions: data.sessions.length, fields: data.fields.length, tasks: data.tasks.length, events: data.events.length, goals: data.goals.length, goalOccurrences: data.goalOccurrences.length, goalProgress: data.goalProgress.length };
+      return { token, exportedAt: data.exportedAt, sessions: data.sessions.length, fields: data.fields.length, tasks: data.tasks.length, events: data.events.length, goals: data.goals.length, goalOccurrences: data.goalOccurrences.length, goalProgress: data.goalProgress.length, commitments: data.commitments.length };
     }
     case 'backup.restore': {
       if (timer.snapshot().mode !== 'idle') throw new Error(t('Finish your current session or break before restoring data.'));

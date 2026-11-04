@@ -6,6 +6,7 @@ import type { ActivitySample, Dataset, Field, FocusSession, SessionEvent, Settin
 import { settings } from '../shared/validation';
 import { GOAL_COLLECTIONS, upgradeGoalRecords, type GoalData, type Goal, type GoalMilestone } from '../shared/goal-types';
 import type { WindowJudgment } from '../shared/jev-decisions';
+import type { Commitment } from '../shared/commitments';
 import { t } from '../shared/i18n';
 
 export const defaultSettings: Settings = {
@@ -20,7 +21,7 @@ export class Store {
     this.path = join(directory, 'focus-guide.sqlite');
     this.db = new Database(this.path);
     const originalVersion = Number(this.db.pragma('user_version', { simple: true }));
-    if (originalVersion > 12) { this.db.close(); throw new Error(t('This dataset was created by a newer Focus Guide version.')); }
+    if (originalVersion > 13) { this.db.close(); throw new Error(t('This dataset was created by a newer Focus Guide version.')); }
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('synchronous = FULL');
@@ -207,6 +208,30 @@ export class Store {
         this.db.pragma('user_version = 12');
       })();
     }
+    if (originalVersion < 13) {
+      // Schema 13 adds calendar commitments and the session link to the commitment it started from. A change that an agent
+      // makes in the calendar belongs to no goal, so the change log is rebuilt with a goalId that can be null; its rows stay as they are.
+      if (originalVersion > 0) {
+        const backups = join(directory, 'backups'); mkdirSync(backups, { recursive: true });
+        this.db.prepare('VACUUM INTO ?').run(join(backups, 'before-schema-v13-' + Date.now() + '.sqlite'));
+      }
+      this.db.transaction(() => {
+        this.db.exec(`CREATE TABLE IF NOT EXISTS commitments (id TEXT PRIMARY KEY, title TEXT NOT NULL, notes TEXT NOT NULL, date TEXT NOT NULL, startMinute INTEGER NOT NULL, durationMinutes INTEGER NOT NULL, timezone TEXT NOT NULL,
+            fieldId TEXT REFERENCES fields(id) ON DELETE CASCADE, goalId TEXT REFERENCES goals(id) ON DELETE SET NULL, milestoneId TEXT REFERENCES milestones(id) ON DELETE SET NULL, taskId TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+            activityMode TEXT NOT NULL, status TEXT NOT NULL, origin TEXT NOT NULL, rescheduleCount INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS commitment_date ON commitments(date);
+          CREATE TABLE agentChanges_v13 (id TEXT PRIMARY KEY, goalId TEXT REFERENCES goals(id) ON DELETE CASCADE, body TEXT NOT NULL);
+          INSERT INTO agentChanges_v13 (id, goalId, body) SELECT id, goalId, body FROM agentChanges;
+          DROP TABLE agentChanges;
+          ALTER TABLE agentChanges_v13 RENAME TO agentChanges;
+          CREATE INDEX IF NOT EXISTS change_goal ON agentChanges(goalId);`);
+        const columns = this.db.pragma('table_info(sessions)') as Array<{ name: string }>;
+        if (!columns.some(c => c.name === 'commitmentId')) this.db.exec('ALTER TABLE sessions ADD COLUMN commitmentId TEXT REFERENCES commitments(id) ON DELETE SET NULL;');
+        this.db.exec('CREATE INDEX IF NOT EXISTS session_commitment ON sessions(commitmentId);');
+        if ((this.db.pragma('foreign_key_check') as unknown[]).length) throw new Error(t('Migration found invalid record links.'));
+        this.db.pragma('user_version = 13');
+      })();
+    }
     if (!this.getMeta('settings')) {
       this.db.transaction(() => {
         this.setMeta('settings', defaultSettings);
@@ -231,8 +256,15 @@ export class Store {
     const events = this.db.prepare('SELECT * FROM events ORDER BY startedAt, id').all() as SessionEvent[];
     const reviews = this.db.prepare('SELECT * FROM reviews ORDER BY week DESC').all() as WeeklyReview[];
     const categories = (this.db.prepare('SELECT * FROM categories ORDER BY createdAt, id').all() as Array<TaskCategory>).map(c => ({ ...c, archived: !!c.archived }));
-    return { fields, tasks, sessions, events, categories, settings: this.getSettings(), reviews, ...this.goalData(), ...(includeActivity ? { activity: this.activity() } : {}) };
+    return { fields, tasks, sessions, events, categories, settings: this.getSettings(), reviews, ...this.goalData(), commitments: this.commitments(), ...(includeActivity ? { activity: this.activity() } : {}) };
   }
+  commitments(): Commitment[] { return this.db.prepare('SELECT * FROM commitments ORDER BY date, startMinute, id').all() as Commitment[]; }
+  commitment(id: string): Commitment | undefined { return this.db.prepare('SELECT * FROM commitments WHERE id=?').get(id) as Commitment | undefined; }
+  putCommitment(c: Commitment): void {
+    this.db.prepare('INSERT INTO commitments (id,title,notes,date,startMinute,durationMinutes,timezone,fieldId,goalId,milestoneId,taskId,activityMode,status,origin,rescheduleCount,createdAt,updatedAt) VALUES (@id,@title,@notes,@date,@startMinute,@durationMinutes,@timezone,@fieldId,@goalId,@milestoneId,@taskId,@activityMode,@status,@origin,@rescheduleCount,@createdAt,@updatedAt) ON CONFLICT(id) DO UPDATE SET title=excluded.title,notes=excluded.notes,date=excluded.date,startMinute=excluded.startMinute,durationMinutes=excluded.durationMinutes,fieldId=excluded.fieldId,goalId=excluded.goalId,milestoneId=excluded.milestoneId,taskId=excluded.taskId,activityMode=excluded.activityMode,status=excluded.status,rescheduleCount=excluded.rescheduleCount,updatedAt=excluded.updatedAt').run(c);
+  }
+  // Sessions keep their recorded time; only their link to the commitment is cleared (ON DELETE SET NULL).
+  removeCommitment(id: string): void { this.db.prepare('DELETE FROM commitments WHERE id=?').run(id); }
   private bodies<T = Record<string, unknown>>(table: 'goals' | 'milestones'): T[] { return (this.db.prepare(`SELECT body FROM ${table} ORDER BY id`).all() as Array<{ body: string }>).map(row => JSON.parse(row.body) as T); }
   goalData(): GoalData {
     return Object.fromEntries(GOAL_COLLECTIONS.map(key => [key, (this.db.prepare(`SELECT body FROM ${key} ORDER BY id`).all() as Array<{ body: string }>).map(row => JSON.parse(row.body))])) as unknown as GoalData;
@@ -288,9 +320,9 @@ export class Store {
     this.db.prepare('INSERT INTO tasks (id,fieldId,title,completed,archived,createdAt,updatedAt,categoryId,notes,priority,dueDate,goalId,milestoneId) VALUES (@id,@fieldId,@title,@completed,@archived,@createdAt,@updatedAt,@categoryId,@notes,@priority,@dueDate,@goalId,@milestoneId) ON CONFLICT(id) DO UPDATE SET title=excluded.title,completed=excluded.completed,archived=excluded.archived,updatedAt=excluded.updatedAt,categoryId=excluded.categoryId,notes=excluded.notes,priority=excluded.priority,dueDate=excluded.dueDate,goalId=excluded.goalId,milestoneId=excluded.milestoneId').run({ goalId: null, milestoneId: null, ...t, completed: +t.completed, archived: +t.archived });
   }
   putSession(s: FocusSession): void {
-    this.db.prepare(`INSERT INTO sessions (id,fieldId,primaryTaskId,checklistIds,intention,plannedMs,activeMs,status,startedAt,endedAt,timezone,energy,focus,note,completionReason,excluded,recovered,timingMode,autoOvertime,targetReached,activityMode,behaviourVersion,goalId,occurrenceId,milestoneId,detractor,challenge,warmUp,medication) VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId,@detractor,@challenge,@warmUp,@medication)
-      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId,detractor=excluded.detractor,challenge=excluded.challenge,warmUp=excluded.warmUp,medication=excluded.medication`)
-      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, detractor: s.detractor ?? null, challenge: s.challenge ?? null, warmUp: s.warmUp ?? null, medication: s.medication ?? null, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
+    this.db.prepare(`INSERT INTO sessions (id,fieldId,primaryTaskId,checklistIds,intention,plannedMs,activeMs,status,startedAt,endedAt,timezone,energy,focus,note,completionReason,excluded,recovered,timingMode,autoOvertime,targetReached,activityMode,behaviourVersion,goalId,occurrenceId,milestoneId,detractor,challenge,warmUp,medication,commitmentId) VALUES (@id,@fieldId,@primaryTaskId,@checklistIds,@intention,@plannedMs,@activeMs,@status,@startedAt,@endedAt,@timezone,@energy,@focus,@note,@completionReason,@excluded,@recovered,@timingMode,@autoOvertime,@targetReached,@activityMode,@behaviourVersion,@goalId,@occurrenceId,@milestoneId,@detractor,@challenge,@warmUp,@medication,@commitmentId)
+      ON CONFLICT(id) DO UPDATE SET fieldId=excluded.fieldId,primaryTaskId=excluded.primaryTaskId,checklistIds=excluded.checklistIds,intention=excluded.intention,plannedMs=excluded.plannedMs,activeMs=excluded.activeMs,status=excluded.status,endedAt=excluded.endedAt,energy=excluded.energy,focus=excluded.focus,note=excluded.note,completionReason=excluded.completionReason,excluded=excluded.excluded,recovered=excluded.recovered,timingMode=excluded.timingMode,autoOvertime=excluded.autoOvertime,targetReached=excluded.targetReached,goalId=excluded.goalId,occurrenceId=excluded.occurrenceId,milestoneId=excluded.milestoneId,detractor=excluded.detractor,challenge=excluded.challenge,warmUp=excluded.warmUp,medication=excluded.medication,commitmentId=excluded.commitmentId`)
+      .run({ activityMode: 'Unspecified', behaviourVersion: 0, goalId: null, occurrenceId: null, milestoneId: null, ...s, detractor: s.detractor ?? null, challenge: s.challenge ?? null, warmUp: s.warmUp ?? null, medication: s.medication ?? null, commitmentId: s.commitmentId ?? null, checklistIds: JSON.stringify(s.checklistIds), excluded: +s.excluded, recovered: +s.recovered, autoOvertime: +s.autoOvertime, targetReached: +s.targetReached });
   }
   putEvent(e: SessionEvent): void {
     this.db.prepare('INSERT INTO events VALUES (@id,@sessionId,@kind,@startedAt,@endedAt,@durationMs,@text,@category,@activeOffsetMs,@source) ON CONFLICT(id) DO UPDATE SET endedAt=excluded.endedAt,durationMs=excluded.durationMs,text=excluded.text,category=excluded.category').run({ activeOffsetMs: null, source: null, ...e });
@@ -328,10 +360,11 @@ export class Store {
   removeReturn(id: string): void { this.db.prepare("DELETE FROM events WHERE id=? AND kind='attention-return'").run(id); }
   restore(data: Dataset): void {
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM windowJudgments; DELETE FROM events; DELETE FROM sessions; DELETE FROM tasks; DELETE FROM agentProposals; DELETE FROM agentChanges; DELETE FROM goals; DELETE FROM fields; DELETE FROM categories; DELETE FROM reviews;');
+      this.db.exec('DELETE FROM windowJudgments; DELETE FROM events; DELETE FROM sessions; DELETE FROM commitments; DELETE FROM tasks; DELETE FROM agentProposals; DELETE FROM agentChanges; DELETE FROM goals; DELETE FROM fields; DELETE FROM categories; DELETE FROM reviews;');
       data.fields.forEach(f => this.putField(f)); data.categories.forEach(c => this.putCategory(c));
       for (const key of GOAL_COLLECTIONS) for (const row of data[key] ?? []) this.putGoalRecord(key,row);
       data.tasks.forEach(t => this.putTask(t));
+      (data.commitments ?? []).forEach(c => this.putCommitment(c));
       data.sessions.forEach(s => this.putSession(s)); data.events.forEach(e => this.putEvent(e));
       (data.activity ?? []).forEach(sample => this.putActivity(sample));
       data.reviews.forEach(r => this.putReview(r)); this.setMeta('settings', { ...data.settings, collectActivity: false, agentAccess: 'off', attentionProbes: false, jevAssist: false, jevWindowCheck: 'off' });

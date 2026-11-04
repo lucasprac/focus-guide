@@ -1,7 +1,7 @@
 import { Button, CheckControl, Hint, IconButton, cn } from './ui';
 import { useEffect, useRef, useState } from 'react';
 import { animate, createScope } from 'animejs';
-import type { AppState, Challenge, Command, CommandResult, Detractor, FocusSession, Goal, GoalOccurrence, ActivityMode, Task } from '../../shared/types';
+import type { AppState, Challenge, Command, CommandResult, Detractor, FocusSession, Goal, GoalOccurrence, ActivityMode, Task, Commitment } from '../../shared/types';
 import GoalsPage from './GoalsPage';
 import type { GoalFocusOptions } from './GoalWorkspace';
 import { ActionCheckIn } from './GoalForms';
@@ -23,7 +23,7 @@ import FloatingBar from './FloatingBar';
 import { t, dateLocale, setLanguage } from '../../shared/i18n';
 
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
-export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
+export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; commitmentId?: string | null; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
 export interface ViewProps { data: AppState; act: Action }
 type Page = 'Goals' | 'Focus' | 'Calendar' | 'Patterns' | 'Neural World' | 'Settings';
 const navigation: Array<{ page: Page; icon: IconName }> = [
@@ -48,7 +48,7 @@ export default function App() {
       const checklistIds = current.checklistIds.filter(id => valid.has(id));
       const primaryTaskId = current.primaryTaskId && checklistIds.includes(current.primaryTaskId) ? current.primaryTaskId : null;
       const goalValid = !current.goalId || data.goals?.some(g => g.id === current.goalId && g.fieldId === fieldId && g.status === 'active');
-      return fieldId === current.fieldId && checklistIds.length === current.checklistIds.length && primaryTaskId === current.primaryTaskId && goalValid ? current : { ...current,fieldId,checklistIds,primaryTaskId,...(!goalValid || fieldId !== current.fieldId ? { goalId: undefined,milestoneId: null,occurrenceId: null,occurrenceDate: undefined,preparedAt: undefined } : {}) };
+      return fieldId === current.fieldId && checklistIds.length === current.checklistIds.length && primaryTaskId === current.primaryTaskId && goalValid ? current : { ...current,fieldId,checklistIds,primaryTaskId,...(!goalValid || fieldId !== current.fieldId ? { goalId: undefined,milestoneId: null,occurrenceId: null,occurrenceDate: undefined,commitmentId: null,preparedAt: undefined } : {}) };
     });
   }, [data?.tasks, data?.fields, data?.goals, data?.timer.sessionId]);
   const previous = useRef<string | null>(null), root = useRef<HTMLDivElement>(null);
@@ -150,6 +150,16 @@ export default function App() {
     setPreparation({ fieldId: task.fieldId,checklistIds: [task.id],primaryTaskId: task.id,goalId: null,milestoneId: null,occurrenceId: null,intention: task.title,durationMinutes: data.settings.defaultMinutes,activityMode: data.settings.activityModes?.[task.fieldId] ?? 'Unspecified',preparedAt: crypto.randomUUID() });
     setPage('Focus');
   };
+  // Focus on a calendar commitment: the session takes its area, goal, step and task where they are still open, and its time.
+  // A free block keeps the area that is chosen now.
+  const focusCommitment = (row: Commitment) => {
+    if (data.timer.mode !== 'idle') { setPage('Focus'); return; }
+    const fieldId = row.fieldId ?? preparation.fieldId;
+    if (!data.fields.some(f => f.id === fieldId && !f.archived)) return;
+    const goal = data.goals?.find(g => g.id === row.goalId && g.status === 'active'), task = data.tasks.find(tk => tk.id === row.taskId && !tk.archived && !tk.completed && tk.fieldId === fieldId);
+    setPreparation({ fieldId,checklistIds: task ? [task.id] : [],primaryTaskId: task?.id ?? null,goalId: goal?.id ?? null,milestoneId: goal ? row.milestoneId : null,occurrenceId: null,commitmentId: row.id,intention: row.notes || row.title,durationMinutes: row.durationMinutes,activityMode: row.activityMode,preparedAt: crypto.randomUUID() });
+    setPage('Focus');
+  };
   const dueTasks = dueTaskCount(data);
   return <div className="app-shell" key={language} ref={root} data-page={page}>
     <aside className={`sidebar ${data.settings.sidebarCollapsed ? 'collapsed' : ''}`} id="side-panel"><div className="brand"><span className="brand-mark"><img src={`${import.meta.env.BASE_URL}icon.png`} alt="" draggable={false} /></span><div>Focus Guide</div><Hint label={data.settings.sidebarCollapsed ? t('Expand side panel') : t('Collapse side panel')}><button className="sidebar-toggle" aria-label={data.settings.sidebarCollapsed ? t('Expand side panel') : t('Collapse side panel')} title={data.settings.sidebarCollapsed ? t('Expand side panel') : t('Collapse side panel')} aria-expanded={!data.settings.sidebarCollapsed} aria-controls="side-panel" onClick={() => void act('settings.update', { ...data.settings, sidebarCollapsed: !data.settings.sidebarCollapsed })}><Icon name="chevron" size={16} /></button></Hint></div>
@@ -172,7 +182,7 @@ export default function App() {
       <div className="page-content">
         <div hidden={page !== 'Focus'}><FocusPage data={data} act={act} preparation={preparation} setPreparation={setPreparation} visible={page === 'Focus'} /></div>
         {page === 'Goals' && <GoalsPage data={data} act={act} startAction={startAction} focusGoal={focusGoal} activeGoalId={activeGoalId} openGoal={setActiveGoalId} />}
-        {page === 'Calendar' && <CalendarPage data={data} act={act} />}
+        {page === 'Calendar' && <CalendarPage data={data} act={act} focusCommitment={focusCommitment} />}
         {page === 'Patterns' && <PatternsPage data={data} act={act} openTutorial={() => setTutorialOpen(true)} />}
         {page === 'Neural World' && <WorldPage data={data} act={act} openGoal={id => { setActiveGoalId(id); setPage('Goals'); }} focusGoal={focusGoal} />}
         {settingsVisited && <div hidden={page !== 'Settings'}><SettingsPage data={data} act={act} visible={page === 'Settings'} openTutorial={() => setTutorialOpen(true)} /></div>}

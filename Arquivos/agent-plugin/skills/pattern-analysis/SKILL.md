@@ -18,10 +18,11 @@ Answer in the language of the user.
 2. Call `get_focus_insights` with the range and the scope. Read the data quality first. If the data is not sufficient, tell the user how many more sessions or check-ins Focus Guide needs, and give only a description of the records.
 3. Call `list_sessions` for the same range, with `limit` 200 (and `goalId` if the scope is one goal).
 4. For each goal in the scope (at most 5 active goals), call `get_goal` and `get_goal_behaviour` for the same range.
+   Call `get_calendar` for the last 28 days (`from` 27 days before today, `to` today). Its `lastFourWeeks` compares the plan with what happened.
 5. Look for patterns in the four areas:
    - **Focus:** the hours and weekdays with the most recorded time, the attention span curves (time to the first drift, after a return), the session length that ends in a drift, and the detractors.
    - **Goals:** goals with no recorded time in 28 days, roadmap steps with `recordedMinutes` much larger than `estimatedMinutes`, steps without an estimate, and the progress against the deadline.
-   - **Workflow:** planned minutes against recorded minutes, sessions without a goal or a roadmap step, sessions without an intention, and the timing modes.
+   - **Workflow:** planned minutes against recorded minutes, calendar commitments that were done, missed, skipped or moved, the median delay between the planned start and the first session, sessions without a goal or a roadmap step, sessions without an intention, and the timing modes.
    - **Behaviour:** action check-ins (done, smaller, skipped), interruptions and returns, self-ratings of focus and energy, and keyboard and mouse context.
 6. Keep at most 5 patterns. Put the pattern with the strongest evidence first.
 7. For each pattern, suggest one behaviour to keep or to change, and one experiment for the next 1 or 2 weeks. Tell the user how to check the result in Focus Guide (for example, the Insights tab of Patterns, or the weekly review).

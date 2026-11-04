@@ -1,7 +1,9 @@
 import type { AgentAccess, GoalData } from './goal-types';
 import type { Language } from './i18n';
+import type { Commitment } from './commitments';
 export type { Language } from './i18n';
 export * from './goal-types';
+export type { Commitment, CommitmentState, CommitmentStatus } from './commitments';
 export type SessionStatus = 'running' | 'paused' | 'completed';
 export const MIN_INCLUDED_SESSION_MS = 2 * 60000;
 export type EventKind = 'active' | 'pause' | 'interruption' | 'thought' | 'recovery' | 'edit' | 'attention-return' | 'probe';
@@ -48,6 +50,8 @@ export interface Task { id: string; fieldId: string; title: string; completed: b
 export type TimingMode = 'countdown' | 'stopwatch';
 export interface FocusSession {
   goalId?: string | null; occurrenceId?: string | null; milestoneId?: string | null;
+  /* Schema 13: the commitment that this session started from. Null when it was not planned in the calendar. */
+  commitmentId?: string | null;
   id: string; fieldId: string; primaryTaskId: string | null; checklistIds: string[];
   intention: string; plannedMs: number | null; activeMs: number; status: SessionStatus;
   timingMode: TimingMode; autoOvertime: boolean; targetReached: boolean;
@@ -91,6 +95,8 @@ export interface Dataset extends Partial<GoalData> {
   settings: Settings; reviews: WeeklyReview[];
   categories: TaskCategory[];
   activity?: ActivitySample[];
+  /* Schema 13: planned focus blocks in the calendar. */
+  commitments?: Commitment[];
 }
 export interface TimerSnapshot {
   mode: 'idle' | 'focus' | 'break'; running: boolean; sessionId: string | null;
@@ -107,11 +113,12 @@ export interface PendingProbe { id: string; sessionId: string; shownAt: string; 
 /* Runtime state of TypeSafe Jev; it never reaches settings, datasets or backups. The key itself never leaves the main process. */
 export interface JevStatus { keyStored: boolean; encryption: boolean; windowCheck?: { state: 'off' | 'ready' | 'stopped'; message: string } }
 export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
-export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 11; exportedAt: string };
-export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
+export type BackupFile = Dataset & GoalData & { commitments: Commitment[]; format: 'focus-guide'; schemaVersion: 12; exportedAt: string };
+export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number; commitments?: number }
 export type Command =
   | 'goal.create' | 'goal.update' | 'goal.delete' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide' | 'goal.behaviour'
   | 'agent.proposal.apply' | 'agent.proposal.reject' | 'agent.change.undo' | 'agent.plugin.write'
+  | 'commitment.save' | 'commitment.delete'
   | 'export.goals'
   | 'field.create' | 'field.update' | 'field.archive' | 'field.delete'
   | 'task.create' | 'task.update' | 'task.delete'

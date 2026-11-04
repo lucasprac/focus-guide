@@ -930,6 +930,14 @@ button:active:not(:disabled) { filter: brightness(.94); }
 /* Top-right, beside the session dot, so it never overlaps the duration text below the day number. */
 .day-plan-dot { position: absolute; top: 11px; right: 17px; width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; }
 .day-task-dot { position: absolute; top: 11px; right: 25px; width: 5px; height: 5px; border-radius: 1px; background: var(--muted); }
+.day-commitment-dot { position: absolute; top: 11px; right: 33px; width: 5px; height: 5px; border: 1px dashed var(--accent); border-radius: 1px; }
+.commitment-row.cancelled { opacity: .55; }
+.commitment-row.cancelled .planned-row-head strong { text-decoration: line-through; }
+.commitment-row .planned-row-head strong { display: inline-flex; align-items: center; gap: 8px; }
+.commitment-time-fields { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .8fr); gap: 0 12px; }
+.commitment-time-fields input { width: 100%; min-width: 0; }
+.commitment-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+@media (max-width: 560px) { .commitment-time-fields { grid-template-columns: 1fr; } }
 .calendar-tasks .organizer-task { padding: 10px 0; }
 @container workspace (max-width: 900px) {
   .goal-action-heading { flex-direction: column; }
