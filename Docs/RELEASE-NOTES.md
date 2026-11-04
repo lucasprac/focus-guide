@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased (3.15.0) — Agent tutorial skill
+
+- **New plugin skill `focus-guide:get-tutorial`.** It teaches an AI agent how Focus Guide works: the pages, the access levels, what each MCP tool reads or changes, which skill to use for each task, and what an agent can never do. Then the agent reads your records and gives you a short tutorial: your stage (new, started or regular), with the counts, and at most three next features to try. The skill only reads and changes nothing.
+- The SessionStart hook names the new skill. Install the plugin again after the update to get it.
+- No schema or backup change.
+
 ## Unreleased (3.14.0) — Manual attention state
 
 - **See your attention state.** During focus, the Focus page and the floating timer show the state of the session: **Warm-up**, **Sustain** or **Fatigue**.

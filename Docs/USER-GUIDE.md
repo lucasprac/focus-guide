@@ -103,7 +103,7 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
 
 ### Claude Code plugin
 
-For Claude Code, the plugin is the easier way to connect. It contains the MCP server, five skills and hooks. You can install it in two ways.
+For Claude Code, the plugin is the easier way to connect. It contains the MCP server, six skills and hooks. You can install it in two ways.
 
 **From GitHub (recommended).** Open Focus Guide once and choose an access level. Then run these commands in Claude Code and restart it:
 
@@ -120,13 +120,14 @@ The plugin finds the app through `agent-launch.cmd`, which Focus Guide writes to
    - `claude plugin install focus-guide@focus-guide-local`
 3. Restart Claude Code. If you also added the `focus-guide` entry yourself, remove it, so that the agent does not see each tool two times.
 
-The skills give the agent a fixed method for five tasks. You can ask in your own words, or type the skill name:
+The skills give the agent a fixed method for six tasks. You can ask in your own words, or type the skill name:
 
 - `/focus-guide:weekly-review`: reviews the week of your goals and saves one small adjustment for each goal.
 - `/focus-guide:pattern-analysis`: finds patterns in focus, goals, workflow and behaviour, with the evidence for each pattern.
 - `/focus-guide:plan-day`: plans today's focus sessions from your planned actions, tasks, roadmap steps and best hours, and saves them as commitments in the Calendar.
 - `/focus-guide:commitments`: the playbook for your calendar. The agent sets the length of each block from your warm-up, sustain and fatigue phases, places short and long rests as you prefer them (it asks you if it does not know), and ranks areas and activities by deadline, invested effort and your preferences. It writes your rest preference in the notes of each block, so the next plan can use it.
 - `/focus-guide:roadmap`: creates a goal with a roadmap, or splits and adjusts the roadmap of a goal.
+- `/focus-guide:get-tutorial`: a tutorial on Focus Guide. The agent learns the pages, access levels, tools and skills. Then it reads your records, finds what you use already, and gives you at most three next features to try. It changes nothing.
 
 The hooks run on this computer:
 
