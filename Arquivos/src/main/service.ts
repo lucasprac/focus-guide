@@ -11,6 +11,7 @@ import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
 import { CommitmentService } from './commitment-service';
 import { t, getLanguage } from '../shared/i18n';
+import { phaseAt, phaseMarkers } from '../shared/attention-phase';
 import { JEV_GAP_LIMITS, type JevReflectionGap, type ReflectionText } from '../shared/jev-decisions';
 
 export class FocusService {
@@ -166,7 +167,7 @@ export class FocusService {
         const plannedMs = timingMode === 'stopwatch' ? null : v.number(input.durationMinutes,t('Duration'),1,1440) * 60000;
         try { this.store.db.transaction(() => {
           if (links.occurrence) this.store.putGoalRecord('goalOccurrences',links.occurrence);
-          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,commitmentId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication });
+          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,commitmentId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication }, this.store.getSettings().attentionPhaseMode === 'manual');
           this.store.setMeta('settings',{ ...this.store.getSettings(),activityModes: { ...this.store.getSettings().activityModes,[f.id]: activityMode } });
         })(); } catch (error) { this.timer.recover(); throw error; }
         return this.timer.current!.id;
@@ -196,6 +197,17 @@ export class FocusService {
         const source = input.source ?? 'main';
         if (source !== 'main' && source !== 'floating' && source !== 'shortcut') throw new Error(t('Invalid return source.'));
         return this.timer.recordReturn(source);
+      }
+      case 'attention.phase': {
+        const phase = v.attentionPhase(input.phase), source = input.source ?? 'main';
+        if (source !== 'main' && source !== 'floating') throw new Error(t('Invalid attention state source.'));
+        const current = this.timer.current;
+        if (!current || this.timer.snapshot().mode !== 'focus') throw new Error(t('Start a focus session first.'));
+        // A session is manual when it started with a phase marker; the setting applies from the next session.
+        const markers = phaseMarkers(this.store.phaseEvents(current.id), current.id);
+        if (!markers.length) throw new Error(t('This session follows the automatic attention state. Manual states apply from the next session.'));
+        if (phaseAt(this.timer.snapshot().elapsedMs, markers) === phase) return null;
+        return this.timer.recordPhase(phase, source);
       }
       case 'attention.remove': this.store.removeReturn(v.id(input.id)); return;
       case 'probe.answer': {

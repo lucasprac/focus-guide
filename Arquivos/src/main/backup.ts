@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PROBE_ANSWERS, type ActivitySample, type BackupFile, type Dataset, type Field, type FocusSession, type SessionEvent, type Task, type TaskCategory, type WeeklyReview } from '../shared/types';
 import * as v from '../shared/validation';
+import { isAttentionPhase } from '../shared/attention-phase';
 import { planDifferenceMinutes } from '../shared/analytics';
 import type { Store } from './store';
 import { GOAL_COLLECTIONS, LEGACY_GOAL_COLLECTIONS, V8_GOAL_COLLECTIONS, goalData, upgradeGoalRecords } from '../shared/goal-types';
@@ -94,8 +95,10 @@ export function validateBackup(value: unknown): BackupFile {
     keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', ...GOAL_COLLECTIONS]);
     return validateBackup({ ...data, schemaVersion: 12, commitments: [], sessions: rows(data.sessions, BACKUP_LIMITS.sessions).map(s => ({ ...s, commitmentId: null })) });
   }
+  // Version 13 adds attention-phase events and the attentionPhaseMode setting; a version 12 backup has neither.
+  if (data.schemaVersion === 12) return validateBackup({ ...data, schemaVersion: 13 });
   keys(data, ['format', 'schemaVersion', 'exportedAt', 'fields', 'tasks', 'sessions', 'events', 'settings', 'reviews', 'categories', 'activity', 'commitments', ...GOAL_COLLECTIONS]);
-  if (data.format !== 'focus-guide' || data.schemaVersion !== 12) throw new Error(t('This is not a supported Focus Guide backup (versions 1 to 12).'));
+  if (data.format !== 'focus-guide' || data.schemaVersion !== 13) throw new Error(t('This is not a supported Focus Guide backup (versions 1 to 13).'));
   const fields: Field[] = rows(data.fields, BACKUP_LIMITS.fields).map(f => {
     keys(f, ['id', 'name', 'color', 'archived', 'createdAt']);
     return { id: v.id(f.id), name: v.text(f.name, t('Field name'), 60, true), color: v.color(f.color), archived: v.bool(f.archived, t('Archived')), createdAt: v.timestamp(f.createdAt) };
@@ -126,13 +129,14 @@ export function validateBackup(value: unknown): BackupFile {
   });
   const events: SessionEvent[] = rows(data.events, BACKUP_LIMITS.events).map(e => {
     keys(e, ['id', 'sessionId', 'kind', 'startedAt', 'endedAt', 'durationMs', 'text', 'category', 'activeOffsetMs', 'source']);
-    if (!['active', 'pause', 'interruption', 'thought', 'recovery', 'edit', 'attention-return', 'probe'].includes(String(e.kind))) throw new Error(t('Unknown event kind.'));
+    if (!['active', 'pause', 'interruption', 'thought', 'recovery', 'edit', 'attention-return', 'probe', 'attention-phase'].includes(String(e.kind))) throw new Error(t('Unknown event kind.'));
     if (![null, 'shortcut', 'floating', 'main'].includes(e.source as string | null)) throw new Error(t('Invalid return source.'));
     const event: SessionEvent = { activeOffsetMs: e.activeOffsetMs === null ? null : v.number(e.activeOffsetMs, t('Active offset'), 0, Number.MAX_SAFE_INTEGER), source: e.source as SessionEvent['source'], id: v.id(e.id), sessionId: v.id(e.sessionId), kind: e.kind as SessionEvent['kind'], startedAt: v.timestamp(e.startedAt), endedAt: e.endedAt === null ? null : v.timestamp(e.endedAt), durationMs: v.number(e.durationMs, t('Event duration'), 0, Number.MAX_SAFE_INTEGER), text: v.text(e.text, t('Event text'), 2000), category: v.text(e.category, t('Category'), 100) };
     if (event.kind === 'active' && event.endedAt && Math.abs(Date.parse(event.endedAt) - Date.parse(event.startedAt) - event.durationMs) > 1) throw new Error(t('An active interval has inconsistent boundaries.'));
     if (!['active', 'pause'].includes(event.kind) && event.durationMs !== 0) throw new Error(t('Only intervals may contain a duration.'));
     if (event.kind === 'active' && !event.endedAt && event.durationMs !== 0) throw new Error(t('An active interval is missing its saved boundary.'));
     if (event.kind === 'probe' && (!([...PROBE_ANSWERS, 'missed'] as string[]).includes(event.category) || (event.category === 'missed') !== (event.source === null) || event.source === 'shortcut')) throw new Error(t('Invalid check-in record.'));
+    if (event.kind === 'attention-phase' && (!isAttentionPhase(event.category) || event.source === 'shortcut')) throw new Error(t('Invalid attention state record.'));
     return event;
   });
   const activity: ActivitySample[] = rows(data.activity, BACKUP_LIMITS.activity).map(a => {
@@ -168,6 +172,7 @@ export function validateBackup(value: unknown): BackupFile {
     boundaries.set(sample.sessionId, sample.endMs);
   }
   for (const event of events) if (event.kind === 'attention-return' && (event.activeOffsetMs === null || event.activeOffsetMs === undefined || !event.source || !sessionMap.has(event.sessionId) || event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1)) throw new Error(t('Return marker exceeds saved time.'));
+  for (const event of events) if (event.kind === 'attention-phase' && (event.activeOffsetMs === null || event.activeOffsetMs === undefined || !sessionMap.has(event.sessionId) || event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1)) throw new Error(t('Attention state marker exceeds saved time.'));
   for (const event of events) if (event.kind === 'probe' && (event.activeOffsetMs === null || event.activeOffsetMs === undefined || !sessionMap.has(event.sessionId) || event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1)) throw new Error(t('Check-in marker exceeds saved time.'));
   // Older interruption and thought markers have no offset; a saved one stays within its session time.
   for (const event of events) if ((event.kind === 'interruption' || event.kind === 'thought') && event.activeOffsetMs !== null && event.activeOffsetMs !== undefined && sessionMap.has(event.sessionId) && event.activeOffsetMs > sessionMap.get(event.sessionId)!.activeMs + 1) throw new Error(t('Interruption or thought marker exceeds saved time.'));
@@ -177,7 +182,7 @@ export function validateBackup(value: unknown): BackupFile {
   if (sessions.filter(s => s.status !== 'completed').length > 1) throw new Error(t('The backup contains multiple unfinished sessions.'));
   const settingsInput = v.object(data.settings);
   // Appearance fields are optional in older version-1 backups. Backups from 3.9.0 carry jevAssist; restore turns it off anyway.
-  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', focusVisual: 'brain', floatingStyle: 'brain', timeFormat: '24h', attentionProbes: false, jevAssist: false, language: 'en', collectedAchievements: {}, ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess', 'focusVisual', 'floatingStyle', 'timeFormat', 'attentionProbes', 'jevAssist', 'language', 'collectedAchievements']);
+  keys({ weeklyCapacityMinutes: 0, theme: 'light', sidebarCollapsed: false, autoOvertime: true, collectActivity: false, returnShortcut: 'Ctrl+Alt+Space', activityModes: {}, agentAccess: 'off', focusVisual: 'brain', floatingStyle: 'brain', timeFormat: '24h', attentionProbes: false, attentionPhaseMode: 'auto', jevAssist: false, language: 'en', collectedAchievements: {}, ...settingsInput }, ['timezone', 'defaultMinutes', 'animation', 'sound', 'palette', 'weeklyGoalMinutes', 'theme', 'sidebarCollapsed', 'autoOvertime', 'collectActivity', 'returnShortcut', 'activityModes', 'weeklyCapacityMinutes', 'agentAccess', 'focusVisual', 'floatingStyle', 'timeFormat', 'attentionProbes', 'attentionPhaseMode', 'jevAssist', 'language', 'collectedAchievements']);
   const base: Dataset = { fields,tasks,sessions,events,reviews,categories,settings: v.settings(settingsInput),activity };
   const domain = validateGoalData(Object.fromEntries(GOAL_COLLECTIONS.map(key => [key,data[key]])),base);
   // Commitments link to records that exist. A goal and its steps never change area, so a goal commitment keeps the goal's area.
@@ -191,7 +196,7 @@ export function validateBackup(value: unknown): BackupFile {
     const c = commitmentMap.get(s.commitmentId);
     if (!c || c.fieldId !== null && c.fieldId !== s.fieldId) throw new Error(t('A session refers to an unknown commitment or to one of another area.'));
   }
-  return { ...base,...domain,commitments,format: 'focus-guide',schemaVersion: 12,exportedAt: v.timestamp(data.exportedAt) };
+  return { ...base,...domain,commitments,format: 'focus-guide',schemaVersion: 13,exportedAt: v.timestamp(data.exportedAt) };
 }
 export function readBackup(path: string): BackupFile {
   if (statSync(path).size > BACKUP_LIMITS.bytes) throw new Error(capacityMessage());
@@ -207,7 +212,7 @@ function backupSettings(settings: Dataset['settings']): Dataset['settings'] {
   return { ...rest, ...(language === 'pt-BR' ? { language } : {}), ...(timeFormat === '12h' ? { timeFormat } : {}), ...(collectedAchievements && Object.keys(collectedAchievements).length ? { collectedAchievements } : {}) };
 }
 export function makeBackup(data: Dataset): BackupFile {
-  return { ...data,settings: backupSettings(data.settings),...goalData(data),commitments: data.commitments ?? [],format: 'focus-guide',schemaVersion: 12,exportedAt: new Date().toISOString(),
+  return { ...data,settings: backupSettings(data.settings),...goalData(data),commitments: data.commitments ?? [],format: 'focus-guide',schemaVersion: 13,exportedAt: new Date().toISOString(),
     activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),
     tasks: data.tasks.map(tk => ({ goalId: null,milestoneId: null,...tk })),
     sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,commitmentId: s.commitmentId ?? null,detractor: s.detractor ?? null,challenge: s.challenge ?? null,warmUp: s.warmUp ?? null,medication: s.medication ?? null })),

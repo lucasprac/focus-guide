@@ -1,12 +1,13 @@
 import type { AgentAccess, GoalData } from './goal-types';
 import type { Language } from './i18n';
 import type { Commitment } from './commitments';
+import type { AttentionPhaseMode } from './attention-phase';
 export type { Language } from './i18n';
 export * from './goal-types';
 export type { Commitment, CommitmentState, CommitmentStatus } from './commitments';
 export type SessionStatus = 'running' | 'paused' | 'completed';
 export const MIN_INCLUDED_SESSION_MS = 2 * 60000;
-export type EventKind = 'active' | 'pause' | 'interruption' | 'thought' | 'recovery' | 'edit' | 'attention-return' | 'probe';
+export type EventKind = 'active' | 'pause' | 'interruption' | 'thought' | 'recovery' | 'edit' | 'attention-return' | 'probe' | 'attention-phase';
 export const ACTIVITY_MODES = ['Unspecified', 'Reading', 'Writing/coding', 'Visual work', 'Video/lecture', 'Offline', 'Mixed'] as const;
 export type ActivityMode = typeof ACTIVITY_MODES[number];
 /* Optional reflection answers after a session; an absent answer stays null. */
@@ -82,6 +83,8 @@ export interface Settings {
   /* Clock style for times of day; absent in older data and backups, which means 24-hour. */
   timeFormat?: TimeFormat;
   attentionProbes?: boolean;
+  /* Attention state during focus: 'auto' follows active time, 'manual' lets you set it. Absent means 'auto'. It applies from the next session. */
+  attentionPhaseMode?: AttentionPhaseMode;
   /* Opt-in TypeSafe Jev judgments. Off by default and after restore; the API key is never part of settings. */
   jevAssist?: boolean;
   /* Opt-in window check during focus. Off by default and after restore; never in a backup. */
@@ -113,7 +116,7 @@ export interface PendingProbe { id: string; sessionId: string; shownAt: string; 
 /* Runtime state of TypeSafe Jev; it never reaches settings, datasets or backups. The key itself never leaves the main process. */
 export interface JevStatus { keyStored: boolean; encryption: boolean; windowCheck?: { state: 'off' | 'ready' | 'stopped'; message: string } }
 export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
-export type BackupFile = Dataset & GoalData & { commitments: Commitment[]; format: 'focus-guide'; schemaVersion: 12; exportedAt: string };
+export type BackupFile = Dataset & GoalData & { commitments: Commitment[]; format: 'focus-guide'; schemaVersion: 13; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number; commitments?: number }
 export type Command =
   | 'goal.create' | 'goal.update' | 'goal.delete' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide' | 'goal.behaviour'
@@ -127,7 +130,7 @@ export type Command =
   | 'session.review' | 'session.edit' | 'session.exclude' | 'session.delete'
   | 'interruption.record' | 'thought.record' | 'break.start' | 'break.stop'
   | 'settings.update' | 'review.save' | 'achievements.collect'
-  | 'attention.return' | 'attention.remove' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
+  | 'attention.return' | 'attention.remove' | 'attention.phase' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
   | 'probe.answer' | 'insights.read'
   | 'jev.key.set' | 'jev.key.clear' | 'jev.log.read' | 'jev.gaps.scan' | 'jev.window.read' | 'jev.window.clear'
   | 'window.float' | 'window.main' | 'window.hide' | 'window.floatPointer' | 'window.floatMove'

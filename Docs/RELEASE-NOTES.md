@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased (3.14.0) — Manual attention state
+
+- **See your attention state.** During focus, the Focus page and the floating timer show the state of the session: **Warm-up**, **Sustain** or **Fatigue**.
+- **Set it yourself.** **Settings > Activity & shortcuts > Attention state** chooses **Automatic** (warm-up for the first 10 active minutes, sustain until minute 25, then fatigue, as before) or **Manual**. In manual mode the session starts in warm-up and you change the state on the Focus page or the floating timer (brain or bar). The setting applies from the next session.
+- **Patterns use it.** For the sessions you recorded in manual mode, the warm-up, sustain and fatigue rates and the curve after the warm-up use your states. Other sessions keep the automatic minutes. The session timeline in Behaviour shows your states.
+- **AI agent.** `list_sessions` returns `attentionPhases` for manual sessions, and each phase in `get_focus_insights` has `manualSessions`. The `pattern-analysis` skill compares your changes with the automatic minutes. Install the plugin again after the update.
+- **Floating timer.** The brain window is 182 pixels high (was 156) to hold the state buttons.
+- **Backup version 13.** Backups can hold attention state events and the new setting. Versions 1 to 12 still restore. Focus Guide 3.13.0 and earlier cannot restore a version 13 backup. No schema change.
+
 ## Unreleased (3.13.0) — Commitments in the Calendar
 
 - **Plan your day.** A commitment is a block of focus time on the Calendar: a day, a start time and minutes. It can be for a task, a goal or one of its roadmap steps, an area, or a free focus block. In the day and week views, click an empty time to plan a block, and drag a block to move it. The **Commitments** card lists the blocks of the selected day. The month view marks days with planned blocks.

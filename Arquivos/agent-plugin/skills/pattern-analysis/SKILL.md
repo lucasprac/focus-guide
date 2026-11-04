@@ -20,7 +20,7 @@ Answer in the language of the user.
 4. For each goal in the scope (at most 5 active goals), call `get_goal` and `get_goal_behaviour` for the same range.
    Call `get_calendar` for the last 28 days (`from` 27 days before today, `to` today). Its `lastFourWeeks` compares the plan with what happened.
 5. Look for patterns in the four areas:
-   - **Focus:** the hours and weekdays with the most recorded time, the attention span curves (time to the first drift, after a return), the session length that ends in a drift, and the detractors.
+   - **Focus:** the hours and weekdays with the most recorded time, the attention span curves (time to the first drift, after a return), the session length that ends in a drift, and the detractors. The warm-up, sustain and fatigue rates use the automatic cuts (10 and 25 active minutes), except in sessions where the user set the attention state by hand: `attentionPhases` in `list_sessions` and `manualSessions` in each phase of `get_focus_insights` show them. Compare the minutes where the user changed state with the automatic cuts.
    - **Goals:** goals with no recorded time in 28 days, roadmap steps with `recordedMinutes` much larger than `estimatedMinutes`, steps without an estimate, and the progress against the deadline.
    - **Workflow:** planned minutes against recorded minutes, calendar commitments that were done, missed, skipped or moved, the median delay between the planned start and the first session, sessions without a goal or a roadmap step, sessions without an intention, and the timing modes.
    - **Behaviour:** action check-ins (done, smaller, skipped), interruptions and returns, self-ratings of focus and energy, and keyboard and mouse context.

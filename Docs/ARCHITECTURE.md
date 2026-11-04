@@ -16,6 +16,16 @@ Design rules that follow from these objectives:
 - If the client uses a cloud model, the data that the agent reads leaves this computer. The settings and the user guide must say this.
 - The app makes one outbound call of its own: TypeSafe Jev judgments (3.9.0). It is off by default, runs only when the user starts a check, and only suggests answers that the user then saves. See [TypeSafe Jev](#typesafe-jev-judgments-390).
 
+## Manual attention states (3.14.0)
+
+The attention state of a focus session is warm-up, sustain or fatigue. `src/shared/attention-phase.ts` holds the states, the automatic cuts (`PHASE_MINUTES`, also `INSIGHT_THRESHOLDS.attentionSpan`), `phaseAt`, `phaseSpans` and `currentAttentionPhase`.
+
+- **Mode.** `settings.attentionPhaseMode` is `auto` or `manual` and is read only at `session.start`. A manual session starts with an `attention-phase` marker (`warm-up`, offset 0, `source: null`) that `TimerEngine.start` commits with the session. So a session is manual exactly when it has a marker, and a setting change during a session cannot leave it half manual.
+- **Command.** `attention.phase` (`phase`, `source` `main` or `floating`) needs a current manual focus session and does nothing when the state does not change. `TimerEngine.recordPhase` uses `persistMarker` while running (marker, total and active interval in one commit), and the saved total while paused, like an interruption.
+- **Display.** The Focus page and both floating timers show `currentAttentionPhase(timer, events)`. It uses the main process's `timer.elapsedMs`; the renderer never measures time.
+- **Analysis.** `phasesOf` measures each phase over `phaseSpans(activeMs, markers)` and classifies drifts and check-ins with `phaseAt`. Sessions without markers keep the 10/25 cuts. Bit-identical WebAssembly kernels are not involved.
+- **Brain window.** The brain floating timer is 132 × 182 (was 132 × 156) for one row of states.
+
 ## Calendar commitments (schema 13, 3.13.0, unreleased)
 
 A commitment is a block of planned focus time: a local date, a start minute and a duration, in the timezone of its plan. It serves a task, a goal (optionally one roadmap step), an area, or nothing (a free focus block). The design puts the agent first: an agent can read the calendar, plan a day or a week in one call, move and cancel its blocks, and read how the plan compares to what happened.
@@ -418,7 +428,7 @@ Unreleased: `FloatingNetwork` replaces the sprite with the brain constellation o
 - The app keeps the original 1028 × 1530 PNG. It does not edit its pixels.
 - Hover and visible keyboard focus show the time and the controls. Focus from a mouse click alone does not keep them visible.
 - The brain is the native drag region. The buttons use `no-drag`.
-- The native bounds request a fixed size of 132 × 156. The app keeps saved positions, with a small margin at the display edge for Windows scaling.
+- The native bounds request a fixed size of 132 × 182 (132 × 156 before 3.14.0). The app keeps saved positions, with a small margin at the display edge for Windows scaling.
 
 The earlier update that added only the sprite added no commands, dependencies or migrations. Version 1.1.0 adds timing and Tasks interfaces and schema version 2. The section [Stopwatch, overtime and Tasks](#stopwatch-overtime-and-tasks-110) describes them.
 

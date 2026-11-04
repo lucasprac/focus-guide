@@ -357,6 +357,7 @@ export class Store {
     this.db.prepare('INSERT INTO windowJudgments (id,sessionId,body) VALUES (?,?,?)').run(judgment.id, judgment.sessionId, JSON.stringify(judgment));
   }
   removeWindowJudgments(): void { this.db.prepare('DELETE FROM windowJudgments').run(); }
+  phaseEvents(sessionId: string): SessionEvent[] { return this.db.prepare("SELECT * FROM events WHERE sessionId=? AND kind='attention-phase' ORDER BY startedAt, id").all(sessionId) as SessionEvent[]; }
   removeReturn(id: string): void { this.db.prepare("DELETE FROM events WHERE id=? AND kind='attention-return'").run(id); }
   restore(data: Dataset): void {
     this.db.transaction(() => {

@@ -19,6 +19,7 @@ import SettingsPage from './SettingsPage';
 import { BehaviourReview, ReturnFeedback } from './Behaviour';
 import ProbePrompt, { ProbeAnnouncer, ReflectionQuestions } from './ProbePrompt';
 import BehaviourTutorial from './BehaviourTutorial';
+import { AttentionPhaseControl } from './AttentionPhaseControl';
 import FloatingBar from './FloatingBar';
 import { t, dateLocale, setLanguage } from '../../shared/i18n';
 
@@ -127,6 +128,7 @@ export default function App() {
         <button onClick={() => void act('window.main')} aria-label={t('Open your focus space')} title={t('Open your focus space')}><Icon name="arrow" size={16} /></button>
         <button onClick={() => void act('window.hide')} aria-label={t('Hide floating timer')} title={t('Hide floating timer')}><Icon name="close" size={16} /></button>
       </div>
+      <AttentionPhaseControl data={data} act={act} variant="mini" />
     </div>
     {error && <div className="mini-error" role="alert"><span>{error}</span><button onClick={() => setError('')} aria-label={t('Dismiss error')}><Icon name="close" size={14} /></button></div>}
   </div>;

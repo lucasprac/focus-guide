@@ -11,6 +11,7 @@ import { COMMITMENT_LIMITS, clockText, commitmentEnd, commitmentSessions, commit
 import { AGENT_TOOLS, accessError, allowsTool, isAgentTool } from '../shared/agent-tools';
 import { AgentEditor } from './agent-edits';
 import type { FocusInsights, SurvivalCurve } from '../shared/focus-insights';
+import { phaseMarkers } from '../shared/attention-phase';
 import { t } from '../shared/i18n';
 
 type Run = (command: Command, input: Record<string, unknown>) => unknown;
@@ -129,7 +130,9 @@ export class AgentService {
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, Math.floor(limit))
       .map(s => ({ id: s.id, startedAt: s.startedAt, localDate: localDay(s.startedAt, s.timezone), timezone: s.timezone, area: data.fields.find(f => f.id === s.fieldId)?.name, goalId: s.goalId ?? null, goal: domain.goals.find(g => g.id === s.goalId)?.title ?? null, step: domain.milestones.find(m => m.id === s.milestoneId)?.title ?? null,
         recordedMinutes: round(s.activeMs / 60000), plannedMinutes: s.plannedMs === null ? null : round(s.plannedMs / 60000), timingMode: s.timingMode, activityMode: s.activityMode ?? 'Unspecified', intention: s.intention, energy: s.energy, focus: s.focus, note: s.note, excludedFromInsights: s.excluded,
-        interruptions: events(s.id, 'interruption').length, returns: events(s.id, 'attention-return').length, pauses: events(s.id, 'pause').length, parkedThoughts: events(s.id, 'thought').map(e => e.text) }));
+        interruptions: events(s.id, 'interruption').length, returns: events(s.id, 'attention-return').length, pauses: events(s.id, 'pause').length, parkedThoughts: events(s.id, 'thought').map(e => e.text),
+        // Manual attention states (warm-up, sustain, fatigue) and the active minute each began; null when the session used the automatic cuts.
+        attentionPhases: (markers => markers.length ? markers.map(m => ({ phase: m.phase, fromMinute: round(m.offsetMs / 60000) })) : null)(phaseMarkers(data.events, s.id)) }));
   }
 
   /* The calendar of a range: commitments with what happened, and per day the recorded sessions, planned weekly actions and

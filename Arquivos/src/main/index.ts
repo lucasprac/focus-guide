@@ -114,8 +114,8 @@ function safeBounds(key: string, defaults: Electron.Rectangle): Electron.Rectang
   const displays = screen.getAllDisplays();
   const display = displays.find(d => saved.x < d.workArea.x + d.workArea.width && saved.x + saved.width > d.workArea.x && saved.y < d.workArea.y + d.workArea.height && saved.y + saved.height > d.workArea.y) ?? screen.getPrimaryDisplay();
   const a = display.workArea;
-  const width = Math.min(key === 'mainBounds' ? Math.max(saved.width, 1050) : 132, a.width);
-  const height = Math.min(key === 'mainBounds' ? Math.max(saved.height, 650) : 156, a.height);
+  const width = Math.min(key === 'mainBounds' ? Math.max(saved.width, 1050) : BRAIN_WINDOW.width, a.width);
+  const height = Math.min(key === 'mainBounds' ? Math.max(saved.height, 650) : BRAIN_WINDOW.height, a.height);
   // Leave room for the native frame rounding on scaled Windows displays.
   const edge = key === 'mainBounds' ? 0 : 8;
   return { width, height, x: Math.max(a.x, Math.min(saved.x, a.x + a.width - width - edge)), y: Math.max(a.y, Math.min(saved.y, a.y + a.height - height - edge)) };
@@ -128,9 +128,11 @@ function barPosition(): FloatBarPosition { const saved = store.getMeta<unknown>(
 // Its empty area lets clicks through (setIgnoreMouseEvents); the renderer turns input on only over the bar and its cards.
 // At the top and bottom the bar is horizontal with its cards below or above it; at the sides it is vertical with its cards beside it.
 const BAR_WINDOW = { horizontal: { width: 260, height: 330 }, vertical: { width: 280, height: 330 } }, BAR_MARGIN = 8;
+// The brain timer: the brain, the time, the controls and one row for the attention state.
+const BRAIN_WINDOW = { width: 132, height: 182 };
 function brainDefaults(): Electron.Rectangle {
   const a = screen.getPrimaryDisplay().workArea;
-  return { x: a.x + a.width - 152, y: a.y + Math.min(55, Math.max(0, a.height - 156)), width: 132, height: 156 };
+  return { x: a.x + a.width - BRAIN_WINDOW.width - 20, y: a.y + Math.min(55, Math.max(0, a.height - BRAIN_WINDOW.height)), ...BRAIN_WINDOW };
 }
 // The bar sits at the middle of one edge of the screen the window is on.
 function floatBounds(): Electron.Rectangle {
@@ -360,7 +362,7 @@ async function handle(command: Command, input: Record<string, unknown>, selected
     }
     default: {
       const value = service.run(command, input);
-      if (['attention.return', 'interruption.record', 'thought.record', 'probe.answer'].includes(command)) collector.flush();
+      if (['attention.return', 'attention.phase', 'interruption.record', 'thought.record', 'probe.answer'].includes(command)) collector.flush();
       if (command === 'attention.return') acknowledgeReturn(value);
       if (command === 'probe.answer') dismissProbe();
       return value;

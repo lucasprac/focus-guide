@@ -2,6 +2,7 @@ import type { AgentAccess, FloatingStyle, FocusVisual, Settings, TimeFormat } fr
 import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, JEV_WINDOW_CHECKS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type JevWindowCheck, type Medication, type ProbeAnswer, type WarmUp } from './types';
 import { ACHIEVEMENT_IDS, PALETTE_IDS } from './achievements';
 import { t, isLanguage, type Language } from './i18n';
+import { isAttentionPhase, type AttentionPhase, type AttentionPhaseMode } from './attention-phase';
 
 export function activityMode(value: unknown): ActivityMode {
   if (!ACTIVITY_MODES.includes(value as ActivityMode)) throw new Error(t('Choose a valid activity mode.'));
@@ -22,6 +23,10 @@ export function warmUp(value: unknown): WarmUp | null {
   if (value === null || value === undefined) return null;
   if (!WARM_UPS.includes(value as WarmUp)) throw new Error(t('Choose a valid warm-up answer.'));
   return value as WarmUp;
+}
+export function attentionPhase(value: unknown): AttentionPhase {
+  if (!isAttentionPhase(value)) throw new Error(t('Choose warm-up, sustain or fatigue.'));
+  return value;
 }
 export function medication(value: unknown): Medication | null {
   if (value === null || value === undefined) return null;
@@ -101,6 +106,7 @@ export function settings(value: unknown): Settings {
     floatingStyle: floatingStyle(v.floatingStyle ?? 'brain'),
     timeFormat: timeFormat(v.timeFormat ?? '24h'),
     attentionProbes: v.attentionProbes === undefined ? false : bool(v.attentionProbes, t('Attention check-ins')),
+    attentionPhaseMode: attentionPhaseMode(v.attentionPhaseMode ?? 'auto'),
     jevAssist: v.jevAssist === undefined ? false : bool(v.jevAssist, t('TypeSafe judgments')),
     jevWindowCheck: jevWindowCheck(v.jevWindowCheck ?? 'off'),
     language: language(v.language),
@@ -116,6 +122,10 @@ function language(value: unknown): Language {
 export function withLanguage(input: unknown, current: Settings): unknown {
   const row = object(input);
   return 'language' in row ? row : { ...row, language: current.language ?? 'en' };
+}
+function attentionPhaseMode(value: unknown): AttentionPhaseMode {
+  if (value !== 'auto' && value !== 'manual') throw new Error(t('Choose automatic or manual attention state.'));
+  return value;
 }
 function focusVisual(value: unknown): FocusVisual {
   if (value !== 'brain' && value !== 'instrument') throw new Error(t('Choose the brain or the session gauge for Focus.'));

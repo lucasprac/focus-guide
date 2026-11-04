@@ -57,7 +57,7 @@ The file has one row for each interval or marker. The app updates an active inte
 |---|---|
 | `id` | Event identifier. |
 | `session_id` | Identifier of the session that owns the event. |
-| `kind` | `active`, `pause`, `interruption`, `thought`, `recovery`, `edit`, `attention-return` or `probe`. |
+| `kind` | `active`, `pause`, `interruption`, `thought`, `recovery`, `edit`, `attention-return`, `probe` or `attention-phase`. |
 | `started_at_utc` | Start of the interval, or time of the marker. |
 | `ended_at_utc` | Last durable active boundary, closed pause boundary or marker boundary. It can be blank for open intervals and for recovery markers. |
 | `duration_ms` | For an active interval: its recorded milliseconds. For a pause: its elapsed milliseconds. For other markers: zero. Only active durations count as focus. |
@@ -767,3 +767,20 @@ No schema bump. Backups do not change.
 | `settings.jevAssist` | `true` lets the user start TypeSafe Jev checks. The default is `false`. A missing key gets `false`. Every restore sets it to `false`. `makeBackup` omits it; restore accepts it, because backups from 3.9.0 have it. |
 
 The TypeSafe API key is not a record. It is in `typesafe-key.bin` in the data folder, encrypted with Windows. It is not in the database, in backups or in exports. A main-distraction answer that the user saves from a suggestion is a normal `detractor` value, with an `edit` event that holds the old values.
+
+## Manual attention states (3.14.0, backup version 13)
+
+No schema bump: the `events` table already takes any `kind`. Backup version 13 accepts the new event kind and setting. Versions 1 to 12 still restore; 3.13.0 and earlier cannot restore a version 13 backup.
+
+| Property | Meaning |
+|---|---|
+| Event `kind` `attention-phase` | A manual attention state from `activeOffsetMs` (recorded active time) on. `category` is `warm-up`, `sustain` or `fatigue`. `durationMs` is 0. `source` is `main` or `floating`, or `null` for the first marker, which the app saves at offset 0 when a manual session starts. `activeOffsetMs` is required and is at most the session's `activeMs`. |
+| `settings.attentionPhaseMode` | `auto` (default; a missing key means `auto`) or `manual`. Read at `session.start`: a manual session gets the first `warm-up` marker in the same transaction as the session. Restore keeps the value. |
+
+Rules:
+
+- A session is manual exactly when it has an `attention-phase` event. Changing the setting during a session does not change that session.
+- The state at an active offset is the category of the last marker at or before it. Before the first marker (only possible in data written by hand), the automatic cuts apply: warm-up before 10 active minutes, sustain before 25, fatigue after.
+- `get_focus_insights`: each phase rate counts the active time, drifts and check-ins of the spans in that state. `manualSessions` counts the manual sessions in the phase. `fromMinute` and `toMinute` stay the automatic cuts. The curve after the warm-up starts at the first state after warm-up in a manual session.
+- `list_sessions`: `attentionPhases` lists `{ phase, fromMinute }` for a manual session and is `null` for an automatic one.
+- Event CSV: `kind` can be `attention-phase`; `category` holds the state.

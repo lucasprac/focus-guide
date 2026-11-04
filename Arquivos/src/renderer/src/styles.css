@@ -349,6 +349,20 @@ select { padding-right: 24px; }
 .mini-controls button { -webkit-app-region: no-drag; display: grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 0; border-radius: var(--radius-chip); background: transparent; color: var(--muted); }
 .mini-controls button:hover { color: var(--accent); background: var(--soft); }
 .mini-controls svg, .mini-loading { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 1px 2px #ffffffb3); }
+.attention-phase.auto { margin: 10px 0 0; text-align: center; font-size: var(--text-caption); color: var(--muted); }
+.attention-phase-main { display: flex; justify-content: center; margin-top: 12px; }
+.attention-phase-main > [role="group"] { display: flex; gap: 6px; }
+.attention-phase-main button { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 6px 12px; font-size: var(--text-caption); color: var(--muted); }
+.attention-phase-main button[data-state="on"] { color: var(--accent); border-color: var(--accent); background: var(--soft); }
+.attention-phase-mini { display: flex; gap: 2px; margin-top: 2px; }
+.attention-phase-mini.auto { margin: 2px 0 0; line-height: 22px; text-shadow: 0 0 2px #fff, 0 1px 3px #fff; }
+.attention-phase-mini button { -webkit-app-region: no-drag; flex: 1; min-width: 0; height: 22px; padding: 0; letter-spacing: -.2px; border: 0; border-radius: var(--radius-chip); background: transparent; color: var(--muted); font-size: var(--text-caption); white-space: nowrap; text-shadow: 0 0 2px #fff, 0 1px 3px #fff; }
+.attention-phase-mini button:hover, .attention-phase-mini button.selected { color: var(--accent); background: var(--soft); text-shadow: none; }
+.attention-phase-bar { display: flex; gap: 6px; }
+.attention-phase-bar.auto { margin: 0; text-align: left; }
+.attention-phase-bar button { flex: 1; height: 32px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--panel); color: var(--text); font-size: var(--text-caption); cursor: pointer; }
+.attention-phase-bar button:hover, .attention-phase-bar button:focus-visible, .attention-phase-bar button.selected { border-color: var(--accent); background: var(--soft); color: var(--accent); }
+.attention-phase-bar button:focus-visible, .attention-phase-mini button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mini-error { position: absolute; inset: 4px; z-index: 1; display: flex; align-items: flex-start; gap: 4px; font-size: var(--text-badge); color: var(--danger); background: var(--error-soft); padding: 6px; border-radius: var(--radius-chip); overflow-y: auto; overflow-wrap: anywhere; }
 .mini-error span { flex: 1; min-width: 0; }
 .mini-error button { flex-shrink: 0; border: 0; background: transparent; color: inherit; padding: 2px; }

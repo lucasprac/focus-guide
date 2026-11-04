@@ -129,6 +129,7 @@ class PreviewStore {
     for (const session of this.data.sessions) this.activityCursors[session.id] = session.activeMs;
     this.save();
   })(); }
+  phaseEvents(sessionId: string) { return this.data.events.filter(e => e.sessionId === sessionId && e.kind === 'attention-phase'); }
   removeReturn(id: string) { this.data.events = this.data.events.filter(e => e.id !== id || e.kind !== 'attention-return'); this.save(); }
   setMeta(name: string, value: unknown) { if (name === 'settings') { this.data.settings = settings(value); this.save(); } }
   private put<T extends { id: string }>(collection: T[], value: T) {
@@ -202,7 +203,7 @@ export function installPreview(): void {
   const probes = new ProbeScheduler(Math.random, new URLSearchParams(location.search).get('probes') === 'fast' ? FAST_PROBE_OPTIONS : DEFAULT_PROBE_OPTIONS);
   const service = new FocusService(store as unknown as Store, timer, kind => {
     const data = store.all();
-    const backup = { ...data,...goalData(data),commitments: data.commitments ?? [],format: 'focus-guide',schemaVersion: 12,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null,warmUp: s.warmUp ?? null,medication: s.medication ?? null,commitmentId: s.commitmentId ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
+    const backup = { ...data,...goalData(data),commitments: data.commitments ?? [],format: 'focus-guide',schemaVersion: 13,exportedAt: new Date().toISOString(),activity: (data.activity ?? []).map(a => ({ ...a,inputMs: a.inputMs ?? null,switches: a.switches ?? null })),tasks: data.tasks.map(t => ({ goalId: null,milestoneId: null,...t })),sessions: data.sessions.map(s => ({ activityMode: 'Unspecified',behaviourVersion: 0,goalId: null,occurrenceId: null,milestoneId: null,...s,detractor: s.detractor ?? null,challenge: s.challenge ?? null,warmUp: s.warmUp ?? null,medication: s.medication ?? null,commitmentId: s.commitmentId ?? null })),events: data.events.map(e => ({ activeOffsetMs: null,source: null,...e })) };
     localStorage.setItem(`${key}-before-${kind}-delete-${Date.now()}-${crypto.randomUUID()}`, JSON.stringify(backup));
   }, probes);
   const simulate = () => {

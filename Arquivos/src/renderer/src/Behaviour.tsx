@@ -6,6 +6,7 @@ import { eventSourceLabel, interruptionLabel, activityModeLabel } from '../../sh
 import { Icon, useMotionEnabled, minutesLabel } from './components';
 import { Badge, Fold } from './ui';
 import { t } from '../../shared/i18n';
+import { ATTENTION_PHASES, ATTENTION_PHASE_LABELS, phaseMarkers, phaseSpans, type AttentionPhase } from '../../shared/attention-phase';
 
 export function ReturnFeedback({ children, sessionId, animation, visible = true, neutral = false }: { children: ReactNode; sessionId: string | null; animation: boolean; visible?: boolean; neutral?: boolean }) {
   const motion = useMotionEnabled(animation);
@@ -73,7 +74,8 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
   let elapsed = 0;
   const pausePoints = chronological.flatMap(e => { if (e.kind === 'active') { elapsed += e.durationMs; return []; } return [{ event: e, offset: elapsed }]; });
   const at = (offset: number) => `${Math.max(0, Math.min(100, offset / totalMs * 100))}%`, minute = (offset: number) => minutesLabel(offset / 60000), { warmUpMinutes, fatigueMinutes } = INSIGHT_THRESHOLDS.attentionSpan;
-  const phaseMs = [Math.min(totalMs, warmUpMinutes * 60000), Math.max(0, Math.min(totalMs, fatigueMinutes * 60000) - warmUpMinutes * 60000), Math.max(0, totalMs - fatigueMinutes * 60000)];
+  // A manual session draws the states you chose; an automatic one the cuts at warmUpMinutes and fatigueMinutes.
+  const markers = phaseMarkers(events, session.id), spans = phaseSpans(session.activeMs, markers), phaseIndex = (phase: AttentionPhase) => ATTENTION_PHASES.indexOf(phase);
   const probeMark = (answer: string) => answer === 'on-task' ? '●' : answer === 'missed' ? '○' : '◐';
   const tracks: Array<{ key: 'keys' | 'clicks' | 'scrolls' | 'movementMs' | 'inputMs' | 'switches'; label: string; unit: string }> = [{ key: 'keys', label: t('Keys'), unit: t('keys') }, { key: 'clicks', label: t('Clicks'), unit: t('clicks') }, { key: 'scrolls', label: t('Scrolls'), unit: t('scrolls') }, { key: 'movementMs', label: t('Movement'), unit: t('ms in movement intervals') },
     ...(measured ? [{ key: 'inputMs' as const, label: t('Input'), unit: t('ms with input') }, { key: 'switches' as const, label: t('Switches'), unit: t('window switches') }] : [])];
@@ -95,13 +97,13 @@ export function BehaviourReview({ session, data, act }: ViewProps & { session: F
           {events.filter(e => e.kind === 'probe').map(e => <span key={e.id} className="timeline-probe" style={{ left: at(offsetOf(e)) }} title={t('Check-in · {v1} · {minute} active time', { v1: e.category === 'missed' ? t('missed') : PROBE_ANSWER_LABELS[e.category as ProbeAnswer] ?? e.category, minute: minute(offsetOf(e)) })}>{probeMark(e.category)}</span>)}
           {pausePoints.map(({ event, offset }) => <span key={event.id} className="timeline-pause" style={{ left: at(offset) }} title={t('Pause · {text}', { text: event.text })}>Ⅱ</span>)}
         </div>
-        <div className="timeline-phases" aria-label={t('Session phases')}>{([[t('Warm-up'), 0], [t('Sustain'), 1], [t('Fatigue'), 2]] as const).map(([label, i]) => phaseMs[i] > 0 && <span key={label} className={`phase-${i}`} style={{ width: `${phaseMs[i] / totalMs * 100}%` }} title={t('{label}: {v2} active min', { label, v2: i === 0 ? `0–${warmUpMinutes}` : i === 1 ? `${warmUpMinutes}–${fatigueMinutes}` : `${fatigueMinutes}+` })}>{label}</span>)}</div>
+        <div className="timeline-phases" aria-label={t('Session phases')}>{spans.map(span => <span key={span.fromMs} className={`phase-${phaseIndex(span.phase)}`} style={{ width: `${(span.toMs - span.fromMs) / totalMs * 100}%` }} title={t('{label}: {v2} active min', { label: ATTENTION_PHASE_LABELS[span.phase], v2: `${Math.round(span.fromMs / 60000)}–${Math.round(span.toMs / 60000)}` })}>{ATTENTION_PHASE_LABELS[span.phase]}</span>)}</div>
         <div className="timeline-axis"><span>{t('0 active min')}</span><span>{t('{v1} active min', { v1: Math.ceil(session.activeMs / 60000) })}</span></div>
       </div>
       <div className="behaviour-legend">
         <div><span className="legend-title">{t('Columns')}</span><div className="legend-items"><span><i className="legend-swatch legend-recorded" />{t('Recorded (including zero)')}</span><span><i className="legend-swatch legend-partial" />{t('Partial')}</span><span><i className="legend-swatch legend-disabled" />{t('Disabled')}</span><span><i className="legend-swatch legend-unavailable" />{t('Unavailable')}</span></div></div>
         <div><span className="legend-title">{t('Markers')}</span><div className="legend-items"><span><b className="timeline-return">↩</b>{t('Return')}</span><span><b className="timeline-interruption">!</b>{t('Interruption')}</span><span><b className="timeline-probe">●</b>{t('On the task')}</span><span><b className="timeline-probe">◐</b>{t('Drifting or elsewhere')}</span><span><b className="timeline-probe">○</b>{t('Missed check-in')}</span><span><b className="timeline-pause">Ⅱ</b>{t('Pause ({length})', { length: pauses.length })}</span></div></div>
-        <p className="hint">{t('Phases: warm-up 0–{warmUpMinutes}, sustain {warmUpMinutes2}–{fatigueMinutes}, fatigue {fatigueMinutes2}+ active minutes. Hover a column for values.', { warmUpMinutes, warmUpMinutes2: warmUpMinutes, fatigueMinutes, fatigueMinutes2: fatigueMinutes })}</p>
+        <p className="hint">{markers.length ? t('Phases: the attention states you chose during this session. Hover a column for values.') : t('Phases: warm-up 0–{warmUpMinutes}, sustain {warmUpMinutes2}–{fatigueMinutes}, fatigue {fatigueMinutes2}+ active minutes. Hover a column for values.', { warmUpMinutes, warmUpMinutes2: warmUpMinutes, fatigueMinutes, fatigueMinutes2: fatigueMinutes })}</p>
       </div>
     </>}
     <ReturnMarkers events={data.events} sessionId={session.id} act={act} />

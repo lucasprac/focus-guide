@@ -199,6 +199,17 @@ During focus, open **Session tools**. It has these commands:
 - **Park this thought.** This saves something to look at later. It does not count as an interruption. Parked thoughts show in the final check-in and in the session history.
 - **Exclude session.** This finishes the session and removes it from insights, daily totals and neural progress. Its time, tasks, notes and events stay in history and in exports.
 
+### Attention state
+
+During focus, the Focus page shows your attention state below the progress bar: **Warm-up**, **Sustain** or **Fatigue**. The floating timer shows it too (the brain: below the controls; the bar: in its panel).
+
+Choose how the state changes in **Settings > Activity & shortcuts > Attention state**:
+
+- **Automatic** (default): warm-up for the first 10 active minutes, sustain until minute 25, then fatigue. You only see the state.
+- **Manual**: the session starts in warm-up, and you select **Warm-up**, **Sustain** or **Fatigue** when your state changes. On the small brain timer the buttons are **Warm**, **Hold** and **Tired**. You can change the state while the session is paused too.
+
+The setting applies from the next session. In **Patterns**, the warm-up, sustain and fatigue rates use your states for the sessions that you recorded in manual mode, and the automatic minutes for the other sessions. The session timeline in **Behaviour** shows the states of each session.
+
 ### After the session
 
 After completion, you can rate your focus from 1 to 5 and write a note. You can also skip both.
@@ -256,7 +267,7 @@ The Focus page can show a session gauge instead of the brain. In Settings, set *
 Click **Floating timer** in the top bar.
 
 - The compact window has a transparent background and stays on top of other windows.
-- It requests a fixed size of 132 × 156 pixels. Windows display scaling can round its native bounds a little.
+- It requests a fixed size of 132 × 182 pixels. Windows display scaling can round its native bounds a little.
 - To move it, drag the brain. You can put it on top of another application.
 - The brain is a constellation of neurons. At the start, the neurons are faint stars. At each 10 minutes of session time, lines slowly connect the neurons and draw the brain: first its outline, then its folds. Each step takes about 2 minutes and adds one twelfth of the brain. The brain is complete after 2 hours of session time. The brain stops forming when you pause.
 - At rest, only the brain is visible.
