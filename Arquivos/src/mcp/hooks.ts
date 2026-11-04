@@ -14,7 +14,7 @@ interface HookInput { session_id?: string; hook_event_name?: string; tool_name?:
 interface SessionState { revisions: Record<string, string> }
 
 const LOG_FILE = 'agent-hook-log.jsonl', LOG_LIMIT = 1024 * 1024, STATE_DAYS = 7;
-const SKILLS = 'focus-guide:weekly-review, focus-guide:pattern-analysis, focus-guide:plan-day, focus-guide:commitments and focus-guide:roadmap';
+const SKILLS = 'focus-guide:weekly-review, focus-guide:pattern-analysis, focus-guide:plan-day, focus-guide:commitments, focus-guide:roadmap and focus-guide:get-tutorial';
 const stateDirectory = join(tmpdir(), 'focus-guide-agent-hooks');
 
 /* A tool of the manual "focus-guide" MCP entry, or of the MCP server that the plugin starts. */

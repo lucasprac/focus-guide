@@ -1,5 +1,17 @@
 # Release notes
 
+## Unreleased (3.15.1) — Tutorial for the new features
+
+- **Behaviour tutorial.** It has 12 steps (was 9). New steps: **Follow your attention state** (automatic or manual warm-up, sustain and fatigue), **Plan focus blocks** (commitments in the Calendar, **Start focus**, done and missed blocks, the task panel with **Ctrl+Shift+T**) and **Optional: TypeSafe judgments** (suggested reflection answers and the window check, with what leaves the computer). The Insights step explains the warm-up, sustain and fatigue phases. The AI agent step names the access levels, proposals, **Agent activity** and the plugin skills, `get-tutorial` too.
+- Both languages (English and Brazilian Portuguese) have the new text.
+- No change to data, schema or backups.
+
+## Unreleased (3.15.0) — Agent tutorial skill
+
+- **New plugin skill `focus-guide:get-tutorial`.** It teaches an AI agent how Focus Guide works: the pages, the access levels, what each MCP tool reads or changes, which skill to use for each task, and what an agent can never do. Then the agent reads your records and gives you a short tutorial: your stage (new, started or regular), with the counts, and at most three next features to try. The skill only reads and changes nothing.
+- The SessionStart hook names the new skill. Install the plugin again after the update to get it.
+- No schema or backup change.
+
 ## Unreleased (3.14.0) — Manual attention state
 
 - **See your attention state.** During focus, the Focus page and the floating timer show the state of the session: **Warm-up**, **Sustain** or **Fatigue**.

@@ -103,7 +103,7 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
 
 ### Claude Code plugin
 
-For Claude Code, the plugin is the easier way to connect. It contains the MCP server, five skills and hooks. You can install it in two ways.
+For Claude Code, the plugin is the easier way to connect. It contains the MCP server, six skills and hooks. You can install it in two ways.
 
 **From GitHub (recommended).** Open Focus Guide once and choose an access level. Then run these commands in Claude Code and restart it:
 
@@ -120,13 +120,14 @@ The plugin finds the app through `agent-launch.cmd`, which Focus Guide writes to
    - `claude plugin install focus-guide@focus-guide-local`
 3. Restart Claude Code. If you also added the `focus-guide` entry yourself, remove it, so that the agent does not see each tool two times.
 
-The skills give the agent a fixed method for five tasks. You can ask in your own words, or type the skill name:
+The skills give the agent a fixed method for six tasks. You can ask in your own words, or type the skill name:
 
 - `/focus-guide:weekly-review`: reviews the week of your goals and saves one small adjustment for each goal.
 - `/focus-guide:pattern-analysis`: finds patterns in focus, goals, workflow and behaviour, with the evidence for each pattern.
 - `/focus-guide:plan-day`: plans today's focus sessions from your planned actions, tasks, roadmap steps and best hours, and saves them as commitments in the Calendar.
 - `/focus-guide:commitments`: the playbook for your calendar. The agent sets the length of each block from your warm-up, sustain and fatigue phases, places short and long rests as you prefer them (it asks you if it does not know), and ranks areas and activities by deadline, invested effort and your preferences. It writes your rest preference in the notes of each block, so the next plan can use it.
 - `/focus-guide:roadmap`: creates a goal with a roadmap, or splits and adjusts the roadmap of a goal.
+- `/focus-guide:get-tutorial`: a tutorial on Focus Guide. The agent learns the pages, access levels, tools and skills. Then it reads your records, finds what you use already, and gives you at most three next features to try. It changes nothing.
 
 The hooks run on this computer:
 
@@ -429,7 +430,7 @@ How to read the figures:
 
 ### Behaviour tutorial
 
-The **Behaviour tutorial** is a short guide with 9 steps. It explains keyboard and mouse totals, attention check-ins, the **I'm back** marker, reflection questions, the Insights tab, how to read the numbers, the Behaviour section of a goal and the agent tool `get_focus_insights`. Some steps have a button, for example **Open Settings**, that closes the tutorial and opens the right page.
+The **Behaviour tutorial** is a short guide with 12 steps. It explains keyboard and mouse totals, attention check-ins, the **I'm back** marker, the attention state (automatic or manual), reflection questions, commitments in the Calendar and the task panel, the Insights tab and the warm-up, sustain and fatigue phases, how to read the numbers, the Behaviour section of a goal, the optional TypeSafe judgments, and what an AI agent and the Claude Code plugin can do. Some steps have a button, for example **Open Settings**, that closes the tutorial and opens the right page.
 
 To open it, select **Open tutorial** in Settings, in the Activity & shortcuts group. Or select **Behaviour tutorial** at the top of Patterns. Use **Back** and **Next** to move between steps. The tutorial does not change your settings or your data.
 
