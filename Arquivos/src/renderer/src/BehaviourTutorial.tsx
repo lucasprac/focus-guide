@@ -9,8 +9,9 @@ interface TutorialStep { title: string; body: ReactNode; target?: TutorialTarget
 const tutorialSteps = (): TutorialStep[] => [
   { get title() { return t('Learn from your own records'); }, body: <>
     <p>{t('Focus Guide can show patterns in how you focus. It uses only your own records.')}</p>
-    <p>{t('All data stays on this computer. The app does not score your attention. It shows what you did and what you reported.')}</p>
-    <p>{t('This tutorial takes about two minutes. You can open it again from Settings or from Patterns.')}</p></> },
+    <p>{t('Your records stay on this computer unless you turn on an optional service. The app does not score your attention. It shows what you did and what you reported.')}</p>
+    <p>{t('It also shows how to plan focus blocks and which optional services can help.')}</p>
+    <p>{t('This tutorial takes about three minutes. You can open it again from Settings or from Patterns.')}</p></> },
   { get title() { return t('Turn on keyboard and mouse totals'); }, target: 'Settings', get goLabel() { return t('Open Settings'); }, body: <>
     <p>{t('In Settings, turn on')}{' '}<strong>{t('Collect keyboard and mouse totals')}</strong>{t('. Then select')}{' '}<strong>{t('Save preferences')}</strong>{t('. It is off until you do this.')}</p>
     <p>{t('Collection runs only while a focus session is running. It counts key presses, clicks, scrolls, mouse movement and changes of the front window.')}</p>
@@ -22,14 +23,24 @@ const tutorialSteps = (): TutorialStep[] => [
   { get title() { return t('Mark when you come back'); }, body: <>
     <p>{t('When you notice that your mind drifted, press')}{' '}<strong>Ctrl+Alt+Space</strong>{t('. You can also use the small check button on the floating timer.')}</p>
     <p>{t('This saves an')}{' '}<strong>{t('I’m back')}</strong>{t(' marker. Insights use these markers to see how long you focus before a drift. You can change the shortcut in Settings.')}</p></> },
+  { get title() { return t('Follow your attention state'); }, target: 'Settings', get goLabel() { return t('Open Settings'); }, body: <>
+    <p>{t('During focus, the Focus page and the floating timer show the state of the session:')}{' '}<strong>{t('Warm-up')}</strong>, <strong>{t('Sustain')}</strong>{' '}{t('or')}{' '}<strong>{t('Fatigue')}</strong>.</p>
+    <p>{t('In Settings,')}{' '}<strong>{t('Attention state')}</strong>{' '}{t('is')}{' '}<strong>{t('Automatic')}</strong>{' '}{t('by default: warm-up for the first 10 active minutes, sustain until minute 25, then fatigue.')}</p>
+    <p>{t('Choose')}{' '}<strong>{t('Manual')}</strong>{' '}{t('to change the state yourself when you feel it change. On the small brain timer, the buttons are Warm, Hold and Tired. The setting applies from the next session, and Patterns then use your states for those sessions.')}</p>
+    <p>{t('When you open a session in Calendar, its timeline shows the states.')}</p></> },
   { get title() { return t('Reflect after a session'); }, target: 'Calendar', get goLabel() { return t('Open Calendar'); }, body: <>
     <p>{t('After a session, the check-in has two optional questions:')}{' '}<strong>{t('What got in the way most?')}</strong>{' '}{t('and')}{' '}<strong>{t('How demanding was it?')}</strong></p>
     <p>{t('To remove an answer, select it again or select')}{' '}<strong>{t('Clear')}</strong>{t('. You can change the answers later with')}{' '}<strong>{t('Edit')}</strong>{' '}{t('in Calendar.')}</p>
     <p>{t('To keep a session out of the insights, select')}{' '}<strong>{t('Exclude this session from insights')}</strong>.</p></> },
+  { get title() { return t('Plan focus blocks'); }, target: 'Calendar', get goLabel() { return t('Open Calendar'); }, body: <>
+    <p>{t('A commitment is a block of focus time on the Calendar, for a task, a goal step, an area or free focus. In the day or week view, click an empty time, or select')}{' '}<strong>{t('New commitment')}</strong>.</p>
+    <p>{t('Select the block, then')}{' '}<strong>{t('Start focus')}</strong>{t('. The session gets the block’s goal, step, task and minutes. A block with a finished session is done. A block whose time passed without a session is missed: a gap in the plan, not a failure.')}</p>
+    <p>{t('Open the task panel from any page with')}{' '}<strong>{t('Tasks')}</strong>{' '}{t('at the top of the window or')}{' '}<strong>Ctrl+Shift+T</strong>{t('. Tasks with a due date also show on the Calendar.')}</p></> },
   { get title() { return t('Read the Insights tab'); }, target: 'Patterns', get goLabel() { return t('Open Patterns'); }, body: <>
     <p>{t('In Patterns, open the')}{' '}<strong>Insights</strong>{t(' tab. The date range, area and goal filters apply to it.')}</p>
     <p>{t('At the top,')}{' '}<strong>{t('The data behind these insights')}</strong>{' '}{t('shows how many sessions and ratings the analysis uses.')}</p>
-    <p>{t('Each figure needs a minimum of data. For example,')}{' '}<em>{t('When you focus best')}</em>{' '}{t('needs 10 rated sessions.')}{' '}<em>{t('What tends to go with higher focus')}</em>{' '}{t('needs 30 rated sessions over 14 days. A figure with too little data tells you what is missing.')}</p></> },
+    <p>{t('Each figure needs a minimum of data. For example,')}{' '}<em>{t('When you focus best')}</em>{' '}{t('needs 10 rated sessions.')}{' '}<em>{t('What tends to go with higher focus')}</em>{' '}{t('needs 30 rated sessions over 14 days. A figure with too little data tells you what is missing.')}</p>
+    <p><em>{t('How long your attention lasts')}</em>{' '}{t('compares drifts per hour in the warm-up, sustain and fatigue phases. Use it to choose the length of your blocks and where to pause.')}</p></> },
   { get title() { return t('Read the numbers with care'); }, target: 'Patterns', get goLabel() { return t('Open Patterns'); }, body: <>
     <p>{t('Intervals are 90% intervals. A wide interval means the result is uncertain. A missing value is a gap, not a zero.')}</p>
     <p>{t('Your ratings and markers are what you reported. A pattern is an association. It does not show a cause.')}</p>
@@ -37,8 +48,14 @@ const tutorialSteps = (): TutorialStep[] => [
   { get title() { return t('See behaviour for one goal'); }, target: 'Goals', get goLabel() { return t('Open Goals'); }, body: <>
     <p>{t('Open a goal and select')}{' '}<strong>{t('Behaviour')}</strong>{t('. It shows how you study that goal: activity modes, times of day, roadmap steps, returns, interruptions and ratings.')}</p>
     <p>{t('Choose 7 days, 30 days, 90 days or all time. Low collection coverage means the keyboard and mouse rates describe only a small part of the time.')}</p></> },
+  { get title() { return t('Optional: TypeSafe judgments'); }, target: 'Settings', get goLabel() { return t('Open Settings'); }, body: <>
+    <p>{t('TypeSafe is a cloud service. It is off by default. To use it, turn on')}{' '}<strong>{t('TypeSafe judgments (Jev)')}</strong>{' '}{t('in Settings and save an API key.')}</p>
+    <p>{t('In Patterns, it can read the notes of sessions without an answer to “What got in the way most?” and suggest one. Nothing changes until you select')}{' '}<strong>{t('Use suggestion')}</strong>{' '}{t('or another answer.')}</p>
+    <p><strong>{t('Window check during focus')}</strong>{' '}{t('rates how closely the window in front matches the session. Review the ratings in')}{' '}<strong>{t('Window checks (review)')}</strong>{' '}{t('in Patterns. The text that TypeSafe reads, and with “Title and capture” a picture of the window, leaves this computer.')}</p></> },
   { get title() { return t('Optional: share insights with an AI agent'); }, target: 'Settings', get goLabel() { return t('Open Settings'); }, body: <>
     <p>{t('If you connect an AI agent, it can read the same insights with the tool')}{' '}<code>get_focus_insights</code>{t('. Read-only access is enough.')}</p>
+    <p>{t('With more access, the agent can propose goals, roadmaps, tasks and calendar commitments, or change them directly. Nothing that it proposes changes until you apply it, and you can undo each direct change in Agent activity.')}</p>
+    <p>{t('The Claude Code plugin adds skills: plan the day as commitments, review the week, find patterns, and get-tutorial, a tour of the app from your own records.')}</p>
     <p>{t('Access is off by default. When it is on, what the agent reads goes to its AI provider. Keep access off if you want your data to stay on this computer.')}</p></> }
 ];
 

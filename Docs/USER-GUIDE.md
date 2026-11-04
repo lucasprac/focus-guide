@@ -430,7 +430,7 @@ How to read the figures:
 
 ### Behaviour tutorial
 
-The **Behaviour tutorial** is a short guide with 9 steps. It explains keyboard and mouse totals, attention check-ins, the **I'm back** marker, reflection questions, the Insights tab, how to read the numbers, the Behaviour section of a goal and the agent tool `get_focus_insights`. Some steps have a button, for example **Open Settings**, that closes the tutorial and opens the right page.
+The **Behaviour tutorial** is a short guide with 12 steps. It explains keyboard and mouse totals, attention check-ins, the **I'm back** marker, the attention state (automatic or manual), reflection questions, commitments in the Calendar and the task panel, the Insights tab and the warm-up, sustain and fatigue phases, how to read the numbers, the Behaviour section of a goal, the optional TypeSafe judgments, and what an AI agent and the Claude Code plugin can do. Some steps have a button, for example **Open Settings**, that closes the tutorial and opens the right page.
 
 To open it, select **Open tutorial** in Settings, in the Activity & shortcuts group. Or select **Behaviour tutorial** at the top of Patterns. Use **Back** and **Next** to move between steps. The tutorial does not change your settings or your data.
 
