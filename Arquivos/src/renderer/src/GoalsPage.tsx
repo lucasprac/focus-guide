@@ -13,7 +13,7 @@ import { AgentActivity } from './AgentActivity';
 import { goalStatusLabel } from '../../shared/labels';
 import { t } from '../../shared/i18n';
 
-type GoalsProps = ViewProps & { startAction: (row: GoalOccurrence) => void; openTasks: (goal: Goal) => void; focusGoal: (goal: Goal, options?: GoalFocusOptions) => void; activeGoalId: string | null; openGoal: (id: string | null) => void };
+type GoalsProps = ViewProps & { startAction: (row: GoalOccurrence) => void; focusGoal: (goal: Goal, options?: GoalFocusOptions) => void; activeGoalId: string | null; openGoal: (id: string | null) => void };
 
 function GoalList({ data,act,startAction,openGoal }: GoalsProps) {
   const domain = goalData(data), today = localDay(Date.now(),data.settings.timezone);
@@ -24,7 +24,7 @@ function GoalList({ data,act,startAction,openGoal }: GoalsProps) {
   return <>
     <PageHeader title={t('What are you learning?')} description={t('Each goal is a place to learn: a roadmap, focused sessions, tasks, and the patterns you notice along the way.')} actions={<Button variant="primary" icon="plus" disabled={!areasOpen} onClick={() => setCreating(true)}>{t('New goal')}</Button>} />
     {!areasOpen && <p className="alert notice">{t('Add an area in Settings to begin planning a goal.')}</p>}
-    <AgentProposals data={data} act={act} goalId={null} onApplied={value => { const id = (value as { goalId?: string } | undefined)?.goalId; if (id) openGoal(id); }} />
+    <AgentProposals data={data} act={act} goalId={null} kinds={['goal.create']} onApplied={value => { const id = (value as { goalId?: string } | undefined)?.goalId; if (id) openGoal(id); }} />
     <section className="goals-overview"><div className="section-title"><h2>{t('Your goals')}</h2><label className="goal-toggle"><CheckControl aria-label={t('Show paused and archived goals')} checked={showAll} onChange={e => setShowAll(e.target.checked)} />{t('Show all statuses')}</label></div><div className="goal-card-grid">{domain.goals.filter(g => showAll || g.status === 'active' || g.status === 'draft').map(g => { const summary = goalSummary(data,g.id,addDays(today,-27),today); return <button key={g.id} className="goal-card" aria-label={t('Open goal: {title}', { title: g.title })} onClick={() => openGoal(g.id)}><Badge tone={g.status === 'active' ? 'accent' : g.status === 'achieved' ? 'success' : 'neutral'} className="goal-status self-start capitalize">{goalStatusLabel(g.status)}</Badge><strong>{g.title}</strong><p>{g.outcome || t('Define an outcome when you are ready.')}</p><span className="hint">{t('{name}{v2} · {v3} · {minutesLabel} in 28 days{v5}', { name: data.fields.find(f => f.id === g.fieldId)?.name, v2: g.deadline ? t(' · Due {deadline}', { deadline: g.deadline }) : '', v3: summary.milestones.length ? t('{completedMilestones}/{length} steps', { completedMilestones: summary.completedMilestones, length: summary.milestones.length }) : t('No roadmap yet'), minutesLabel: minutesLabel(summary.minutes), v5: domain.agentProposals.some(p => p.goalId === g.id && (p.status === 'pending' || p.status === 'stale')) ? t(' · Agent proposals to review') : '' })}</span></button>; })}</div>{!domain.goals.length && <EmptyState title={t('What would you like to learn or accomplish?')}>{t('A course, a subject, a project, or a personal routine. Create a goal, then build its roadmap and focus inside it.')}</EmptyState>}</section>
     <AgentActivity data={data} act={act} />
     <section className="panel goals-today"><div className="section-title"><Icon name="sun" /><h2>{t('Today’s actions')}</h2><span className="hint">{t('Actions keep their planning timezone')}</span></div><TodayActions data={data} act={act} rows={todaysOccurrences(data)} startAction={startAction} /></section>
@@ -36,5 +36,5 @@ function GoalList({ data,act,startAction,openGoal }: GoalsProps) {
 
 export default function GoalsPage(props: GoalsProps) {
   const goal = goalData(props.data).goals.find(g => g.id === props.activeGoalId);
-  return goal ? <GoalWorkspace key={goal.id} data={props.data} act={props.act} goal={goal} startAction={props.startAction} openTasks={props.openTasks} focusGoal={props.focusGoal} onBack={() => props.openGoal(null)} /> : <GoalList {...props} />;
+  return goal ? <GoalWorkspace key={goal.id} data={props.data} act={props.act} goal={goal} startAction={props.startAction} focusGoal={props.focusGoal} onBack={() => props.openGoal(null)} /> : <GoalList {...props} />;
 }

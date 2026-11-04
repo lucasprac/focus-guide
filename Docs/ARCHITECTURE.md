@@ -14,6 +14,50 @@ Design rules that follow from these objectives:
 - One analysis feeds the interface and the agent. For example, `get_focus_insights` uses the same engine as the Insights tab, and `get_goal_behaviour` uses `goalBehaviourProfile()`.
 - The user sets agent access (`off`, `read`, `propose`, `edit`). The agent rules in [Agent bridge and proposals](#agent-bridge-and-proposals-schema-8) apply to every new agent feature.
 - If the client uses a cloud model, the data that the agent reads leaves this computer. The settings and the user guide must say this.
+- The app makes one outbound call of its own: TypeSafe Jev judgments (3.9.0). It is off by default, runs only when the user starts a check, and only suggests answers that the user then saves. See [TypeSafe Jev](#typesafe-jev-judgments-390).
+
+## Manual attention states (3.14.0)
+
+The attention state of a focus session is warm-up, sustain or fatigue. `src/shared/attention-phase.ts` holds the states, the automatic cuts (`PHASE_MINUTES`, also `INSIGHT_THRESHOLDS.attentionSpan`), `phaseAt`, `phaseSpans` and `currentAttentionPhase`.
+
+- **Mode.** `settings.attentionPhaseMode` is `auto` or `manual` and is read only at `session.start`. A manual session starts with an `attention-phase` marker (`warm-up`, offset 0, `source: null`) that `TimerEngine.start` commits with the session. So a session is manual exactly when it has a marker, and a setting change during a session cannot leave it half manual.
+- **Command.** `attention.phase` (`phase`, `source` `main` or `floating`) needs a current manual focus session and does nothing when the state does not change. `TimerEngine.recordPhase` uses `persistMarker` while running (marker, total and active interval in one commit), and the saved total while paused, like an interruption.
+- **Display.** The Focus page and both floating timers show `currentAttentionPhase(timer, events)`. It uses the main process's `timer.elapsedMs`; the renderer never measures time.
+- **Analysis.** `phasesOf` measures each phase over `phaseSpans(activeMs, markers)` and classifies drifts and check-ins with `phaseAt`. Sessions without markers keep the 10/25 cuts. Bit-identical WebAssembly kernels are not involved.
+- **Brain window.** The brain floating timer is 132 × 182 (was 132 × 156) for one row of states.
+
+## Calendar commitments (schema 13, 3.13.0, unreleased)
+
+A commitment is a block of planned focus time: a local date, a start minute and a duration, in the timezone of its plan. It serves a task, a goal (optionally one roadmap step), an area, or nothing (a free focus block). The design puts the agent first: an agent can read the calendar, plan a day or a week in one call, move and cancel its blocks, and read how the plan compares to what happened.
+
+- **Model.** `src/shared/commitments.ts` holds the type, the record validation, `clockText`/`parseClock` (`HH:MM`), `overlappingCommitment` and `commitmentState`. The stored `status` is a decision: `planned`, `done`, `skipped` or `cancelled`. The state that the calendar shows is derived: a planned block with a running or paused linked session is `active`, with a completed linked session `done`, and after its end without a session `missed`.
+- **Rules (`CommitmentService`, `src/main/commitment-service.ts`).** `commitment.save` creates a block or changes the fields that it gets; `commitment.delete` deletes one (user only). Blocks that are planned or done never overlap on the same date, because only one session runs at a time. A block ends on the day it starts (5 to 720 minutes). Links resolve upward: a named task gives its area, goal and step; a goal gives its area; a step needs its goal. A link that the input does not change is kept, also if its record was archived since. A block with sessions keeps their area. A move of a planned block increases `rescheduleCount`.
+- **Sessions.** `session.start` accepts `commitmentId` for a planned block of today whose area (if it has one) is the session's area. The session stores the link (`sessions.commitmentId`, `ON DELETE SET NULL`). `session.edit` clears it when the area changes. **Start focus** in the Calendar prepares the Focus page with the block's goal, step, task, minutes, activity mode and the link.
+- **Calendar UI.** Day and week views draw the blocks under the recorded sessions (dashed until something happens). A click on an empty time opens the editor at that quarter hour; a drag moves a planned block without sessions to another time or day (15-minute snap, followed on the window so that the block can change column). The **Commitments** card lists the selected day with **Start focus** and **Open**; the month view marks days with planned blocks.
+- **Agent.** `get_calendar` (read) returns the commitments of a range (at most 62 days) with their state and linked sessions, and for each day the recorded sessions, planned weekly actions and due tasks. `lastFourWeeks` gives done, missed, skipped and cancelled blocks, committed and recorded minutes, the median delay from the planned start to the first session, moved blocks, and the blocks that the agent planned. `get_overview` adds `todaysCommitments` and `openCommitmentProposals`. `propose_commitments` saves a `commitments.add` proposal (always `goalId: null`), checked for clashes and past times at once and again on apply. At `edit`, `create_commitments` saves 1 to 50 blocks in one audited change (all or none) and `update_commitment` moves, retargets or cancels one block. An agent plans from the current time on, at most one year ahead. It never deletes a block, never sets `done` or `skipped`, and never changes a block that the user marked or that has sessions. The Claude Code hook asks the user before a cancel. The plugin skill `commitments` (`agent-plugin/skills/commitments/SKILL.md`) is the agents' playbook: block length from the warm-up, sustain and fatigue phases of `get_focus_insights`, short and long rests from the user's preference (asked when unknown, kept as a `Rest:` line in the block notes, because no record stores it), and a rank from deadline, invested effort and the user's preferences. `plan-day` and the SessionStart hook point to it.
+- **Audit.** A calendar change has target `commitment` and `goalId: null`; every other change still belongs to a goal. Undo of a created block cancels it; undo of a change saves the earlier fields. `origin` records who planned a block (`user` or `agent`); an applied proposal and an agent edit send `agent`.
+- **Schema 13.** The migration saves `before-schema-v13-<timestamp>.sqlite`, then in one transaction adds the `commitments` table, the `sessions.commitmentId` column and index, and rebuilds `agentChanges` with a nullable `goalId` (rows copied as they are). The previous app cannot open a schema 13 database.
+
+## Task panel (3.12.0, unreleased)
+
+Tasks is no longer a page. `TaskPanel.tsx` is a side sheet (Radix `Dialog`) that the **Tasks** button in the top bar and `Ctrl+Shift+T` (a window key, not a global shortcut) open on every page. It lists only tasks without a goal, grouped by due date (overdue, today, upcoming, no due date; completed and archived are folded). Goal tasks, roadmap steps and session planning stay in the goal workspace, which now also edits a goal task (title, notes, step, priority, due date) and can move it out of its goal.
+
+- **No area.** A task without an area is stored in the area with the fixed id `general` (`GENERAL_FIELD_ID`). `task.create` and `task.update` with `fieldId: null` create that area the first time, in the same transaction as the task. It is an ordinary `fields` row: it can be renamed or deleted (with the recovery backup), but not archived. The panel shows it as "No area"; the other pages show its name. No schema or backup format change.
+- **Area changes.** `task.update` accepts `fieldId`, except for a goal task (it keeps its goal's area) and a task in the current session's checklist.
+- **Focus.** **Focus** on a task prepares the Focus page with the task's area, the task as primary task and its title as the intention. The checklist, the primary-task choice and the categories are no longer in the interface; `session.tasks` and `category.*` stay for compatibility and keep their data.
+- **Calendar.** Tasks with a due date (with or without a goal) show as a mark on the day, a chip in the Plans row of the day and week views, and in a **Tasks due** card for the selected day. The area and goal filters apply.
+- **Agent.** `get_overview` returns `tasks` (tasks without a goal: open, and completed in the last 14 days, at most 200; `areaId` is null for no area) and `openTaskProposals`. `propose_tasks` without `goalId` saves a `tasks.add` proposal with `goalId: null` and `payload { areaId, tasks }`; the user applies it in the task panel. `create_tasks` and `update_task` stay goal-only, because `agentChanges.goalId` is `NOT NULL`. A backup with a goal-less task proposal cannot be restored by 3.11.0 or earlier.
+
+## TypeSafe Jev judgments (3.9.0)
+
+TypeSafe Jev reads free text and answers typed questions with probabilities. The use cases, the rules and the phases are in [TypeSafe Jev in Focus Guide](JEV-USE-CASES.md). Phase 1 fills empty main-distraction answers from the text of a session.
+
+- `settings.jevAssist` turns the feature on. The default is `false`. Restore sets it to `false`. No schema bump.
+- `jev.gaps.scan` reads its candidates inside the command queue (`FocusService.jevReflectionGaps()`), then sends the requests outside it, as `insights.read` computes outside it. The scan writes nothing. The user saves an answer through `session.review`.
+- `jev.key.set`, `jev.key.clear` and `jev.log.read` run outside the queue and only from the main window. They touch no records.
+- `src/main/jev-questions.ts` holds all wording and the pinned model. `src/shared/jev-decisions.ts` holds the truth tables and thresholds. `src/main/jev-client.ts` makes the call with `net.fetch`, retries status 429 and 529 with backoff, and keeps the last 20 requests in memory. `src/main/jev.ts` stores the key with `safeStorage` and runs three requests at a time. A rejected key stops the scan.
+- `AppState.jev` (`keyStored`, `encryption`) is runtime only. It never reaches settings, datasets or backups.
+- The preview has no network access and refuses `jev.*` commands.
 
 ## Interface language (unreleased)
 
@@ -24,6 +68,15 @@ The default language is English. Brazilian Portuguese is optional through `setti
 - Each process has its own language state. Main calls `setLanguage` after loading the store and in `state()` after every change, so the tray and dialogs follow. The renderer calls it from `AppState.settings.language` and remounts the shell with `key={language}`. The Insights worker receives `language` in its job options and the Insights cache key includes the language.
 - Module-level texts are functions or getters, because `t()` must run after the language is set. Validation messages are translated in main; `ROADMAP_CHANGED` stays an English sentinel because callers compare it by value.
 - Not translated: IPC and MCP names and texts, backup keys, CSV headers, persisted values.
+
+## TypeSafe window checks (schema 12, unreleased)
+
+- `WindowJudgeScheduler` (`src/main/window-judge.ts`) runs in the 250 ms update tick. It reads only `timer.snapshot()`: one look for each 5 minutes of active focus time (`JEV_WINDOW_LIMITS.everyMs`). Pause, breaks and Offline sessions do not count. `FOCUS_GUIDE_TEST_MODE=1` with `FOCUS_GUIDE_WINDOW_CHECK_MS` (10 000 or more) shortens the interval for tests.
+- The activity helper answers a `window <request>` command with the top-level foreground window: its handle, program name and title (at most 256 characters). It answers also when activity collection is off. Focus Guide's own windows come back only as `own`.
+- With `title-image`, the main process captures that window with `desktopCapturer` (`window:<HWND>:0`), scales it into the TypeSafe limits (280–1568 px per side) and encodes it as JPEG. A blank picture is not sent. The picture stays in memory for one request; the request log keeps only its size.
+- The request to TypeSafe runs outside the command queue. One look runs at a time. The row is written inside the queue with `store.untracked`, because no insight reads it.
+- A rejected key (status 401) stops the check until a new key is saved. Any other failure is an `error` row.
+- The table is not part of `store.all()`, so the window titles never reach the renderer state, Insights, the agent bridge or backups. `jev.window.read` returns the newest 200 rows only to the main window.
 
 ## Session preparation answers (schema 11, unreleased)
 
@@ -117,10 +170,12 @@ The scheduler cancels a check-in and saves no record in these cases:
 
 #### Statistics module (Rust and WebAssembly)
 
-The matrix kernels of `insight-stats.ts` are written in Rust (`native/stats/src/lib.rs`) and compiled to WebAssembly: ridge (`ridgeFit`, `ridgeSelect`), lasso and elastic net (`penalizedFit`, `penalizedSelect`), `collinearity`, `kMeans` and `silhouettes`. The other helpers (intervals, quantiles, Kaplan–Meier, `mulberry32`) stay in TypeScript. They are cheap, and Kaplan–Meier uses `log` and `exp`, which can differ by one unit in the last place between math libraries.
+The matrix kernels of `insight-stats.ts` are written in Rust (`native/stats/src/lib.rs`) and compiled to WebAssembly: `ridgeSelect`, `penalizedSelect`, `collinearity`, `silhouettes`, and three kernels that run whole loops of the engine. `modelFits` selects the ridge, lasso and elastic-net penalties on one matrix; `modelBootstrap` refits all bootstrap resamples; `kMeansStarts` runs every k-means++ start for one k and keeps the best. The other helpers (intervals, quantiles, Kaplan–Meier, `mulberry32`) stay in TypeScript. They are cheap, and Kaplan–Meier uses `log` and `exp`, which can differ by one unit in the last place between math libraries.
 
-- **Same numbers.** Each kernel repeats the TypeScript it replaced operation by operation, with the same order of additions and the same guards. WebAssembly uses IEEE 754 doubles, Rust never fuses a multiply and an add, and the kernels use only +, −, ×, ÷ and √. A check against the previous TypeScript (5 778 comparisons of random, constant, collinear and empty inputs, and the full engine on the example dataset) found no difference in any bit. The grid of the lasso penalty uses `floor ** x`, so `penalizedSelect` computes those factors in TypeScript and passes them in.
-- **Random numbers.** `kMeans` keeps its `random` argument. The module imports `env.stats_random`, which calls that function, so k-means++ draws the same seeded stream.
+- **Few calls.** Each call copies its matrix into WebAssembly memory and its result out. With one call per fit, these copies and the garbage they left cost about as much as the arithmetic, so the first port gained little. The loop kernels copy each matrix once: one call per rolling-origin window instead of three, one call for the 200 bootstrap resamples instead of 200 to 400, one call per k instead of one per start. The lasso and the elastic net also share their fold moments. The resample indices are still drawn in TypeScript with `mulberry32(42)`, in the same order, and passed in.
+
+- **Same numbers.** Each kernel repeats the TypeScript it replaced operation by operation, with the same order of additions and the same guards. The loop kernels call the same inner functions as the single kernels. A check against the single-call version (164 916 comparisons of random, constant, collinear, binary, zero and NaN inputs from n = 0 to 400, and the full engine on the example dataset copied 1, 5 and 17 times, in English and Portuguese) found no difference in any bit. WebAssembly uses IEEE 754 doubles, Rust never fuses a multiply and an add, and the kernels use only +, −, ×, ÷ and √. A check against the previous TypeScript (5 778 comparisons of random, constant, collinear and empty inputs, and the full engine on the example dataset) found no difference in any bit. The grid of the lasso penalty uses `floor ** x`, so `penalizedSelect` computes those factors in TypeScript and passes them in.
+- **Random numbers.** `kMeansStarts` keeps its `random` argument. The module imports `env.stats_random`, which calls that function, so k-means++ draws the same seeded stream.
 - **Loading.** `loadStats()` compiles the module once and must finish before the first insight. The main process awaits it before it opens the store, the insights worker awaits it before its first job, and the renderer awaits it before React mounts (the preview too). Browsers refuse to compile a large module synchronously, so loading is asynchronous. A call before loading ends fails with "The statistics engine is still loading."
 - **Build.** `scripts/build-stats.cjs` (`npm.cmd run build:stats`, part of `build`) compiles the crate with `cargo build --release --target wasm32-unknown-unknown` and embeds the module as base64 in `src/shared/stats-wasm.ts`. That generated file is committed, so `dev`, `preview` and `typecheck` work without Rust. It records a hash of the crate sources. Without Rust, the build accepts the committed file only when the hash matches; after a change to `native/stats`, it stops and asks for Rust.
 - **Content Security Policy.** The renderer policy has `script-src 'self' 'wasm-unsafe-eval'`. Chromium needs `wasm-unsafe-eval` to compile WebAssembly. It allows no `eval` of JavaScript, and the module comes from the app bundle.
@@ -182,7 +237,7 @@ The design target for `insights.read` is less than 300 ms for 1 000 sessions and
 - K-means trains on at most 5 000 minutes. The silhouette uses at most 1 500 points.
 - The model tests at most 40 later sessions. The bootstrap uses 200 resamples.
 
-A call without cache takes about 380 ms at 1 000 sessions. This is above the target. The team accepted it. Since the worker, the call no longer blocks the main process, and checkpoints no longer clear the cache. The WebAssembly kernels gave less speed than expected: a synthetic run of the model took 0.66 s instead of 0.71 s at 1 000 rated sessions, and k-means with silhouettes took 62 ms instead of 111 ms at 3 000 points (Node 22, Linux). V8 already runs the old loops close to native speed.
+A call without cache took about 420 ms at 1 020 sessions and 52 000 activity minutes (the example dataset copied 17 times, Node 22, Windows). With the loop kernels of 3.10.2 it takes about 330 ms. This is still above the target. The team accepted it. Since the worker, the call no longer blocks the main process, and checkpoints no longer clear the cache. The WebAssembly kernels gave less speed than expected: a synthetic run of the model took 0.66 s instead of 0.71 s at 1 000 rated sessions, and k-means with silhouettes took 62 ms instead of 111 ms at 3 000 points (Node 22, Linux). V8 already runs the old loops close to native speed.
 
 ## Learning workspace and local agent bridge (unreleased)
 
@@ -230,7 +285,7 @@ flowchart LR
 
 ### Claude Code plugin (3.6.0)
 
-- `agent.plugin.write` (main process only; the preview refuses it) writes a local plugin marketplace to `claude-plugin/` in the data folder: `.claude-plugin/marketplace.json` (`focus-guide-local`) and the plugin `focus-guide/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json` and four skills. The app writes the files, not the package, because the MCP server and the hooks need the absolute path of the executable. The command needs an access level other than `off`. It removes the earlier `focus-guide/` folder first. The files hold no records. The same plugin is also published from the repository: `.claude-plugin/marketplace.json` at the root (marketplace `focus-guide`) points to `Arquivos/agent-plugin/`. Its `.mcp.json` and hooks run `scripts/focus-guide.cmd`, which calls `%APPDATA%\Focus Guide\agent-launch.cmd`; the main process rewrites that file at each start (`writeAgentLauncher`) with the launch paths and environment. Keep the hooks in `Arquivos/agent-plugin/hooks/hooks.json` in step with `hooksConfig` in `agent-plugin.ts`.
+- `agent.plugin.write` (main process only; the preview refuses it) writes a local plugin marketplace to `claude-plugin/` in the data folder: `.claude-plugin/marketplace.json` (`focus-guide-local`) and the plugin `focus-guide/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json` and five skills. The app writes the files, not the package, because the MCP server and the hooks need the absolute path of the executable. The command needs an access level other than `off`. It removes the earlier `focus-guide/` folder first. The files hold no records. The same plugin is also published from the repository: `.claude-plugin/marketplace.json` at the root (marketplace `focus-guide`) points to `Arquivos/agent-plugin/`. Its `.mcp.json` and hooks run `scripts/focus-guide.cmd`, which calls `%APPDATA%\Focus Guide\agent-launch.cmd`; the main process rewrites that file at each start (`writeAgentLauncher`) with the launch paths and environment. Keep the hooks in `Arquivos/agent-plugin/hooks/hooks.json` in step with `hooksConfig` in `agent-plugin.ts`.
 - The skills are Markdown in `Arquivos/agent-plugin/skills/` (`weekly-review`, `pattern-analysis`, `plan-day`, `roadmap`). `src/main/agent-plugin.ts` embeds them at build time with `?raw` imports.
 - The hooks run `focus-guide-mcp.cjs --hook <event>` with the app executable and `ELECTRON_RUN_AS_NODE=1`, through PowerShell (`"shell": "powershell"`), so that no Node.js installation is necessary. `src/mcp/hooks.ts` holds the logic and `src/mcp/client.ts` the bridge client that the server and the hooks share. The hooks match the tools of the manual `focus-guide` entry and of the plugin server (`mcp__plugin_focus-guide_focus-guide__*`).
   - `SessionStart`: calls `get_overview` with a 3-second limit and gives the agent only the access level and counts (active goals, open proposals, planned actions today), or says that the app is not available.
@@ -258,7 +313,7 @@ Shared goal-planning functions:
 - Summarize effort separately from action records and outcome records.
 - Apply the documented gates for duration and barrier suggestions.
 
-The renderer uses the existing Radix controls and semantic tokens. Goals owns repeatable plans and their reviews. Tasks continues to be the editor for one-off tasks. Calendar shows planned actions as outlines, separately from the heat of recorded time. Patterns can filter sessions by goal. The isolated preview runs the same `GoalService` with atomic synthetic storage.
+The renderer uses the existing Radix controls and semantic tokens. Goals owns repeatable plans and their reviews. The task panel (3.12.0) holds one-off tasks without a goal; the goal workspace edits goal tasks. Calendar shows planned actions as outlines, separately from the heat of recorded time. Patterns can filter sessions by goal. The isolated preview runs the same `GoalService` with atomic synthetic storage.
 
 The migration takes a snapshot of the old SQLite database before its transaction starts. Backup format 4:
 
@@ -283,7 +338,7 @@ The browser demo saves an activity cursor for each session. The cursors are opti
 
 ```mermaid
 flowchart LR
-    MainUI[React main window<br/>Focus / Goals / Tasks / Calendar / Patterns / World / Settings]
+    MainUI[React main window<br/>Goals / Focus / Calendar / Patterns / World / Settings<br/>Task panel on every page]
     FloatUI[Compact React floating window<br/>Black brain / purple progress curves<br/>Countdown and controls on hover or keyboard focus]
     Bridge[Sandboxed preload<br/>Typed state and named commands]
     Queue[Electron main process<br/>Sender validation and command queue]
@@ -373,7 +428,7 @@ Unreleased: `FloatingNetwork` replaces the sprite with the brain constellation o
 - The app keeps the original 1028 × 1530 PNG. It does not edit its pixels.
 - Hover and visible keyboard focus show the time and the controls. Focus from a mouse click alone does not keep them visible.
 - The brain is the native drag region. The buttons use `no-drag`.
-- The native bounds request a fixed size of 132 × 156. The app keeps saved positions, with a small margin at the display edge for Windows scaling.
+- The native bounds request a fixed size of 132 × 182 (132 × 156 before 3.14.0). The app keeps saved positions, with a small margin at the display edge for Windows scaling.
 
 The earlier update that added only the sprite added no commands, dependencies or migrations. Version 1.1.0 adds timing and Tasks interfaces and schema version 2. The section [Stopwatch, overtime and Tasks](#stopwatch-overtime-and-tasks-110) describes them.
 
@@ -462,7 +517,7 @@ Existing sessions keep their IDs, times and links. Their overtime is disabled. J
 
 ### Tasks and Focus
 
-The Tasks page owns creation, editing, categories, links and completion. `App` keeps the shared pending session selection. Focus stays mounted, so its preparation drafts stay. Its animation stops when the view is hidden. When you archive or complete a task, the app removes it from the pending choices. Active and historical links stay.
+Until 3.12.0, the Tasks page owned creation, editing, categories, links and completion (see [Task panel](#task-panel-3120-unreleased) for the current design). `App` keeps the shared pending session selection. Focus stays mounted, so its preparation drafts stay. Its animation stops when the view is hidden. When you archive or complete a task, the app removes it from the pending choices. Active and historical links stay.
 
 ### Preview
 

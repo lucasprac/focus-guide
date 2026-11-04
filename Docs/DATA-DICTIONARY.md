@@ -57,7 +57,7 @@ The file has one row for each interval or marker. The app updates an active inte
 |---|---|
 | `id` | Event identifier. |
 | `session_id` | Identifier of the session that owns the event. |
-| `kind` | `active`, `pause`, `interruption`, `thought`, `recovery`, `edit`, `attention-return` or `probe`. |
+| `kind` | `active`, `pause`, `interruption`, `thought`, `recovery`, `edit`, `attention-return`, `probe` or `attention-phase`. |
 | `started_at_utc` | Start of the interval, or time of the marker. |
 | `ended_at_utc` | Last durable active boundary, closed pause boundary or marker boundary. It can be blank for open intervals and for recovery markers. |
 | `duration_ms` | For an active interval: its recorded milliseconds. For a pause: its elapsed milliseconds. For other markers: zero. Only active durations count as focus. |
@@ -111,7 +111,7 @@ The file has one row for each interval or marker. The app updates an active inte
 | Property | Meaning |
 |---|---|
 | `id` | Stable identifier. |
-| `fieldId` | Identifier of the field that owns the task. |
+| `fieldId` | Identifier of the field that owns the task. A task without an area belongs to the field with the fixed id `general` (3.12.0), which `task.create` makes the first time. |
 | `title` | Task text that you can edit, 1–200 characters. |
 | `completed` | Current completion state in the checklist. It is not a historical outcome for each session. |
 | `archived` | Soft removal from future preparation lists. History links stay valid. |
@@ -160,6 +160,7 @@ The JSON properties `id`, `sessionId`, `kind`, `startedAt`, `endedAt`, `duration
 | `settings.language` | Interface language, `en` or `pt-BR`. Optional: absent means `en`. Changing it does not change stored data. `makeBackup` omits it when it is `en`, so English backups are identical to earlier versions; restore treats a missing value as `en`. |
 | `settings.focusVisual` | `brain` or `instrument`. Selects the 3D brain or the session gauge on the Focus page. Optional; the default is `brain`. It changes only the appearance. |
 | `settings.floatingStyle` | `brain` or `bar`. Selects the brain constellation or the filling bar for the floating timer. Optional; the default is `brain`. It changes only the appearance and the floating window size. |
+| `settings.timeFormat` | `24h` or `12h`. Clock style for times of day on the Calendar (hour axis, block times, session times). Optional; absent means `24h`. `makeBackup` omits it when it is `24h`, so 24-hour backups are identical to earlier versions. It changes only the appearance. |
 | `settings.sound` | When `true`, the app requests the Windows completion notification sound. Windows can suppress it. |
 | `settings.palette` | `cyan`, `violet`, `amber`, `rose`, `mint`, `ocean`, `ember` or `aurora`. `violet`, `amber` and `rose` need 5, 20 or 50 finished, included hours. `mint`, `ocean`, `ember` and `aurora` need the achievements `explorer`, `weeks-12`, `summit` and `hours-100`. `PALETTES` in `shared/achievements.ts` holds the rules. |
 | `settings.collectedAchievements` | Optional map from an achievement id to the UTC time at which you collected it. Only `achievements.collect` changes it; `settings.update` keeps the saved value. Ids that the app does not know are dropped on validation. `makeBackup` omits it when it is empty. Achievements themselves are derived from records and are not stored; their titles and the palette names go through `t()`. |
@@ -244,7 +245,7 @@ The app rejects these problems before it replaces the data:
 - A task edit cannot change the field of the task. This keeps the session links correct.
 - `settings.autoOvertime` is `true` by default for new sessions. Old session records keep `false`.
 - When you remove a category, the app archives it (soft archive).
-- The search, filter and sort preferences of the Tasks view are in local renderer storage. Dataset backups do not include them.
+- The last area chosen in the task panel is in local renderer storage. Dataset backups do not include it. (Before 3.12.0, the search, filter and sort preferences of the Tasks view were there.)
 - Stopwatch sessions have a null planned time. The app excludes them only from comparisons with planned duration. Recorded-time totals include them.
 
 ## Version 3 behaviour records
@@ -353,7 +354,7 @@ These items stay. Their links are set to `null`:
 
 - Only a `todo` row can have `completed: true`. Validation rejects a done row of another kind.
 - Only `todo` rows count for progress (the goal summary, the **N of M done** text and the **milestones remain unchecked** count).
-- A task's `milestoneId` can refer only to a `todo` row. The service refuses to change a linked to-do to another kind. The error names the row and tells you to unlink its tasks on the Tasks page first. JSON import rejects a task that links to a row of another kind.
+- A task's `milestoneId` can refer only to a `todo` row. The service refuses to change a linked to-do to another kind. The error names the row and tells you to unlink its tasks in the goal's Tasks tab first. JSON import rejects a task that links to a row of another kind.
 - `numbered` rows have no stored number. The app counts from 1 in each run of consecutive numbered rows.
 - The migration and the JSON import of versions 1–5 give every milestone `kind: 'todo'`, because every earlier milestone was a to-do. JSON exports are version 6. The app rejects JSON versions above 6.
 - `goal.milestones.sync` accepts a new row with an identifier that the editor made. If no milestone has that identifier, the service creates the milestone with it. If a milestone of another goal has it, the service refuses the save. So a repeated save does not create duplicates.
@@ -403,10 +404,10 @@ One record for each change that an agent made directly, at the `edit` access lev
 | Field | Meaning |
 |---|---|
 | `id` | Change identifier. |
-| `goalId` | The goal that the change belongs to. A change always belongs to a goal. |
+| `goalId` | The goal that the change belongs to. From schema 13, `null` for a calendar change (target `commitment`). |
 | `at` | UTC time of the change. |
 | `source`, `tool` | The client label and the tool, for example `update_roadmap`. |
-| `target` | `goal`, `roadmap`, `step`, `task`, `action` or `review`. |
+| `target` | `goal`, `roadmap`, `step`, `task`, `action`, `review` or (schema 13) `commitment`. |
 | `summary` | Text that the app writes, up to 500 characters. It does not come from the agent. |
 | `rationale` | The agent's reason, up to 4000 characters. |
 | `before`, `after` | For each changed record, its changed fields before and after the change. `null` in `before` means that the change created the record. Each side holds up to 60,000 characters. |
@@ -509,6 +510,67 @@ Schema 11 adds two optional answers that you give before a session starts. Old r
 - Export writes `schemaVersion` 11. Import accepts versions 1 to 11 and rejects other versions.
 - A version 10 backup becomes version 11 with `null` for `warmUp` and `medication`.
 - Focus Guide 3.1.0 and earlier cannot restore a version 11 backup.
+
+## TypeSafe window checks (schema 12)
+
+Schema 12 adds the table `windowJudgments`. Each row is one look by TypeSafe Jev at the window in front during a focus session (UC-S1 in [JEV-USE-CASES.md](JEV-USE-CASES.md)). The table is kept apart from the other records so that the quality of the ratings can be judged first: `store.all()`, the renderer state, Insights, the AI agent tools and backups do not read it.
+
+The columns are `id`, `sessionId` (deleted with its session) and `body`, a JSON object with these properties:
+
+| Property | Meaning |
+|---|---|
+| `at` | UTC time of the look. |
+| `activeOffsetMs` | Active time of the session at the look, from the timer. It joins the row to `events.activeOffsetMs` of the attention check-ins. |
+| `model`, `questionSet` | The Jev model and the version of the question wording (`window-alignment@1`). |
+| `status` | `ok`, `skipped` (no request was sent) or `error` (the request failed). An error is never a low rating. |
+| `reason` | For `skipped`: `own-window` (Focus Guide was in front), `no-window`, `private-window` (a private browsing title; the title is not kept) or `no-title`. |
+| `error` | The error message for `error`. |
+| `app`, `title` | Program name (file name without `.exe`) and window title, as sent. Empty for a skipped private window. |
+| `image` | `sent`, `unusable` (no usable picture; only the title was sent) or `off`. The picture itself is never stored. |
+| `area`, `plan` | Score answers: `score` (0 to 3, probability-weighted), `confidence` (0 to 1, from TypeSafe) and `probabilities` (one per level). Level 0 is unrelated, 1 a general tool with no visible subject, 2 a near subject, 3 the work itself. `plan` is `null` when the session has no goal, task or intention. |
+| `readable` | Probability that the window shows what the person is working on or looking at. |
+| `inputTokens` | Input tokens billed for the request, or `null`. |
+
+- Setting `settings.jevWindowCheck`: `off`, `title` or `title-image`. The default is `off`. The migration and every restore set it to `off`. Backups never include it.
+- The migration saves a `before-schema-v12-<timestamp>.sqlite` snapshot with `VACUUM INTO`, except for an empty new database. Then one transaction adds the table and sets `user_version` to 12.
+- Restore deletes every row. **Patterns > Window checks (review) > Delete all** does the same at any time.
+- Export: **Export CSV** in the same card writes `focus-guide-windowJudgments-<date>.csv`, oldest first, with one column for each level probability.
+- The previous app rejects a schema 12 database. A rollback needs the matching snapshot.
+
+## Calendar commitments (schema 13)
+
+Schema 13 adds the table `commitments`. Each row is one block of planned focus time.
+
+| Column | Meaning |
+|---|---|
+| `id` | Commitment identifier. |
+| `title` | Up to 200 characters. Without a title, the app uses the name of the task, step, goal or area, or "Focus block". |
+| `notes` | Up to 2000 characters. |
+| `date` | Local date of the block (`YYYY-MM-DD`). |
+| `startMinute`, `durationMinutes` | Start as minutes after midnight, and length in whole minutes (5 to 720). A block ends on the day it starts. |
+| `timezone` | IANA timezone of the plan: the default timezone when the block was made. |
+| `fieldId` | Area, or `null`. Deleted with its area. |
+| `goalId`, `milestoneId` | Goal and roadmap step, or `null`. A goal block has the goal's area; a step needs its goal. Set to `null` when the goal or step is deleted. |
+| `taskId` | Task, or `null`. Set to `null` when the task is deleted. |
+| `activityMode` | Activity mode for the session, as in sessions. |
+| `status` | `planned`, `done` (the user says it happened), `skipped` (the user did not do it) or `cancelled` (out of the plan, kept for history). |
+| `origin` | `user` or `agent`: who planned the block. |
+| `rescheduleCount` | How often a planned block was moved to another date or start. |
+| `createdAt`, `updatedAt` | UTC times. |
+
+- Blocks that are `planned` or `done` do not overlap on the same date.
+- The calendar shows a derived state: `active` (a linked session runs), `done` (a stored `done`, or a completed linked session), `missed` (planned, no session, and its end has passed), or the stored status.
+- `sessions.commitmentId`: the commitment that the session started from, or `null`. Deleting the commitment sets it to `null`; the session keeps its time. A linked session has the commitment's area when the commitment has one.
+- `agentChanges.goalId` can now be `null`: a change with target `commitment` belongs to no goal, and every other change still belongs to a goal. Its `before` and `after` hold title, notes, date, startMinute, durationMinutes, the four links, activityMode and status.
+- `agentProposals.kind` adds `commitments.add`, with `goalId: null` and `payload { commitments }`. Each item has `date`, `start` (`HH:MM`), `durationMinutes`, optional `title`, `notes` and `activityMode`, and the target `areaId`, `goalId`, `step` (title) and `taskId`.
+- The migration saves a `before-schema-v13-<timestamp>.sqlite` snapshot first. The previous app rejects a schema 13 database. A rollback needs the matching snapshot.
+
+### Backup version 12
+
+- Export writes `schemaVersion` 12, with the new `commitments` collection and `commitmentId` on each session.
+- Import accepts versions 1 to 12. A version 11 backup becomes version 12 with no commitments and `commitmentId: null`.
+- Restore checks that the links of each commitment exist, that a goal block has the goal's area, that a step belongs to the goal, and that each linked session refers to a known commitment of its own area. Overlaps are not checked on restore.
+- Focus Guide 3.12.0 and earlier cannot restore a version 12 backup.
 
 ## Calculation rules for insights
 
@@ -695,3 +757,30 @@ The action editor uses `suggestedDuration()`. It looks at finished, included ses
 | `probeSessions`, `probeAnswered`, `probeMissed` | Sessions that had a check-in, answered check-ins, and `missed` check-ins. |
 | `droppedLong`, `droppedRecovered` | Sessions that the engine left out for length or for recovery. |
 | `notes` | One sentence for each rule that removed data, with the count. |
+
+## TypeSafe judgments setting (3.9.0)
+
+No schema bump. Backups do not change.
+
+| Property | Meaning |
+|---|---|
+| `settings.jevAssist` | `true` lets the user start TypeSafe Jev checks. The default is `false`. A missing key gets `false`. Every restore sets it to `false`. `makeBackup` omits it; restore accepts it, because backups from 3.9.0 have it. |
+
+The TypeSafe API key is not a record. It is in `typesafe-key.bin` in the data folder, encrypted with Windows. It is not in the database, in backups or in exports. A main-distraction answer that the user saves from a suggestion is a normal `detractor` value, with an `edit` event that holds the old values.
+
+## Manual attention states (3.14.0, backup version 13)
+
+No schema bump: the `events` table already takes any `kind`. Backup version 13 accepts the new event kind and setting. Versions 1 to 12 still restore; 3.13.0 and earlier cannot restore a version 13 backup.
+
+| Property | Meaning |
+|---|---|
+| Event `kind` `attention-phase` | A manual attention state from `activeOffsetMs` (recorded active time) on. `category` is `warm-up`, `sustain` or `fatigue`. `durationMs` is 0. `source` is `main` or `floating`, or `null` for the first marker, which the app saves at offset 0 when a manual session starts. `activeOffsetMs` is required and is at most the session's `activeMs`. |
+| `settings.attentionPhaseMode` | `auto` (default; a missing key means `auto`) or `manual`. Read at `session.start`: a manual session gets the first `warm-up` marker in the same transaction as the session. Restore keeps the value. |
+
+Rules:
+
+- A session is manual exactly when it has an `attention-phase` event. Changing the setting during a session does not change that session.
+- The state at an active offset is the category of the last marker at or before it. Before the first marker (only possible in data written by hand), the automatic cuts apply: warm-up before 10 active minutes, sustain before 25, fatigue after.
+- `get_focus_insights`: each phase rate counts the active time, drifts and check-ins of the spans in that state. `manualSessions` counts the manual sessions in the phase. `fromMinute` and `toMinute` stay the automatic cuts. The curve after the warm-up starts at the first state after warm-up in a manual session.
+- `list_sessions`: `attentionPhases` lists `{ phase, fromMinute }` for a manual session and is `null` for an automatic one.
+- Event CSV: `kind` can be `attention-phase`; `category` holds the state.

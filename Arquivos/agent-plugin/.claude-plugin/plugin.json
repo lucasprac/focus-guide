@@ -1,6 +1,6 @@
 {
   "name": "focus-guide",
-  "description": "Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan and roadmaps.",
+  "description": "Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan, calendar commitments and roadmaps.",
   "author": { "name": "Lucasprac" },
   "homepage": "https://github.com/lucasprac/focus-guide",
   "repository": "https://github.com/lucasprac/focus-guide",

@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6D4AFF"></a>
   <img alt="Platform: Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-2F62D9">
-  <img alt="Version 3.7.0" src="https://img.shields.io/badge/version-3.7.0-6D4AFF">
+  <img alt="Version 3.10.2" src="https://img.shields.io/badge/version-3.10.2-6D4AFF">
 </p>
 
 ![Goals page with an agent proposal and four goal cards](Docs/images/goals.png)
@@ -31,6 +31,8 @@
 Focus Guide keeps all records in a local SQLite database in `%APPDATA%\Focus Guide`. The app has no account, no telemetry and no network service. It makes daily backups and takes a snapshot before each schema migration. You can export a JSON backup or a CSV file at any time.
 
 If you connect an AI agent that uses a cloud model, the data that the agent reads goes to that model provider. Agent access is `off` by default, and the Settings page explains each level before you turn it on.
+
+The optional TypeSafe judgments (off by default) are the only network call of the app itself. When you start a check, the text of the sessions it reads goes to TypeSafe. See [TypeSafe Jev in Focus Guide](Docs/JEV-USE-CASES.md).
 
 ## Install
 

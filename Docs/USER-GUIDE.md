@@ -35,6 +35,8 @@ Behaviour insights upgrade the database to schema 10. The app saves a `before-sc
 
 The session preparation answers upgrade the database to schema 11. The app saves a `before-schema-v11` snapshot first. Version 3.1.0 and earlier cannot open a schema 11 database, and they cannot restore a version 11 backup.
 
+Commitments upgrade the database to schema 13. The app saves a `before-schema-v13` snapshot first. Version 3.12.0 and earlier cannot open a schema 13 database, and they cannot restore a version 12 backup. Before you update, save a full JSON backup with your current version.
+
 ## Learn with goals
 
 The app opens on **Goals**. A goal is the place where you learn something, for example "Learn linear algebra".
@@ -42,7 +44,7 @@ The app opens on **Goals**. A goal is the place where you learn something, for e
 1. Select **New goal**. Choose its area (for example Mathematics), a title and an outcome.
 2. Open the goal. In **Roadmap**, write stages as headings and steps as to-dos. Open **Details** on a step to add an estimate, a target date, notes and links.
 3. Select **Focus on this goal** or **Focus on this step**. Focus opens with the goal, its area and the step. Select **Begin focus**.
-4. In **Tasks**, add one-off steps. In **Plan & review**, add weekly actions and write your weekly review.
+4. In the goal's **Tasks** tab, add one-off steps for the goal. In **Plan & review**, add weekly actions and write your weekly review. For small tasks without a goal, use the task panel (see [Use tasks](#use-tasks)).
 5. In **Behaviour**, see how you study this goal: time by activity mode and roadmap step, planned actions, and the same Insights figures as in Patterns for this goal.
 
 Areas are the former focus fields. They group goals. You manage them in **Settings > Your areas**. You can still start a session without a goal: select **Free focus** on the Focus page.
@@ -72,7 +74,7 @@ Use the agent to find patterns in your development:
 
 - **Focus:** `list_sessions` and `get_focus_insights` show when and how long you focus, and what interrupts you.
 - **Goals:** `get_goal` and `get_overview` show the progress of each goal and its roadmap.
-- **Workflow:** `get_weekly_review` shows one week of a goal: recorded time, planned action check-ins and roadmap progress.
+- **Workflow:** `get_weekly_review` shows one week of a goal: recorded time, planned action check-ins and roadmap progress. `get_calendar` shows your commitments and compares the plan with what happened.
 - **Behaviour:** `get_goal_behaviour` and `get_focus_insights` show your activity, check-in and reflection patterns.
 
 These values describe your records. They do not measure attention, and an association is not a cause. The agent can then help you plan the next week, adjust a roadmap or change a habit.
@@ -80,9 +82,9 @@ These values describe your records. They do not measure attention, and an associ
 1. Open **Settings > AI agent (MCP)**.
 2. Choose the access level:
    - **Off** (default): no agent can connect.
-   - **Read only**: the agent can read areas, goals, roadmaps, tasks, sessions, weekly reviews, behaviour summaries and focus insights.
-   - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions and review notes. Nothing changes until you apply a proposal.
-   - **Read and edit**: the agent can also change goals, roadmaps, step details, tasks, weekly actions and review notes at once. At this level the agent cannot delete anything, mark a goal achieved, archive a goal or tick a roadmap step. It works only on goals and on tasks that belong to a goal, and it has no access to sessions, the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page, where you can undo it.
+   - **Read only**: the agent can read areas, goals, roadmaps, tasks (also tasks without a goal), sessions, the calendar, weekly reviews, behaviour summaries and focus insights.
+   - **Read and propose**: the agent can also propose goals, roadmaps, tasks, weekly actions, review notes and calendar commitments. Nothing changes until you apply a proposal. Proposed tasks without a goal appear in the task panel. Proposed commitments appear on the Calendar page.
+   - **Read and edit**: the agent can also change goals, roadmaps, step details, tasks, weekly actions and review notes at once, and plan, move and cancel commitments in your calendar. At this level the agent cannot delete anything, mark a goal achieved, archive a goal, tick a roadmap step, or mark a commitment done or skipped. It does not change a commitment with recorded sessions. It works only on goals, on tasks that belong to a goal and on the calendar, and it has no access to the timer, areas, settings or backups. Every change appears in **Agent activity** on the Goals page (calendar changes also on the Calendar page), where you can undo it. Undo of a planned commitment cancels it.
 3. Select **Copy configuration**.
 4. Add the configuration to your client:
    - Claude Desktop: add the `focus-guide` entry to `mcpServers` in `claude_desktop_config.json`, then restart Claude Desktop.
@@ -101,7 +103,7 @@ The client prompts `build_learning_roadmap`, `weekly_learning_review` and `analy
 
 ### Claude Code plugin
 
-For Claude Code, the plugin is the easier way to connect. It contains the MCP server, four skills and hooks. You can install it in two ways.
+For Claude Code, the plugin is the easier way to connect. It contains the MCP server, five skills and hooks. You can install it in two ways.
 
 **From GitHub (recommended).** Open Focus Guide once and choose an access level. Then run these commands in Claude Code and restart it:
 
@@ -118,11 +120,12 @@ The plugin finds the app through `agent-launch.cmd`, which Focus Guide writes to
    - `claude plugin install focus-guide@focus-guide-local`
 3. Restart Claude Code. If you also added the `focus-guide` entry yourself, remove it, so that the agent does not see each tool two times.
 
-The skills give the agent a fixed method for four tasks. You can ask in your own words, or type the skill name:
+The skills give the agent a fixed method for five tasks. You can ask in your own words, or type the skill name:
 
 - `/focus-guide:weekly-review`: reviews the week of your goals and saves one small adjustment for each goal.
 - `/focus-guide:pattern-analysis`: finds patterns in focus, goals, workflow and behaviour, with the evidence for each pattern.
-- `/focus-guide:plan-day`: plans today's focus sessions from your planned actions, tasks, roadmap steps and best hours.
+- `/focus-guide:plan-day`: plans today's focus sessions from your planned actions, tasks, roadmap steps and best hours, and saves them as commitments in the Calendar.
+- `/focus-guide:commitments`: the playbook for your calendar. The agent sets the length of each block from your warm-up, sustain and fatigue phases, places short and long rests as you prefer them (it asks you if it does not know), and ranks areas and activities by deadline, invested effort and your preferences. It writes your rest preference in the notes of each block, so the next plan can use it.
 - `/focus-guide:roadmap`: creates a goal with a roadmap, or splits and adjusts the roadmap of a goal.
 
 The hooks run on this computer:
@@ -150,35 +153,24 @@ After you update or move Focus Guide, select **Update plugin files**, then run `
    - Both answers are optional. To clear an answer, click it again or select **Clear**. You cannot change them after the session starts.
    - If you collapse this section, the app keeps your draft.
 
-The field, timing and intention stay visible together. Preparation from Goals or Tasks shows as a compact linked summary.
+The field, timing and intention stay visible together. Preparation from Goals or from the task panel shows as a compact linked summary.
 
 Below the duration, Focus can show up to three hints from the last 90 days. They come from the prepared goal, or from the area if you chose no goal. Each hint comes from a different group. One hint suggests a session length or a pause. Select the button on it, for example **Use 25 min**, to set the timer. One hint suggests a time of day. One hint tells you what to do before you start, for example to write the first small step. If you saved an adjustment for this week, Focus shows it above the hints. Hints use the same rules as the Insights tab, so they appear only when you have enough records. If the app cannot read them, it shows none.
 
 ### Use tasks
 
-To create and edit next steps, open **Tasks** in the sidebar.
+Tasks are your next small steps. Open them from any page: select **Tasks** at the top of the window, or press **Ctrl+Shift+T**. The task panel opens at the right side.
 
-- Each task has a focus field for time tracking. A task can also have a separate category, notes, a priority and a due date.
-- The due date of a new task is today (your local date). The **Task details** label shows it. To use a different day, open **Task details** and choose a date. To have no due date, select **No due date**. To edit the due date of an existing task, use **Edit task**.
-- You can change the names and colors of categories.
-- You can search titles and notes. You can filter by field, category, status and priority. You can sort by date, due date, priority or title.
-- The app saves your views locally.
-
-To prepare a session from Tasks:
-
-1. Select a session field.
-2. Select up to 100 tasks.
-3. Optionally, select a primary task.
-4. Click **Go to Focus**.
-
-The selection and the Focus draft stay when you change pages. During focus, you can go back to Tasks. There you can link existing open tasks from the current field, or mark tasks as complete.
-
-- **Archive** and **Restore** keep the task IDs and the historical links.
-- When you archive a category, its assignments stay.
+- Write a task and press Enter. Choose its area, or **No area**. Choose its due date: **Due today** (the default), **Due tomorrow**, **No due date** or **Choose a day**.
+- A task without an area goes to the **General** area. The app makes this area the first time. You can rename or delete it in Settings, but you cannot archive it. Focus time on these tasks counts as time in the General area.
+- The panel groups the tasks by date: **Overdue**, **Today**, **Upcoming** and **No due date**. **Completed** and **Archived** are folded at the bottom.
+- The chips at the top show the tasks of one area, or of **No area**.
+- Select a task to change its title, notes, area, due date and priority. Select the check box to complete it. Select **Archive** to hide it; **Restore** brings it back with its history.
+- Select **Focus** on a task. Focus opens with the task's area, and the task title as the intention. Then select **Begin focus**.
+- Tasks with a due date also show on the **Calendar**.
 - Due dates do not schedule notifications.
-- Each session records its time one time only. The number of tasks in the session does not change this.
 
-The Tasks page starts with creation, search and the task list. Expand the optional task details, the advanced filters or the category management when you need them. In wide windows, session preparation is next to the list. In narrow windows, it is below the list.
+The panel shows only tasks that belong to no goal. The tasks of a goal are in the goal's **Tasks** tab. There you add a task, link it to a roadmap step, edit it, focus on it, or select **Move out of this goal**. Then the task moves to the panel.
 
 ### Run the session
 
@@ -206,6 +198,17 @@ During focus, open **Session tools**. It has these commands:
 - **Mark interruption.** An interruption marker does not pause the clock. When you stop working, use Pause.
 - **Park this thought.** This saves something to look at later. It does not count as an interruption. Parked thoughts show in the final check-in and in the session history.
 - **Exclude session.** This finishes the session and removes it from insights, daily totals and neural progress. Its time, tasks, notes and events stay in history and in exports.
+
+### Attention state
+
+During focus, the Focus page shows your attention state below the progress bar: **Warm-up**, **Sustain** or **Fatigue**. The floating timer shows it too (the brain: below the controls; the bar: in its panel).
+
+Choose how the state changes in **Settings > Activity & shortcuts > Attention state**:
+
+- **Automatic** (default): warm-up for the first 10 active minutes, sustain until minute 25, then fatigue. You only see the state.
+- **Manual**: the session starts in warm-up, and you select **Warm-up**, **Sustain** or **Fatigue** when your state changes. On the small brain timer the buttons are **Warm**, **Hold** and **Tired**. You can change the state while the session is paused too.
+
+The setting applies from the next session. In **Patterns**, the warm-up, sustain and fatigue rates use your states for the sessions that you recorded in manual mode, and the automatic minutes for the other sessions. The session timeline in **Behaviour** shows the states of each session.
 
 ### After the session
 
@@ -264,7 +267,7 @@ The Focus page can show a session gauge instead of the brain. In Settings, set *
 Click **Floating timer** in the top bar.
 
 - The compact window has a transparent background and stays on top of other windows.
-- It requests a fixed size of 132 × 156 pixels. Windows display scaling can round its native bounds a little.
+- It requests a fixed size of 132 × 182 pixels. Windows display scaling can round its native bounds a little.
 - To move it, drag the brain. You can put it on top of another application.
 - The brain is a constellation of neurons. At the start, the neurons are faint stars. At each 10 minutes of session time, lines slowly connect the neurons and draw the brain: first its outline, then its folds. Each step takes about 2 minutes and adds one twelfth of the brain. The brain is complete after 2 hours of session time. The brain stops forming when you pause.
 - At rest, only the brain is visible.
@@ -325,7 +328,23 @@ The app saves focus time at each transition and does a checkpoint every five sec
 
 ## Calendar
 
-The monthly calendar shows before the planned actions of the selected day. The calendar and the annual heatmap can show **Recorded time**, **Sessions** or **Self-rated focus**. The field filter includes archived fields. To see the session timeline and parked thoughts of a day, select the day.
+Use **Day**, **Week** or **Month** to change the view. **Today** and the arrows move by one day, one week or one month.
+
+- **Day** and **Week** show the hours of the day. Each recorded session is a block in the colour of its area, from its first to its last active minute on that day. Select a block to see the session in **A closer look**. Select a date at the top of a column to see that day.
+- Planned actions have a date but no time. In the day and week views, they show as dashed chips in the **Plans** row above the hours. In the month view, they show as outlined dots.
+- To use 12-hour time (1:00 PM) instead of 24-hour time (13:00), go to **Settings > Appearance & feedback > Time format**.
+
+### Commitments
+
+A commitment is time that you set aside to focus: a block on one day, from a start time, for a number of minutes. Use commitments to plan your day.
+
+- **Plan a block.** In the day or week view, click an empty time. Or select **New commitment** in the **Commitments** card below the calendar. Choose what the block is for: **A free focus block**, **An area**, **A goal or roadmap step**, or **A task**. A task gives its area, goal and step. Leave the title empty to use the name of what you plan for.
+- **Move a block.** Drag it to another time or day. It snaps to quarter hours. Two planned blocks cannot overlap, because you focus on one thing at a time.
+- **Start the block.** Select the block, then **Start focus**. You can also use **Start focus** in the Commitments card. The Focus page then has the block's goal, step, task and minutes, and the session is linked to the block. You can start a block only on its own day.
+- **What happened.** A block with a finished session shows as **done**. A block whose time passed without a session shows as **missed**. A missed block is a gap in the plan, not a failure. In the block, you can also select **Mark done**, **Skipped** or **Cancel commitment**, and **Back to planned** to undo that. **Delete** removes the block; its sessions stay.
+- Your AI agent can plan blocks for you. Its proposals and its direct changes show below the Commitments card. See [Connect an AI agent](#connect-an-ai-agent-mcp).
+
+The planned actions of the selected day show below the calendar. The month view and the annual heatmap can show **Recorded time**, **Sessions** or **Self-rated focus**. The field filter includes archived fields. To see the session timeline and parked thoughts of a day, select the day.
 
 - When an active interval continues past midnight, the app divides it between the two days. It uses the saved timezone of the session.
 - Session counts and ratings belong to the start day.

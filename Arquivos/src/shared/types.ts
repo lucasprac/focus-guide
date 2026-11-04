@@ -1,10 +1,13 @@
 import type { AgentAccess, GoalData } from './goal-types';
 import type { Language } from './i18n';
+import type { Commitment } from './commitments';
+import type { AttentionPhaseMode } from './attention-phase';
 export type { Language } from './i18n';
 export * from './goal-types';
+export type { Commitment, CommitmentState, CommitmentStatus } from './commitments';
 export type SessionStatus = 'running' | 'paused' | 'completed';
 export const MIN_INCLUDED_SESSION_MS = 2 * 60000;
-export type EventKind = 'active' | 'pause' | 'interruption' | 'thought' | 'recovery' | 'edit' | 'attention-return' | 'probe';
+export type EventKind = 'active' | 'pause' | 'interruption' | 'thought' | 'recovery' | 'edit' | 'attention-return' | 'probe' | 'attention-phase';
 export const ACTIVITY_MODES = ['Unspecified', 'Reading', 'Writing/coding', 'Visual work', 'Video/lecture', 'Offline', 'Mixed'] as const;
 export type ActivityMode = typeof ACTIVITY_MODES[number];
 /* Optional reflection answers after a session; an absent answer stays null. */
@@ -20,10 +23,14 @@ export type Medication = typeof MEDICATION_ANSWERS[number];
 /* A probe event stores one of these answers, or 'missed', in its category. */
 export const PROBE_ANSWERS = ['on-task', 'drifting', 'elsewhere'] as const;
 export type ProbeAnswer = typeof PROBE_ANSWERS[number];
+/* The TypeSafe window check during focus (schema 12): off, the window title only, or the title and a capture of the window. */
+export const JEV_WINDOW_CHECKS = ['off', 'title', 'title-image'] as const;
+export type JevWindowCheck = typeof JEV_WINDOW_CHECKS[number];
 /* What the Focus stage draws: the 3D brain or the isometric session gauge. Appearance only; timing is unchanged. */
 export type FocusVisual = 'brain' | 'instrument';
 /* How the floating timer looks: the brain constellation or a thin bar that fills as time passes. Appearance only. */
 export type FloatingStyle = 'brain' | 'bar';
+export type TimeFormat = '24h' | '12h';
 /* Where the floating bar sits: the middle of one screen edge. Window placement, kept with the window bounds, not in settings. */
 export const FLOAT_BAR_POSITIONS = ['top', 'bottom', 'left', 'right'] as const;
 export type FloatBarPosition = typeof FLOAT_BAR_POSITIONS[number];
@@ -37,11 +44,15 @@ export interface ActivitySample {
 }
 export interface CollectorStatus { state: 'recording' | 'disabled' | 'waiting' | 'unavailable'; shortcut: 'ready' | 'unavailable' | 'conflict'; requestedShortcut?: string; effectiveShortcut?: string; shortcutError?: string; message: string }
 export interface Field { id: string; name: string; color: string; archived: boolean; createdAt: string }
+/* The area of tasks that have no area of their own. task.create makes it the first time; it is an ordinary area record. */
+export const GENERAL_FIELD_ID = 'general';
 export interface TaskCategory { id: string; name: string; color: string; archived: boolean; createdAt: string }
 export interface Task { id: string; fieldId: string; title: string; completed: boolean; archived: boolean; createdAt: string; updatedAt: string; categoryId: string | null; notes: string; priority: 'low' | 'normal' | 'high'; dueDate: string | null; goalId?: string | null; milestoneId?: string | null }
 export type TimingMode = 'countdown' | 'stopwatch';
 export interface FocusSession {
   goalId?: string | null; occurrenceId?: string | null; milestoneId?: string | null;
+  /* Schema 13: the commitment that this session started from. Null when it was not planned in the calendar. */
+  commitmentId?: string | null;
   id: string; fieldId: string; primaryTaskId: string | null; checklistIds: string[];
   intention: string; plannedMs: number | null; activeMs: number; status: SessionStatus;
   timingMode: TimingMode; autoOvertime: boolean; targetReached: boolean;
@@ -69,7 +80,15 @@ export interface Settings {
   agentAccess?: AgentAccess;
   focusVisual?: FocusVisual;
   floatingStyle?: FloatingStyle;
+  /* Clock style for times of day; absent in older data and backups, which means 24-hour. */
+  timeFormat?: TimeFormat;
   attentionProbes?: boolean;
+  /* Attention state during focus: 'auto' follows active time, 'manual' lets you set it. Absent means 'auto'. It applies from the next session. */
+  attentionPhaseMode?: AttentionPhaseMode;
+  /* Opt-in TypeSafe Jev judgments. Off by default and after restore; the API key is never part of settings. */
+  jevAssist?: boolean;
+  /* Opt-in window check during focus. Off by default and after restore; never in a backup. */
+  jevWindowCheck?: JevWindowCheck;
   /* Interface language; absent in older data and backups, which means English. */
   language?: Language;
 }
@@ -79,6 +98,8 @@ export interface Dataset extends Partial<GoalData> {
   settings: Settings; reviews: WeeklyReview[];
   categories: TaskCategory[];
   activity?: ActivitySample[];
+  /* Schema 13: planned focus blocks in the calendar. */
+  commitments?: Commitment[];
 }
 export interface TimerSnapshot {
   mode: 'idle' | 'focus' | 'break'; running: boolean; sessionId: string | null;
@@ -92,12 +113,15 @@ export interface AgentBridgeStatus { state: 'off' | 'ready' | 'error'; message: 
 export interface AgentPluginStatus { path: string; version: string; current: boolean }
 /* Runtime state of the attention check-in that is on screen now; it never reaches settings, datasets or backups. */
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
-export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
-export type BackupFile = Dataset & GoalData & { format: 'focus-guide'; schemaVersion: 11; exportedAt: string };
-export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number }
+/* Runtime state of TypeSafe Jev; it never reaches settings, datasets or backups. The key itself never leaves the main process. */
+export interface JevStatus { keyStored: boolean; encryption: boolean; windowCheck?: { state: 'off' | 'ready' | 'stopped'; message: string } }
+export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
+export type BackupFile = Dataset & GoalData & { commitments: Commitment[]; format: 'focus-guide'; schemaVersion: 13; exportedAt: string };
+export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number; commitments?: number }
 export type Command =
   | 'goal.create' | 'goal.update' | 'goal.delete' | 'goal.milestone.save' | 'goal.milestones.sync' | 'goal.action.save' | 'goal.occurrence.save' | 'goal.occurrence.reschedule' | 'goal.progress.save' | 'goal.progress.delete' | 'goal.review.save' | 'goal.suggestion.decide' | 'goal.behaviour'
   | 'agent.proposal.apply' | 'agent.proposal.reject' | 'agent.change.undo' | 'agent.plugin.write'
+  | 'commitment.save' | 'commitment.delete'
   | 'export.goals'
   | 'field.create' | 'field.update' | 'field.archive' | 'field.delete'
   | 'task.create' | 'task.update' | 'task.delete'
@@ -106,10 +130,11 @@ export type Command =
   | 'session.review' | 'session.edit' | 'session.exclude' | 'session.delete'
   | 'interruption.record' | 'thought.record' | 'break.start' | 'break.stop'
   | 'settings.update' | 'review.save' | 'achievements.collect'
-  | 'attention.return' | 'attention.remove' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
+  | 'attention.return' | 'attention.remove' | 'attention.phase' | 'behaviour.read' | 'activity.delete' | 'export.activity' | 'shortcut.capture' | 'shortcut.retry'
   | 'probe.answer' | 'insights.read'
+  | 'jev.key.set' | 'jev.key.clear' | 'jev.log.read' | 'jev.gaps.scan' | 'jev.window.read' | 'jev.window.clear'
   | 'window.float' | 'window.main' | 'window.hide' | 'window.floatPointer' | 'window.floatMove'
-  | 'export.sessions' | 'export.events' | 'export.backup'
+  | 'export.sessions' | 'export.events' | 'export.backup' | 'export.windowJudgments'
   | 'backup.preview' | 'backup.restore' | 'backup.create';
 export type AppEvent = { type: 'state'; state: AppState } | { type: 'timer'; timer: TimerSnapshot } | { type: 'error'; message: string } | { type: 'notice'; message: string } | { type: 'visibility'; visible: boolean } | { type: 'attention-return'; sessionId: string; eventId: string; savedAt: string } | { type: 'shortcut-captured'; shortcut: string };
 export type CommandResult = { ok: true; value?: unknown } | { ok: false; error: string };

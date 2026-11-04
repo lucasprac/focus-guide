@@ -3,6 +3,7 @@ import type { AppState, FloatBarPosition } from '../../shared/types';
 import { PALETTES } from '../../shared/achievements';
 import type { Action } from './App';
 import { Icon, time } from './components';
+import { AttentionPhaseControl } from './AttentionPhaseControl';
 import ProbePrompt, { ProbeAnnouncer } from './ProbePrompt';
 import { displayedTime, timerLabel, visualProgress } from '../../shared/timer-display';
 import { t } from '../../shared/i18n';
@@ -107,6 +108,7 @@ export default function FloatingBar({ data, act, error, onDismissError }: { data
         <button onClick={() => void act('window.main')} aria-label={t('Open your focus space')} title={t('Open your focus space')}><Icon name="arrow" size={16} /></button>
         <button onClick={() => void act('window.hide')} aria-label={t('Hide floating timer')} title={t('Hide floating timer')}><Icon name="close" size={16} /></button>
       </div>
+      <AttentionPhaseControl data={data} act={act} variant="bar" />
       {focus && <form className="fbar-note" onSubmit={e => { e.preventDefault(); void saveNote(); }}>
         <input value={note} onChange={e => setNote(e.target.value)} maxLength={2000} aria-label={t('Quick note for after the session')} placeholder={noteSaved ? t('Saved for after the session') : t('Note a task or thought…')} />
         <span className="sr-only" role="status">{noteSaved ? t('Saved for after the session') : ''}</span>

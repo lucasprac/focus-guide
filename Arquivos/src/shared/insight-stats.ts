@@ -2,6 +2,7 @@
    k-means++ and silhouette. Pure and deterministic, with no dependencies. Every interval is a 90 % interval.
    The matrix kernels (ridge, lasso and elastic net, collinearity, k-means, silhouettes) run in Rust compiled to WebAssembly
    (native/stats, embedded by scripts/build-stats.cjs). They give the same doubles as the TypeScript they replaced.
+   Each call copies its matrix into WebAssembly, so modelFits, modelBootstrap and kMeansStarts run whole loops of the engine in one call.
    Call loadStats() once before the first insight; the scalar helpers below stay in TypeScript because a call into
    WebAssembly costs more than they do, and Kaplan–Meier uses log and exp, which differ by an ulp between math libraries. */
 import { STATS_WASM } from './stats-wasm';
@@ -70,13 +71,13 @@ export function kaplanMeier(rows: Array<{ time: number; event: boolean }>): { po
 interface StatsModule {
   memory: WebAssembly.Memory;
   stats_alloc(len: number): number; stats_free(pointer: number, len: number): void;
-  ridge_fit(x: number, y: number, n: number, p: number, lambda: number, out: number): void;
   ridge_select(x: number, y: number, n: number, p: number, lambdas: number, count: number, out: number): void;
-  penalized_fit(x: number, y: number, n: number, p: number, lambda: number, alpha: number, out: number): void;
   penalized_select(x: number, y: number, n: number, p: number, alpha: number, folds: number, factors: number, steps: number, out: number): void;
   collinearity(x: number, n: number, p: number, out: number): void;
-  k_means(points: number, n: number, d: number, k: number, maxIterations: number, centroids: number, labels: number): number;
   silhouettes(points: number, n: number, d: number, labelings: number, count: number, out: number): void;
+  k_means_starts(points: number, n: number, d: number, k: number, starts: number, maxIterations: number, centroids: number, labels: number, spread: number): number;
+  model_fits(x: number, y: number, n: number, p: number, lambdas: number, count: number, alpha: number, folds: number, factors: number, steps: number, out: number): void;
+  model_bootstrap(x: number, y: number, n: number, p: number, picks: number, draws: number, estimator: number, ridgeLambda: number, lassoLambda: number, netLambda: number, alpha: number, lasso: number, draw: number): void;
 }
 let stats: StatsModule | null = null, loading: Promise<void> | null = null;
 // k-means++ draws from the caller's generator through this import, so the seeded stream stays the same.
@@ -108,11 +109,6 @@ function flatten(rows: number[][], width: number): Float64Array {
   return flat;
 }
 
-/* Ridge regression on centred columns: the intercept is not penalized. Columns are used as given (standardize first). */
-export function ridgeFit(x: number[][], y: number[], lambda: number): { intercept: number; coefficients: number[] } {
-  const n = y.length, p = x[0]?.length ?? 0;
-  return withBuffers([flatten(x.slice(0, n), p), y], [1 + p], (m, [xs, ys, out]) => m.ridge_fit(xs, ys, n, p, lambda, out), ([out]) => ({ intercept: out[0], coefficients: Array.from(out.subarray(1)) }));
-}
 /* The penalty with the lowest mean squared leave-one-out error (PRESS; ties keep the stronger penalty), its fit, and its mean absolute
    leave-one-out error. Squared error ranks penalties more smoothly than absolute error on integer ratings.
    With X'X = V D V' and U = X V, each penalty costs O(n p): the fit is ȳ + U (z / (d + λ)) with z = V'X'y, the leverage is
@@ -123,14 +119,16 @@ export function ridgeSelect(x: number[][], y: number[], lambdas: readonly number
     ([out]) => ({ lambda: out[0], loo: out[1], intercept: out[2], coefficients: Array.from(out.subarray(3)) }));
 }
 
-/* k-means++ seeding, then Lloyd iterations. Fewer than k distinct points give fewer centroids; an empty cluster keeps its centroid. */
-export function kMeans(points: number[][], k: number, random: () => number, maxIterations = 50): { centroids: number[][]; labels: number[] } {
+/* k-means++ seeding, then Lloyd iterations, from `starts` starts. Fewer than k distinct points give fewer centroids; an empty cluster keeps its centroid.
+   The start with the lowest within-cluster sum of squares stays (a later start must beat it by more than 1e-9).
+   A start with fewer than k centroids ends the search. Null when no start was kept. */
+export function kMeansStarts(points: number[][], k: number, random: () => number, starts: number, maxIterations = 50): { centroids: number[][]; labels: number[]; spread: number } | null {
   const n = points.length, d = points[0]?.length ?? 0;
-  if (!n || k < 1) return { centroids: [], labels: points.map(() => 0) };
+  if (!n || k < 1) return null;
   const previous = draw; draw = random;
   try {
-    return withBuffers([flatten(points, d)], [n * d, n], (m, [ps, centroids, labels]) => m.k_means(ps, n, d, k, maxIterations, centroids, labels),
-      ([centroids, labels], count) => ({ centroids: Array.from({ length: count as number }, (_, c) => Array.from(centroids.subarray(c * d, c * d + d))), labels: Array.from(labels) }));
+    return withBuffers([flatten(points, d)], [n * d, n, 1], (m, [ps, centroids, labels, spread]) => m.k_means_starts(ps, n, d, k, starts, maxIterations, centroids, labels, spread),
+      ([centroids, labels, spread], count) => count ? { centroids: Array.from({ length: count as number }, (_, c) => Array.from(centroids.subarray(c * d, c * d + d))), labels: Array.from(labels), spread: spread[0] } : null);
   } finally { draw = previous; }
 }
 /* Mean silhouette width (Euclidean) of several labelings of the same points; each pairwise distance is computed once.
@@ -145,20 +143,40 @@ export function silhouette(points: number[][], labels: number[]): number { retur
 /* Lasso and elastic net by cyclic coordinate descent on the covariance form, for standardized columns.
    Minimizes 1/(2n) Σ (y - b0 - x·β)² + λ (α Σ|β| + (1 - α)/2 Σ β²): alpha 1 is the lasso, 0 < alpha < 1 the elastic net. */
 export interface PenalizedFit { intercept: number; coefficients: number[]; lambda: number }
-export function penalizedFit(x: number[][], y: number[], lambda: number, alpha: number): PenalizedFit {
-  const n = y.length, p = x[0]?.length ?? 0;
-  if (!n || !p) return { intercept: n ? y.reduce((a, b) => a + b, 0) / n : 0, coefficients: new Array(p).fill(0), lambda };
-  return withBuffers([flatten(x.slice(0, n), p), y], [1 + p], (m, [xs, ys, out]) => m.penalized_fit(xs, ys, n, p, lambda, alpha, out), ([out]) => ({ intercept: out[0], coefficients: Array.from(out.subarray(1)), lambda }));
-}
 /* The penalty with the lowest squared error over `folds` interleaved folds, from a descending grid of `steps` values that starts where every
    coefficient is zero; ties keep the stronger penalty. Fold moments come from the totals, so each fold costs O(p²) before its descent.
    The grid factors are computed here, so the power function is the same one the TypeScript version used. */
 export function penalizedSelect(x: number[][], y: number[], alpha: number, folds = 5, steps = 12, floor = 1e-3): PenalizedFit {
   const n = y.length, p = x[0]?.length ?? 0;
   if (!n || !p) return { intercept: n ? y.reduce((a, b) => a + b, 0) / n : 0, coefficients: new Array(p).fill(0), lambda: 0 };
-  const factors = Array.from({ length: steps }, (_, i) => floor ** (i / (steps - 1)));
+  const factors = gridFactors(steps, floor);
   return withBuffers([flatten(x.slice(0, n), p), y, factors], [2 + p], (m, [xs, ys, fs, out]) => m.penalized_select(xs, ys, n, p, alpha, folds, fs, steps, out),
     ([out]) => ({ intercept: out[0], coefficients: Array.from(out.subarray(2)), lambda: out[1] }));
+}
+const gridFactors = (steps: number, floor: number) => Array.from({ length: steps }, (_, i) => floor ** (i / (steps - 1)));
+
+/* ridgeSelect, and penalizedSelect for the lasso (alpha 1) and the elastic net (alpha), on one copy of the matrix. Same results as the three calls. */
+export type ModelFits = { ridge: ReturnType<typeof ridgeSelect>; lasso: PenalizedFit; 'elastic-net': PenalizedFit };
+export function modelFits(x: number[][], y: number[], lambdas: readonly number[], alpha: number, folds = 5, steps = 12, floor = 1e-3): ModelFits {
+  const n = y.length, p = x[0]?.length ?? 0;
+  if (!n || !p) return { ridge: ridgeSelect(x, y, lambdas), lasso: penalizedSelect(x, y, 1, folds, steps, floor), 'elastic-net': penalizedSelect(x, y, alpha, folds, steps, floor) };
+  const sorted = [...lambdas].sort((a, b) => b - a), factors = gridFactors(steps, floor);
+  return withBuffers([flatten(x.slice(0, n), p), y, sorted, factors], [7 + 3 * p], (m, [xs, ys, ls, fs, out]) => m.model_fits(xs, ys, n, p, ls, sorted.length, alpha, folds, fs, steps, out), ([out]) => {
+    const penalized = (at: number): PenalizedFit => ({ intercept: out[at], coefficients: Array.from(out.subarray(at + 2, at + 2 + p)), lambda: out[at + 1] });
+    return { ridge: { lambda: out[0], loo: out[1], intercept: out[2], coefficients: Array.from(out.subarray(3, 3 + p)) }, lasso: penalized(3 + p), 'elastic-net': penalized(5 + 2 * p) };
+  });
+}
+/* Bootstrap refits: draw b uses the rows picks[b * n] … picks[b * n + n - 1]. `lasso` holds the coefficients of the lasso at lambdas.lasso,
+   `draw` those of `estimator` (ridge at lambdas.ridge, the elastic net at lambdas['elastic-net'] and alpha). Each refit is a single fit at a fixed penalty
+   on the resampled rows: ridge on centred columns (intercept not penalized), or coordinate descent. With no rows or no columns every coefficient is 0. */
+export function modelBootstrap(x: number[][], y: number[], picks: Float64Array, estimator: keyof ModelFits, lambdas: Record<keyof ModelFits, number>, alpha: number): { lasso: number[][]; draw: number[][] } {
+  const n = y.length, p = x[0]?.length ?? 0, draws = n ? picks.length / n : 0;
+  // The kernel indexes rows with these values; one outside [0, n) would stop the WebAssembly module instead of throwing.
+  if (n ? !Number.isInteger(draws) || picks.some(i => !Number.isInteger(i) || i < 0 || i >= n) : picks.length) throw new Error(t('The resample indices are not valid rows.'));
+  if (!n || !p) { const zeros = () => Array.from({ length: draws }, () => new Array<number>(p).fill(0)); return { lasso: zeros(), draw: zeros() }; }
+  const code = { ridge: 0, lasso: 1, 'elastic-net': 2 }[estimator], rows = (out: Float64Array) => Array.from({ length: draws }, (_, b) => Array.from(out.subarray(b * (1 + p) + 1, (b + 1) * (1 + p))));
+  return withBuffers([flatten(x.slice(0, n), p), y, picks], [draws * (1 + p), draws * (1 + p)],
+    (m, [xs, ys, ps, lasso, draw]) => m.model_bootstrap(xs, ys, n, p, ps, draws, code, lambdas.ridge, lambdas.lasso, lambdas['elastic-net'], alpha, lasso, draw), ([lasso, draw]) => ({ lasso: rows(lasso), draw: rows(draw) }));
 }
 
 /* Pearson correlations between columns, and the variance inflation factor of each (the diagonal of the inverse correlation matrix).

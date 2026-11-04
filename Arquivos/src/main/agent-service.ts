@@ -1,20 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import type { Store } from './store';
-import type { Command } from '../shared/types';
+import { GENERAL_FIELD_ID, type Command } from '../shared/types';
 import { goalData, sortMilestones, type AgentProposal, type ProposalKind } from '../shared/goal-types';
 import * as v from '../shared/validation';
 import { goalDate, goalPlan, whyTags, GOAL_LIMITS, PROPOSAL_LIMITS, validateGoalRecord } from '../shared/goal-validation';
 import { MILESTONE_LIMITS, formatMilestoneMarkdown, parseMilestoneMarkdown, reconnectMilestones } from '../shared/milestone-markdown';
-import { addDays, localDay, monday } from '../shared/analytics';
-import { actionPlan, barrierSuggestions, goalSummary, roadmapEffort, roadmapRevision, todaysOccurrences } from '../shared/goal-planning';
+import { addDays, localDay, median, minuteOfDay, monday } from '../shared/analytics';
+import { actionPlan, barrierSuggestions, goalSummary, plannedOccurrences, roadmapEffort, roadmapRevision, todaysOccurrences } from '../shared/goal-planning';
+import { COMMITMENT_LIMITS, clockText, commitmentEnd, commitmentSessions, commitmentState, overlappingCommitment, parseClock, type Commitment } from '../shared/commitments';
 import { AGENT_TOOLS, accessError, allowsTool, isAgentTool } from '../shared/agent-tools';
 import { AgentEditor } from './agent-edits';
 import type { FocusInsights, SurvivalCurve } from '../shared/focus-insights';
+import { phaseMarkers } from '../shared/attention-phase';
 import { t } from '../shared/i18n';
 
 type Run = (command: Command, input: Record<string, unknown>) => unknown;
 const POINT_LIMIT = 60;
 const round = (minutes: number) => Math.round(minutes * 10) / 10;
+const TARGET_KEYS = ['areaId', 'goalId', 'step', 'taskId'];
+const optionalId = (value: unknown) => value === undefined || value === null || value === '' ? null : v.id(value);
 
 /* Serves the local AI agent. Read tools return copies of records. Propose tools save proposals only: the user applies
    or rejects each proposal in the app. Edit tools (the 'edit' access level) change records directly through AgentEditor,
@@ -47,6 +51,7 @@ export class AgentService {
       case 'get_focus_insights': return this.focusInsights(input, now);
       case 'list_sessions': return this.sessions(input, now);
       case 'get_weekly_review': return this.weeklyReview(input, now);
+      case 'get_calendar': return this.calendar(input, now);
       case 'list_proposals': {
         const status = input.status === undefined ? null : v.text(input.status, 'Status', 10, true), goalId = input.goalId === undefined ? null : v.id(input.goalId);
         return this.records().agentProposals.filter(p => (!status || p.status === status) && (!goalId || p.goalId === goalId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100);
@@ -56,10 +61,10 @@ export class AgentService {
         return this.records().agentChanges.filter(c => !goalId || c.goalId === goalId).sort((a, b) => b.at.localeCompare(a.at)).slice(0, Math.floor(limit))
           .map(c => ({ id: c.id, at: c.at, tool: c.tool, target: c.target, goalId: c.goalId, summary: c.summary, rationale: c.rationale, undoneByUser: c.undoneAt !== null }));
       }
-      case 'create_goal': case 'update_goal': case 'update_roadmap': case 'update_step': case 'create_tasks': case 'update_task': case 'create_action': case 'update_action': case 'add_review_note':
+      case 'create_goal': case 'update_goal': case 'update_roadmap': case 'update_step': case 'create_tasks': case 'update_task': case 'create_action': case 'update_action': case 'add_review_note': case 'create_commitments': case 'update_commitment':
         return this.editor().tool(name, input, source, now);
       default: {
-        const kind = ({ propose_goal: 'goal.create', propose_roadmap: 'roadmap.replace', propose_tasks: 'tasks.add', propose_action: 'action.add', propose_review_note: 'review.note' } as const)[name];
+        const kind = ({ propose_goal: 'goal.create', propose_roadmap: 'roadmap.replace', propose_tasks: 'tasks.add', propose_action: 'action.add', propose_review_note: 'review.note', propose_commitments: 'commitments.add' } as const)[name];
         return this.propose(kind, input, source, now);
       }
     }
@@ -74,7 +79,14 @@ export class AgentService {
       goals: domain.goals.map(g => { const s = goalSummary(data, g.id, addDays(today, -27), today); return { id: g.id, title: g.title, status: g.status, areaId: g.fieldId, outcome: g.outcome, deadline: g.deadline, roadmap: { done: s.completedMilestones, total: s.milestones.length }, recordedMinutesLast28Days: round(s.minutes), openProposals: domain.agentProposals.filter(p => p.goalId === g.id && open(p)).length }; }),
       todaysActions: todaysOccurrences(data, Date.parse(now)).map(o => ({ goalId: o.goalId, action: domain.goalActions.find(a => a.id === o.actionId)?.title, date: o.date, status: o.status, normal: o.plan.normal, smaller: o.plan.smaller })),
       recordedMinutesThisWeek: round(data.sessions.filter(s => s.status === 'completed' && !s.excluded && localDay(s.startedAt, s.timezone) >= week).reduce((sum, s) => sum + s.activeMs / 60000, 0)),
-      openNewGoalProposals: domain.agentProposals.filter(p => p.goalId === null && open(p)).length
+      openNewGoalProposals: domain.agentProposals.filter(p => p.goalId === null && p.kind === 'goal.create' && open(p)).length,
+      openTaskProposals: domain.agentProposals.filter(p => p.goalId === null && p.kind === 'tasks.add' && open(p)).length,
+      openCommitmentProposals: domain.agentProposals.filter(p => p.kind === 'commitments.add' && open(p)).length,
+      // Today's calendar; get_calendar has the details and other days.
+      todaysCommitments: (data.commitments ?? []).filter(c => c.date === today && c.status !== 'cancelled').map(c => ({ id: c.id, start: clockText(c.startMinute), end: clockText(commitmentEnd(c)), title: c.title, state: commitmentState(c, data.sessions, Date.parse(now)), goalId: c.goalId, areaId: c.fieldId })),
+      // Tasks without a goal: open ones and the ones completed in the last 14 days. areaId null means no area (the General area).
+      tasks: data.tasks.filter(tk => !tk.goalId && !tk.archived && (!tk.completed || tk.updatedAt.slice(0, 10) >= addDays(today, -14))).slice(-200)
+        .map(tk => ({ id: tk.id, title: tk.title, notes: tk.notes, areaId: tk.fieldId === GENERAL_FIELD_ID ? null : tk.fieldId, area: tk.fieldId === GENERAL_FIELD_ID ? null : data.fields.find(f => f.id === tk.fieldId)?.name ?? null, dueDate: tk.dueDate, priority: tk.priority, completed: tk.completed }))
     };
   }
 
@@ -118,7 +130,51 @@ export class AgentService {
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, Math.floor(limit))
       .map(s => ({ id: s.id, startedAt: s.startedAt, localDate: localDay(s.startedAt, s.timezone), timezone: s.timezone, area: data.fields.find(f => f.id === s.fieldId)?.name, goalId: s.goalId ?? null, goal: domain.goals.find(g => g.id === s.goalId)?.title ?? null, step: domain.milestones.find(m => m.id === s.milestoneId)?.title ?? null,
         recordedMinutes: round(s.activeMs / 60000), plannedMinutes: s.plannedMs === null ? null : round(s.plannedMs / 60000), timingMode: s.timingMode, activityMode: s.activityMode ?? 'Unspecified', intention: s.intention, energy: s.energy, focus: s.focus, note: s.note, excludedFromInsights: s.excluded,
-        interruptions: events(s.id, 'interruption').length, returns: events(s.id, 'attention-return').length, pauses: events(s.id, 'pause').length, parkedThoughts: events(s.id, 'thought').map(e => e.text) }));
+        interruptions: events(s.id, 'interruption').length, returns: events(s.id, 'attention-return').length, pauses: events(s.id, 'pause').length, parkedThoughts: events(s.id, 'thought').map(e => e.text),
+        // Manual attention states (warm-up, sustain, fatigue) and the active minute each began; null when the session used the automatic cuts.
+        attentionPhases: (markers => markers.length ? markers.map(m => ({ phase: m.phase, fromMinute: round(m.offsetMs / 60000) })) : null)(phaseMarkers(data.events, s.id)) }));
+  }
+
+  /* The calendar of a range: commitments with what happened, and per day the recorded sessions, planned weekly actions and
+     due tasks, so an agent can see busy and free time. lastFourWeeks compares the plan with what happened. */
+  private calendar(input: Record<string, unknown>, now: string) {
+    const data = this.store.all(), domain = goalData(data), timezone = this.timezone(), today = this.today(now), at = Date.parse(now);
+    const from = input.from === undefined ? today : goalDate(input.from), to = input.to === undefined ? addDays(from, 6) : goalDate(input.to);
+    if (from > to || to > addDays(from, 61)) throw new Error(t('Choose a range of 1 to 62 days, with from on or before to.'));
+    const rows = data.commitments ?? [], recorded = (c: Commitment) => commitmentSessions(data.sessions, c.id);
+    const clock = (time: string, zone: string) => clockText(minuteOfDay(time, zone));
+    const describe = (c: Commitment) => ({
+      id: c.id, date: c.date, start: clockText(c.startMinute), end: clockText(commitmentEnd(c)), durationMinutes: c.durationMinutes, title: c.title, notes: c.notes,
+      state: commitmentState(c, data.sessions, at), areaId: c.fieldId, area: data.fields.find(f => f.id === c.fieldId)?.name ?? null,
+      goalId: c.goalId, goal: domain.goals.find(g => g.id === c.goalId)?.title ?? null, stepId: c.milestoneId, step: domain.milestones.find(m => m.id === c.milestoneId)?.title ?? null,
+      taskId: c.taskId, task: data.tasks.find(tk => tk.id === c.taskId)?.title ?? null, activityMode: c.activityMode, plannedBy: c.origin, rescheduleCount: c.rescheduleCount,
+      recordedMinutes: round(recorded(c).reduce((sum, s) => sum + s.activeMs / 60000, 0)), sessions: recorded(c).map(s => ({ id: s.id, start: clock(s.startedAt, c.timezone), recordedMinutes: round(s.activeMs / 60000) }))
+    });
+    const sessions = data.sessions.filter(s => { const day = localDay(s.startedAt, s.timezone); return day >= from && day <= to; });
+    const actions = plannedOccurrences(data, from, to, undefined, at), days = [];
+    for (let day = from; day <= to; day = addDays(day, 1)) {
+      const planned = rows.filter(c => c.date === day && c.status !== 'cancelled' && c.status !== 'skipped'), daySessions = sessions.filter(s => localDay(s.startedAt, s.timezone) === day);
+      days.push({
+        date: day, committedMinutes: planned.reduce((sum, c) => sum + c.durationMinutes, 0), recordedMinutes: round(daySessions.filter(s => !s.excluded).reduce((sum, s) => sum + s.activeMs / 60000, 0)),
+        sessions: daySessions.map(s => ({ id: s.id, start: clock(s.startedAt, s.timezone), end: s.endedAt ? clock(s.endedAt, s.timezone) : null, running: s.status !== 'completed', recordedMinutes: round(s.activeMs / 60000), area: data.fields.find(f => f.id === s.fieldId)?.name, goal: domain.goals.find(g => g.id === s.goalId)?.title ?? null, commitmentId: s.commitmentId ?? null })),
+        plannedActions: actions.filter(o => o.date === day).map(o => ({ goalId: o.goalId, action: domain.goalActions.find(a => a.id === o.actionId)?.title, status: o.status, estimatedMinutes: o.plan.estimatedMinutes, normal: o.plan.normal })),
+        tasksDue: data.tasks.filter(tk => tk.dueDate === day && !tk.archived && !tk.completed).map(tk => ({ id: tk.id, title: tk.title, goalId: tk.goalId ?? null, priority: tk.priority }))
+      });
+    }
+    // Commitments of the last 28 days whose outcome is known: done, missed, skipped or cancelled.
+    const past = rows.filter(c => c.date >= addDays(today, -27) && c.date <= today).map(c => ({ c, state: commitmentState(c, data.sessions, at) })).filter(r => r.state !== 'planned' && r.state !== 'active');
+    const count = (state: string) => past.filter(r => r.state === state).length, kept = past.filter(r => r.state !== 'cancelled');
+    const delays = kept.flatMap(({ c }) => { const first = [...recorded(c)].sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0]; return first && localDay(first.startedAt, c.timezone) === c.date ? [minuteOfDay(first.startedAt, c.timezone) - c.startMinute] : []; });
+    return {
+      today, timezone, now: clockText(minuteOfDay(now, timezone)), from, to,
+      commitments: rows.filter(c => c.date >= from && c.date <= to).map(describe), days,
+      lastFourWeeks: {
+        withOutcome: past.length, done: count('done'), missed: count('missed'), skipped: count('skipped'), cancelled: count('cancelled'), committedMinutes: kept.reduce((sum, r) => sum + r.c.durationMinutes, 0),
+        recordedMinutesInCommitments: round(kept.reduce((sum, r) => sum + recorded(r.c).reduce((total, s) => total + s.activeMs / 60000, 0), 0)), medianStartDelayMinutes: delays.length ? Math.round(median(delays)!) : null, rescheduled: kept.filter(r => r.c.rescheduleCount > 0).length,
+        plannedByAgent: kept.filter(r => r.c.origin === 'agent').length, doneOfPlannedByAgent: kept.filter(r => r.c.origin === 'agent' && r.state === 'done').length
+      },
+      note: t('A missed commitment has no session and no decision from the user. It is a gap in the plan, not a failure.')
+    };
   }
 
   private weeklyReview(input: Record<string, unknown>, now: string) {
@@ -150,12 +206,78 @@ export class AgentService {
     if (required && !rows.some(r => r.kind === 'todo')) throw new Error(t('A roadmap needs at least one to-do step, written as "- [ ] Step".'));
     return text;
   }
+  /* An agent's commitment in the form of the tools: a local date, a start as HH:MM, whole minutes and an optional target
+     (taskId alone, or goalId with an optional step title, or areaId, or none for a free focus block). With partial, only the
+     given fields; a target key replaces the whole target. */
+  commitmentItem(value: unknown, partial = false): Record<string, unknown> {
+    const r = v.object(value), item: Record<string, unknown> = {};
+    if (!partial || r.date !== undefined) item.date = goalDate(r.date);
+    if (!partial || r.start !== undefined) item.start = clockText(parseClock(r.start));
+    if (!partial || r.durationMinutes !== undefined) {
+      const minutes = v.number(r.durationMinutes, t('Duration'), COMMITMENT_LIMITS.minMinutes, COMMITMENT_LIMITS.maxMinutes);
+      if (!Number.isInteger(minutes)) throw new Error(t('Plan commitments in whole minutes.'));
+      item.durationMinutes = minutes;
+    }
+    if (r.title !== undefined) item.title = v.text(r.title, t('Commitment title'), COMMITMENT_LIMITS.title);
+    if (r.notes !== undefined) item.notes = v.text(r.notes, t('Commitment notes'), COMMITMENT_LIMITS.notes);
+    if (r.activityMode !== undefined) item.activityMode = v.activityMode(r.activityMode);
+    if (!partial || TARGET_KEYS.some(k => r[k] !== undefined)) Object.assign(item, { areaId: optionalId(r.areaId), goalId: optionalId(r.goalId), taskId: optionalId(r.taskId), step: v.text(r.step ?? '', t('Roadmap step'), MILESTONE_LIMITS.title) });
+    return item;
+  }
+  /* The same commitment in the form of commitment.save. A roadmap step is named by its title, as in the task tools. */
+  commitmentInput(item: Record<string, unknown>): Record<string, unknown> {
+    const input: Record<string, unknown> = {};
+    if (item.date !== undefined) input.date = item.date;
+    if (item.start !== undefined) input.startMinute = parseClock(item.start);
+    for (const key of ['durationMinutes', 'title', 'notes', 'activityMode']) if (item[key] !== undefined) input[key] = item[key];
+    if (!('areaId' in item)) return input;
+    const areaId = item.areaId as string | null, goalId = item.goalId as string | null, taskId = item.taskId as string | null, step = String(item.step ?? '');
+    if (taskId) {
+      if (areaId || goalId || step) throw new Error(t('Send taskId alone: a task already gives its area, goal and roadmap step.'));
+      return { ...input, taskId, goalId: null, fieldId: null };
+    }
+    if (goalId) {
+      const goal = this.goal(goalId), row = step ? openSteps(this.store.all(), goal.id).find(m => m.title.toLocaleLowerCase() === step.toLocaleLowerCase()) : undefined;
+      if (step && !row) throw new Error(t('No open roadmap step is called “{name}”. Use a step title from get_goal.', { name: step }));
+      if (areaId && areaId !== goal.fieldId) throw new Error(t('A goal commitment keeps the goal’s area. Leave out areaId.'));
+      return { ...input, taskId: null, goalId: goal.id, milestoneId: row?.id ?? null, fieldId: null };
+    }
+    if (step) throw new Error(t('A roadmap step needs its goal: send goalId with step.'));
+    if (areaId) { const field = this.store.field(areaId); if (!field || field.archived) throw new Error(t('Choose an active area. Use get_overview to find area identifiers.')); }
+    return { ...input, taskId: null, goalId: null, milestoneId: null, fieldId: areaId };
+  }
+  /* An agent plans from now on: a new or moved block may not end before the current time, and stays within a year. */
+  commitmentAhead(date: string, startMinute: number, durationMinutes: number, now: string): void {
+    const timezone = this.timezone(), today = localDay(now, timezone), current = minuteOfDay(now, timezone);
+    if (date < today || date === today && startMinute + durationMinutes <= current) throw new Error(t('Plan commitments from now on. This block ends before the current time ({time} on {today}).', { time: clockText(current), today }));
+    if (date > addDays(today, 366)) throw new Error(t('Plan commitments up to one year ahead.'));
+  }
   private payload(kind: ProposalKind, input: Record<string, unknown>, now: string): { goalId: string | null; payload: Record<string, unknown> } {
+    if (kind === 'commitments.add') {
+      if (!Array.isArray(input.commitments) || !input.commitments.length || input.commitments.length > COMMITMENT_LIMITS.batch) throw new Error(t('Propose from 1 to {batch} commitments.', { batch: COMMITMENT_LIMITS.batch }));
+      const items = input.commitments.map(item => this.commitmentItem(item)), placed: Commitment[] = [...this.store.commitments()];
+      // Check the plan now, so the agent hears of a clash at once; applying the proposal checks it again.
+      items.forEach((item, i) => {
+        const draft = this.commitmentInput(item), row = { id: `proposed-${i}`, title: t('commitment {n}', { n: i + 1 }), date: String(draft.date), startMinute: Number(draft.startMinute), durationMinutes: Number(draft.durationMinutes), status: 'planned' as const };
+        this.commitmentAhead(row.date, row.startMinute, row.durationMinutes, now);
+        const clash = overlappingCommitment(placed, row);
+        if (clash) throw new Error(t('Commitment {n} overlaps “{title}” ({start}–{end}) on {date}.', { n: i + 1, title: clash.title, start: clockText(clash.startMinute), end: clockText(commitmentEnd(clash)), date: clash.date }));
+        placed.push(row as Commitment);
+      });
+      return { goalId: null, payload: { commitments: items } };
+    }
     if (kind === 'goal.create') {
       const field = this.store.field(v.id(input.areaId)); if (!field || field.archived) throw new Error(t('Choose an active area. Use get_overview to find area identifiers.'));
       const actions = input.actions === undefined ? [] : input.actions;
       if (!Array.isArray(actions) || actions.length > 10) throw new Error(t('Propose up to 10 weekly actions.'));
       return { goalId: null, payload: { areaId: field.id, title: v.text(input.title, t('Goal title'), 200, true), outcome: v.text(input.outcome ?? '', t('Outcome'), 2000), why: v.text(input.why ?? '', t('Why this matters'), 2000), whyTags: whyTags(input.whyTags ?? []), deadline: v.date(input.deadline ?? null), roadmapMarkdown: this.markdown(input.roadmapMarkdown, false), actions: actions.map(a => this.actionDraft(a, now)) } };
+    }
+    if (kind === 'tasks.add' && (input.goalId === undefined || input.goalId === null)) {
+      // Tasks without a goal: in an area, or without an area (null, or the General area).
+      const areaId = input.areaId === undefined || input.areaId === null || input.areaId === GENERAL_FIELD_ID ? null : v.id(input.areaId);
+      if (areaId) { const field = this.store.field(areaId); if (!field || field.archived) throw new Error(t('Choose an active area. Use get_overview to find area identifiers.')); }
+      if (!Array.isArray(input.tasks) || !input.tasks.length || input.tasks.length > 50) throw new Error(t('Propose from 1 to 50 tasks.'));
+      return { goalId: null, payload: { areaId, tasks: input.tasks.map(item => { const tk = v.object(item); if (tk.step !== undefined && tk.step !== '') throw new Error(t('A roadmap step needs a goal. Leave out step for tasks without a goal.')); return { title: v.text(tk.title, t('Task title'), 200, true), notes: v.text(tk.notes ?? '', t('Task notes'), 2000), priority: v.priority(tk.priority ?? 'normal'), dueDate: v.date(tk.dueDate ?? null) }; }) } };
     }
     const goal = this.goal(input.goalId);
     if (kind === 'roadmap.replace') return { goalId: goal.id, payload: { goalId: goal.id, markdown: this.markdown(input.markdown, true) } };
@@ -174,7 +296,7 @@ export class AgentService {
     if (all.filter(p => p.status === 'pending' || p.status === 'stale').length >= PROPOSAL_LIMITS.pending) throw new Error(t('There are {pending} open proposals. Ask the user to apply or reject some of them first.', { pending: PROPOSAL_LIMITS.pending }));
     if (all.length >= GOAL_LIMITS.agentProposals) throw new Error(t('The proposal history is full.'));
     const { goalId, payload } = this.payload(kind, input, now);
-    const defaults: Record<ProposalKind, string> = { 'goal.create': t('New goal: {title}', { title: payload.title }), 'roadmap.replace': t('Revised roadmap'), 'tasks.add': (payload.tasks as unknown[] | undefined)?.length === 1 ? t('1 new task') : t('{v1} new tasks', { v1: (payload.tasks as unknown[] | undefined)?.length ?? 0 }), 'action.add': t('Weekly action: {v1}', { v1: (payload.action as { title?: string } | undefined)?.title ?? '' }), 'review.note': t('Review note for {week}', { week: payload.week }) };
+    const defaults: Record<ProposalKind, string> = { 'goal.create': t('New goal: {title}', { title: payload.title }), 'roadmap.replace': t('Revised roadmap'), 'tasks.add': (payload.tasks as unknown[] | undefined)?.length === 1 ? t('1 new task') : t('{v1} new tasks', { v1: (payload.tasks as unknown[] | undefined)?.length ?? 0 }), 'action.add': t('Weekly action: {v1}', { v1: (payload.action as { title?: string } | undefined)?.title ?? '' }), 'review.note': t('Review note for {week}', { week: payload.week }), 'commitments.add': (payload.commitments as unknown[] | undefined)?.length === 1 ? t('1 new commitment') : t('{v1} new commitments', { v1: (payload.commitments as unknown[] | undefined)?.length ?? 0 }) };
     const proposal = validateGoalRecord('agentProposals', { id: randomUUID(), goalId, kind, summary: v.text(input.summary ?? defaults[kind], t('Summary'), PROPOSAL_LIMITS.summary, true), rationale: v.text(input.rationale ?? '', t('Rationale'), PROPOSAL_LIMITS.rationale), source: source.slice(0, PROPOSAL_LIMITS.source), payload, basis: kind === 'roadmap.replace' && goalId ? this.roadmapSignature(goalId) : null, status: 'pending', createdAt: now, decidedAt: null }) as AgentProposal;
     this.store.putGoalRecord('agentProposals', proposal);
     return { proposalId: proposal.id, status: proposal.status, message: t('Saved as a proposal. Nothing changed yet. The user reviews it in Focus Guide and applies or rejects it.') };
@@ -197,11 +319,13 @@ export class AgentService {
         return { goalId: payload.goalId };
       }
       case 'tasks.add': {
+        if (!proposal.goalId) return { taskIds: (payload.tasks as Array<Record<string, unknown>>).map(tk => this.command('task.create', { fieldId: payload.areaId ?? null, title: tk.title, notes: tk.notes, priority: tk.priority, dueDate: tk.dueDate, categoryId: null })) };
         const goal = this.goal(payload.goalId), steps = records.milestones.filter(m => m.goalId === goal.id && m.kind === 'todo' && !m.archived);
         const ids = (payload.tasks as Array<Record<string, unknown>>).map(tk => this.command('task.create', { fieldId: goal.fieldId, title: tk.title, notes: tk.notes, priority: tk.priority, dueDate: tk.dueDate, categoryId: null, goalId: goal.id, milestoneId: steps.find(m => tk.step && m.title.toLocaleLowerCase() === String(tk.step).toLocaleLowerCase())?.id ?? null }));
         return { goalId: goal.id, taskIds: ids };
       }
       case 'action.add': { const action = payload.action as Record<string, unknown>; return { goalId: payload.goalId, actionId: this.command('goal.action.save', { goalId: payload.goalId, title: action.title, plan: plan(action) }) }; }
+      case 'commitments.add': return { commitmentIds: (payload.commitments as Array<Record<string, unknown>>).map(item => this.command('commitment.save', { ...this.commitmentInput(item), origin: 'agent' })) };
       case 'review.note': {
         const existing = records.goalReviews.find(r => r.goalId === payload.goalId && r.week === payload.week);
         const adjustment = existing?.adjustment ? `${existing.adjustment}\n\n${payload.text}` : String(payload.text);
@@ -230,3 +354,6 @@ export class AgentService {
     return result;
   }
 }
+
+/* The open to-do steps of a goal, in roadmap order. */
+function openSteps(data: ReturnType<Store['all']>, goalId: string) { return sortMilestones(goalData(data).milestones.filter(m => m.goalId === goalId && m.kind === 'todo' && !m.archived)); }

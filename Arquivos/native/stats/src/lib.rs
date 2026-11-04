@@ -7,6 +7,8 @@
 //! `js_max` and `js_min` copy Math.max and Math.min (NaN wins, +0 beats −0), and `truthy` copies a JavaScript `if (value)`.
 //!
 //! Matrices are row-major `f64` buffers that the caller allocates with `stats_alloc` and frees with `stats_free`.
+//! Every copy into WebAssembly costs about as much as a pass of the kernel, so `model_fits`, `model_bootstrap` and `k_means_starts`
+//! run whole loops of the engine on one copy of their matrix. They call the same inner functions as the single kernels.
 
 use std::slice;
 
@@ -15,6 +17,7 @@ extern "C" {
     /// The caller's random number generator (mulberry32 in the engine), so k-means++ draws the same stream as before.
     fn stats_random() -> f64;
 }
+fn random() -> f64 { unsafe { stats_random() } }
 
 fn js_max(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else if a > b { a } else if b > a { b } else if a.is_sign_negative() { b } else { a }
@@ -80,15 +83,9 @@ fn intercept_of(mean_y: f64, beta: &[f64], means: &[f64]) -> f64 {
     mean_y - beta.iter().zip(means).fold(0.0, |sum, (b, m)| sum + b * m)
 }
 
-/// out = [intercept, β₁ … βₚ]
-///
-/// # Safety
-/// `x` holds n·p values, `y` n values and `out` 1 + p slots.
-#[no_mangle]
-pub unsafe extern "C" fn ridge_fit(x: *const f64, y: *const f64, n: usize, p: usize, lambda: f64, out: *mut f64) {
-    let s = ridge_setup(input(x, n * p), input(y, n), n, p);
+fn ridge_fit_into(x: &[f64], y: &[f64], n: usize, p: usize, lambda: f64, out: &mut [f64]) {
+    let s = ridge_setup(x, y, n, p);
     let beta = coefficients_of(&s, &cholesky(&s, lambda));
-    let out = output(out, 1 + p);
     out[0] = intercept_of(s.mean_y, &beta, &s.means);
     out[1..].copy_from_slice(&beta);
 }
@@ -125,7 +122,9 @@ fn eigen(matrix: &[f64], p: usize) -> (Vec<f64>, Vec<f64>) {
 /// `x` holds n·p values, `y` n values, `lambdas` count values and `out` 3 + p slots.
 #[no_mangle]
 pub unsafe extern "C" fn ridge_select(x: *const f64, y: *const f64, n: usize, p: usize, lambdas: *const f64, count: usize, out: *mut f64) {
-    let (x, y, lambdas) = (input(x, n * p), input(y, n), input(lambdas, count));
+    ridge_select_into(input(x, n * p), input(y, n), n, p, input(lambdas, count), output(out, 3 + p));
+}
+fn ridge_select_into(x: &[f64], y: &[f64], n: usize, p: usize, lambdas: &[f64], out: &mut [f64]) {
     let s = ridge_setup(x, y, n, p);
     let mut full = vec![0.0; p * p];
     for j in 0..p { for k in 0..=j { let g = s.gram[j * p + k]; full[j * p + k] = g; full[k * p + j] = g; } }
@@ -149,7 +148,6 @@ pub unsafe extern "C" fn ridge_select(x: *const f64, y: *const f64, n: usize, p:
     }
     let mut beta = vec![0.0; p];
     for k in 0..p { for j in 0..p { beta[k] += vectors[k * p + j] * z[j] / (values[j] + best_lambda + 1e-10); } }
-    let out = output(out, 3 + p);
     out[0] = best_lambda;
     out[1] = if best_loo.is_finite() { best_loo } else { 0.0 };
     out[2] = intercept_of(s.mean_y, &beta, &s.means);
@@ -202,17 +200,10 @@ fn descend(s: &Centred, p: usize, lambda: f64, alpha: f64, beta: &mut [f64]) {
     }
 }
 
-/// out = [intercept, β₁ … βₚ]; the caller handles n = 0 or p = 0.
-///
-/// # Safety
-/// `x` holds n·p values, `y` n values and `out` 1 + p slots.
-#[no_mangle]
-pub unsafe extern "C" fn penalized_fit(x: *const f64, y: *const f64, n: usize, p: usize, lambda: f64, alpha: f64, out: *mut f64) {
-    let (x, y) = (input(x, n * p), input(y, n));
+fn penalized_fit_into(x: &[f64], y: &[f64], n: usize, p: usize, lambda: f64, alpha: f64, out: &mut [f64]) {
     let s = centred_of(&moments_of(x, y, p, 0..n), p);
     let mut beta = vec![0.0; p];
     descend(&s, p, lambda, alpha, &mut beta);
-    let out = output(out, 1 + p);
     out[0] = intercept_of(s.mean_y, &beta, &s.mean_x);
     out[1..].copy_from_slice(&beta);
 }
@@ -226,9 +217,25 @@ pub unsafe extern "C" fn penalized_fit(x: *const f64, y: *const f64, n: usize, p
 /// `x` holds n·p values, `y` n values, `factors` steps values and `out` 2 + p slots.
 #[no_mangle]
 pub unsafe extern "C" fn penalized_select(x: *const f64, y: *const f64, n: usize, p: usize, alpha: f64, folds: usize, factors: *const f64, steps: usize, out: *mut f64) {
-    let (x, y, factors, out) = (input(x, n * p), input(y, n), input(factors, steps), output(out, 2 + p));
-    let all = moments_of(x, y, p, 0..n);
-    let full = centred_of(&all, p);
+    let (x, y) = (input(x, n * p), input(y, n));
+    penalized_select_into(&CrossValidation::new(x, y, n, p, folds), x, y, p, alpha, input(factors, steps), output(out, 2 + p));
+}
+/* The full fit and the training side of each interleaved fold. They do not depend on alpha, so the lasso and the elastic net share them. */
+struct CrossValidation { full: Centred, folds: Vec<(Vec<usize>, Centred)> }
+impl CrossValidation {
+    fn new(x: &[f64], y: &[f64], n: usize, p: usize, folds: usize) -> Self {
+        let all = moments_of(x, y, p, 0..n);
+        let k = folds.min(n);
+        let folds = (0..k).map(|f| {
+            let held: Vec<usize> = (0..(n - f + k - 1) / k).map(|i| f + i * k).collect();
+            let train = centred_of(&without_moments(&all, &moments_of(x, y, p, held.iter().copied())), p);
+            (held, train)
+        }).collect();
+        CrossValidation { full: centred_of(&all, p), folds }
+    }
+}
+fn penalized_select_into(cv: &CrossValidation, x: &[f64], y: &[f64], p: usize, alpha: f64, factors: &[f64], out: &mut [f64]) {
+    let (full, steps) = (&cv.full, factors.len());
     let top = full.c.iter().fold(f64::NEG_INFINITY, |best, c| js_max(best, c.abs())) / alpha;
     if !(top > 1e-12) {
         out[0] = full.mean_y; out[1] = 0.0;
@@ -236,16 +243,13 @@ pub unsafe extern "C" fn penalized_select(x: *const f64, y: *const f64, n: usize
         return;
     }
     let grid: Vec<f64> = factors.iter().map(|f| top * f).collect();
-    let k = folds.min(n);
     let mut errors = vec![0.0; steps];
-    for f in 0..k {
-        let held: Vec<usize> = (0..(n - f + k - 1) / k).map(|i| f + i * k).collect();
-        let train = centred_of(&without_moments(&all, &moments_of(x, y, p, held.iter().copied())), p);
+    for (held, train) in &cv.folds {
         let mut beta = vec![0.0; p];
         for (g, &lambda) in grid.iter().enumerate() {
-            descend(&train, p, lambda, alpha, &mut beta);
+            descend(train, p, lambda, alpha, &mut beta);
             let intercept = intercept_of(train.mean_y, &beta, &train.mean_x);
-            for &i in &held {
+            for &i in held {
                 let mut fitted = intercept;
                 for j in 0..p { fitted += beta[j] * x[i * p + j]; }
                 let residual = y[i] - fitted;
@@ -256,7 +260,7 @@ pub unsafe extern "C" fn penalized_select(x: *const f64, y: *const f64, n: usize
     let mut best = 0;
     for g in 1..steps { if errors[g] < errors[best] - 1e-12 { best = g; } }
     let mut beta = vec![0.0; p];
-    for &lambda in &grid[..=best] { descend(&full, p, lambda, alpha, &mut beta); }
+    for &lambda in &grid[..=best] { descend(full, p, lambda, alpha, &mut beta); }
     out[0] = intercept_of(full.mean_y, &beta, &full.mean_x);
     out[1] = grid[best];
     out[2..].copy_from_slice(&beta);
@@ -314,16 +318,10 @@ fn nearest(flat: &[f64], i: usize, centroids: &[f64], k: usize, d: usize) -> usi
     }
     best
 }
-/// k-means++ seeding with `stats_random`, then Lloyd iterations. Returns the number of centroids, at most n.
-/// out_centroids holds n·d slots (the first count·d are used), out_labels n slots. The caller handles n = 0 or k < 1.
-///
-/// # Safety
-/// `points` holds n·d values, `out_centroids` n·d slots and `out_labels` n slots.
-#[no_mangle]
-pub unsafe extern "C" fn k_means(points: *const f64, n: usize, d: usize, k: f64, max_iterations: f64, out_centroids: *mut f64, out_labels: *mut f64) -> usize {
-    let flat = input(points, n * d);
+/* k-means++ seeding with `stats_random`, then Lloyd iterations. Returns the number of centroids, at most n; the first count·d slots of out_centroids are used. */
+fn k_means_into(flat: &[f64], n: usize, d: usize, k: f64, max_iterations: f64, out_centroids: &mut [f64], out_labels: &mut [f64]) -> usize {
     let nf = n as f64;
-    let mut chosen = vec![js_min(nf - 1.0, (stats_random() * nf).floor()) as usize];
+    let mut chosen = vec![js_min(nf - 1.0, (random() * nf).floor()) as usize];
     let mut distances = vec![f64::INFINITY; n];
     loop {
         let last = *chosen.last().unwrap();
@@ -335,7 +333,7 @@ pub unsafe extern "C" fn k_means(points: *const f64, n: usize, d: usize, k: f64,
             total += distances[i];
         }
         if chosen.len() as f64 >= k || total <= 0.0 { break; }
-        let mut target = stats_random() * total;
+        let mut target = random() * total;
         let mut pick = usize::MAX;
         for i in 0..n { if distances[i] > 0.0 { pick = i; target -= distances[i]; if target <= 0.0 { break; } } }
         if pick == usize::MAX { break; }
@@ -355,9 +353,79 @@ pub unsafe extern "C" fn k_means(points: *const f64, n: usize, d: usize, k: f64,
         for c in 0..count { if sizes[c] > 0 { for j in 0..d { centroids[c * d + j] = sums[c * d + j] / sizes[c] as f64; } } }
         iteration += 1.0;
     }
-    output(out_centroids, n * d)[..count * d].copy_from_slice(&centroids);
-    for (slot, &label) in output(out_labels, n).iter_mut().zip(&labels) { *slot = label as f64; }
+    out_centroids[..count * d].copy_from_slice(&centroids);
+    for (slot, &label) in out_labels.iter_mut().zip(&labels) { *slot = label as f64; }
     count
+}
+
+/// `starts` k-means++ starts in a row; the start with the lowest within-cluster sum of squares stays (a later start must be lower by
+/// more than 1e-9). A start with fewer than k centroids ends the search. Returns the centroid count of the kept start, or 0 when none
+/// was kept. out_centroids holds n·d slots, out_labels n slots and out_spread 1 slot. The caller handles n = 0 or k < 1.
+///
+/// # Safety
+/// `points` holds n·d values, `out_centroids` n·d slots, `out_labels` n slots and `out_spread` 1 slot.
+#[no_mangle]
+pub unsafe extern "C" fn k_means_starts(points: *const f64, n: usize, d: usize, k: f64, starts: usize, max_iterations: f64, out_centroids: *mut f64, out_labels: *mut f64, out_spread: *mut f64) -> usize {
+    let (flat, out_centroids, out_labels) = (input(points, n * d), output(out_centroids, n * d), output(out_labels, n));
+    let (mut centroids, mut labels, mut best) = (vec![0.0; n * d], vec![0.0; n], None);
+    for _start in 0..starts {
+        let count = k_means_into(flat, n, d, k, max_iterations, &mut centroids, &mut labels);
+        if (count as f64) < k { break; }
+        let mut spread = 0.0;
+        for i in 0..n { let c = labels[i] as usize; for j in 0..d { let diff = flat[i * d + j] - centroids[c * d + j]; spread += diff * diff; } }
+        if best.map_or(true, |(_, low)| spread < low - 1e-9) {
+            best = Some((count, spread));
+            out_centroids.copy_from_slice(&centroids);
+            out_labels.copy_from_slice(&labels);
+        }
+    }
+    let (count, spread) = best.unwrap_or((0, 0.0));
+    output(out_spread, 1)[0] = spread;
+    count
+}
+
+/// Ridge, lasso and elastic-net penalty selection on one matrix, so the matrix crosses into WebAssembly once.
+/// out = [ridge: lambda, loo, intercept, β (3 + p)] [lasso: intercept, lambda, β (2 + p)] [elastic net: intercept, lambda, β (2 + p)].
+/// The caller handles n = 0 or p = 0.
+///
+/// # Safety
+/// `x` holds n·p values, `y` n values, `lambdas` count values, `factors` steps values and `out` 7 + 3p slots.
+#[no_mangle]
+pub unsafe extern "C" fn model_fits(x: *const f64, y: *const f64, n: usize, p: usize, lambdas: *const f64, count: usize, alpha: f64, folds: usize, factors: *const f64, steps: usize, out: *mut f64) {
+    let (x, y, factors, out) = (input(x, n * p), input(y, n), input(factors, steps), output(out, 7 + 3 * p));
+    let (ridge, rest) = out.split_at_mut(3 + p);
+    let (lasso, net) = rest.split_at_mut(2 + p);
+    ridge_select_into(x, y, n, p, input(lambdas, count), ridge);
+    let cv = CrossValidation::new(x, y, n, p, folds);
+    penalized_select_into(&cv, x, y, p, 1.0, factors, lasso);
+    penalized_select_into(&cv, x, y, p, alpha, factors, net);
+}
+
+/// Bootstrap fits: draw b refits the rows picks[b·n .. b·n + n] (row indices). out_lasso gets the lasso at `lasso_lambda`;
+/// out_draw gets the chosen estimator (0 ridge at `ridge_lambda`, 1 the lasso, 2 the elastic net at `net_lambda` and `alpha`).
+/// Each row of both outputs is [intercept, β₁ … βₚ]. The caller handles n = 0 or p = 0.
+///
+/// # Safety
+/// `x` holds n·p values, `y` n values, `picks` draws·n values, `out_lasso` and `out_draw` draws·(1 + p) slots each.
+#[no_mangle]
+pub unsafe extern "C" fn model_bootstrap(x: *const f64, y: *const f64, n: usize, p: usize, picks: *const f64, draws: usize, estimator: u32, ridge_lambda: f64, lasso_lambda: f64, net_lambda: f64, alpha: f64, out_lasso: *mut f64, out_draw: *mut f64) {
+    let (x, y, picks) = (input(x, n * p), input(y, n), input(picks, draws * n));
+    let (out_lasso, out_draw) = (output(out_lasso, draws * (1 + p)), output(out_draw, draws * (1 + p)));
+    let (mut xb, mut yb) = (vec![0.0; n * p], vec![0.0; n]);
+    for b in 0..draws {
+        for (i, &pick) in picks[b * n..b * n + n].iter().enumerate() {
+            let r = pick as usize;
+            xb[i * p..i * p + p].copy_from_slice(&x[r * p..r * p + p]);
+            yb[i] = y[r];
+        }
+        let (lasso, draw) = (&mut out_lasso[b * (1 + p)..(b + 1) * (1 + p)], &mut out_draw[b * (1 + p)..(b + 1) * (1 + p)]);
+        penalized_fit_into(&xb, &yb, n, p, lasso_lambda, 1.0, lasso);
+        match estimator {
+            0 => ridge_fit_into(&xb, &yb, n, p, ridge_lambda, draw),
+            1 => draw.copy_from_slice(lasso),
+            _ => penalized_fit_into(&xb, &yb, n, p, net_lambda, alpha, draw),
+        }
+    }
 }
 
 /// Mean silhouette width (Euclidean) of `count` labelings of the same n points, stored one after another in `labelings`;

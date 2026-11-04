@@ -3,6 +3,7 @@ import type { FocusSession, ProbeAnswer, SessionEvent, TimerSnapshot } from '../
 import { MIN_INCLUDED_SESSION_MS } from '../shared/types';
 import type { Store } from './store';
 import { t } from '../shared/i18n';
+import type { AttentionPhase } from '../shared/attention-phase';
 
 export interface Clock { monotonic(): number; utc(): number }
 const realClock: Clock = { monotonic: () => Number(process.hrtime.bigint() / 1000000n), utc: () => Date.now() };
@@ -39,12 +40,14 @@ export class TimerEngine {
     this.interval = this.event('pause', this.pauseReason);
     this.store.persist(this.current, this.interval, extras);
   }
-  start(input: Omit<FocusSession, 'id' | 'activeMs' | 'status' | 'startedAt' | 'endedAt' | 'focus' | 'note' | 'completionReason' | 'excluded' | 'recovered' | 'targetReached'>): void {
+  /** manualPhase: the session starts in warm-up with a manual attention-phase marker, committed with the session itself. */
+  start(input: Omit<FocusSession, 'id' | 'activeMs' | 'status' | 'startedAt' | 'endedAt' | 'focus' | 'note' | 'completionReason' | 'excluded' | 'recovered' | 'targetReached'>, manualPhase = false): void {
     if (this.current || this.breakTimer) throw new Error(t('Finish the current session or break first.'));
     const session: FocusSession = { ...input, id: randomUUID(), activeMs: 0, status: 'running', startedAt: iso(this.clock.utc()), endedAt: null, focus: null, note: '', completionReason: null, excluded: false, recovered: false, targetReached: false };
     this.current = session;
-    const interval = this.event('active');
-    try { this.store.persist(session, interval); } catch (error) { this.current = null; throw error; }
+    const interval = this.event('active'), extras: SessionEvent[] = [];
+    if (manualPhase) { const marker = this.event('attention-phase', '', 'warm-up'); marker.endedAt = marker.startedAt; marker.activeOffsetMs = 0; marker.source = null; extras.push(marker); }
+    try { this.store.persist(session, interval, extras); } catch (error) { this.current = null; throw error; }
     this.interval = interval; this.anchor = this.clock.monotonic(); this.baseMs = this.savedMs = 0; this.pauseReason = null;
   }
   private elapsed(): number {
@@ -142,6 +145,14 @@ export class TimerEngine {
     try { this.store.persist(next, this.closedInterval(activeMs), [event]); }
     catch (error) { this.failStorage(); throw error; }
     this.current = next; this.savedMs = activeMs; this.lastReturn = this.clock.monotonic();
+    return event;
+  }
+  /** A manual attention state from this point of active time on. While paused it sits at the saved total. */
+  recordPhase(phase: AttentionPhase, source: 'floating' | 'main'): SessionEvent {
+    if (!this.current) throw new Error(t('Start a focus session first.'));
+    const event = this.event('attention-phase', '', phase); event.endedAt = event.startedAt; event.source = source;
+    if (this.current.status !== 'running') { event.activeOffsetMs = this.current.activeMs; this.store.putEvent(event); return event; }
+    this.persistMarker(event);
     return event;
   }
   addTask(taskId: string): void {

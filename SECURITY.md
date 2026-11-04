@@ -19,6 +19,7 @@ Include these items in your report:
 Focus Guide is a local desktop app. These are the main protections:
 
 - **Records.** All records stay in a local SQLite database in `%APPDATA%\Focus Guide`. The app has no network service and sends no telemetry.
+- **TypeSafe judgments.** The app makes one outbound call, to `https://api.typesafe.ai/v1/systemone`, only when the user turns on TypeSafe judgments and starts a check. The call goes from the main process; the renderer CSP keeps `connect-src 'self'`. The API key is encrypted with Windows (`safeStorage`) in `typesafe-key.bin` in the data folder and never reaches settings, backups, the renderer or the request log. Restore turns the setting off.
 - **Renderer.** The renderer runs sandboxed with context isolation and a strict Content Security Policy. It has no Node.js access. The preload script exposes only `getState`, `command` and `onEvent`, and the main process validates every command and checks its sender.
 - **AI agent bridge.** The bridge listens on a Windows named pipe only while agent access is not `off`. It checks a token that changes at each start and accepts only the tools in `src/shared/agent-tools.ts`. Agent access is `off` after a migration and after a restore.
 - **Agent edits.** Below the `edit` level, an agent only reads or saves proposals. At `edit`, every change is audited in the same transaction and can be undone. An agent can never delete records, mark a goal achieved or archived, or tick a roadmap step.

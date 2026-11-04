@@ -1,5 +1,76 @@
 # Release notes
 
+## Unreleased (3.14.0) — Manual attention state
+
+- **See your attention state.** During focus, the Focus page and the floating timer show the state of the session: **Warm-up**, **Sustain** or **Fatigue**.
+- **Set it yourself.** **Settings > Activity & shortcuts > Attention state** chooses **Automatic** (warm-up for the first 10 active minutes, sustain until minute 25, then fatigue, as before) or **Manual**. In manual mode the session starts in warm-up and you change the state on the Focus page or the floating timer (brain or bar). The setting applies from the next session.
+- **Patterns use it.** For the sessions you recorded in manual mode, the warm-up, sustain and fatigue rates and the curve after the warm-up use your states. Other sessions keep the automatic minutes. The session timeline in Behaviour shows your states.
+- **AI agent.** `list_sessions` returns `attentionPhases` for manual sessions, and each phase in `get_focus_insights` has `manualSessions`. The `pattern-analysis` skill compares your changes with the automatic minutes. Install the plugin again after the update.
+- **Floating timer.** The brain window is 182 pixels high (was 156) to hold the state buttons.
+- **Backup version 13.** Backups can hold attention state events and the new setting. Versions 1 to 12 still restore. Focus Guide 3.13.0 and earlier cannot restore a version 13 backup. No schema change.
+
+## Unreleased (3.13.0) — Commitments in the Calendar
+
+- **Plan your day.** A commitment is a block of focus time on the Calendar: a day, a start time and minutes. It can be for a task, a goal or one of its roadmap steps, an area, or a free focus block. In the day and week views, click an empty time to plan a block, and drag a block to move it. The **Commitments** card lists the blocks of the selected day. The month view marks days with planned blocks.
+- **From plan to session.** **Start focus** on a block of today prepares the Focus page with its goal, step, task and minutes, and links the session to the block. A block with a finished session shows as done; a block whose time passed without a session shows as missed. You can also mark a block done, skipped or cancelled.
+- **Agents plan the calendar.** New MCP tools: `get_calendar` reads a range of days with busy time (commitments, sessions, planned actions, due tasks) and compares the last four weeks of plans with what happened. `propose_commitments` proposes blocks; you apply them on the Calendar page. At the `edit` level, `create_commitments` plans up to 50 blocks in one change and `update_commitment` moves, retargets or cancels a block. Every change shows in **Agent activity**, and **Undo** cancels the planned blocks. The agent never deletes a block, never marks one done or skipped, and never changes a block with sessions. The `plan-day` skill now saves its plan as commitments.
+- **Agent playbook.** The new plugin skill `focus-guide:commitments` tells agents how to plan blocks: length from your warm-up, sustain and fatigue phases, short and long rests as you prefer them (the agent asks when it does not know), and the order of areas and activities from deadline, invested effort and your preferences. Install the plugin again after the update to get it.
+- **Schema 13.** New `commitments` table and `sessions.commitmentId`. The agent change log accepts changes that belong to no goal. The migration saves a `before-schema-v13-<timestamp>.sqlite` snapshot first. The previous app cannot open a schema 13 database.
+- **Backup version 12.** Backups include the commitments and the session links. Versions 1 to 11 still restore. Focus Guide 3.12.0 and earlier cannot restore a version 12 backup.
+
+## Unreleased (3.12.0) — Tasks as a quick panel
+
+- **Tasks on every page.** Tasks is no longer a page in the menu. Select **Tasks** at the top of the window, or press **Ctrl+Shift+T**, to open the task panel. Write a task and press Enter. Choose an area or **No area**, and a due date (today by default).
+- **A direct list.** The panel groups the tasks by date: **Overdue**, **Today**, **Upcoming** and **No due date**. **Completed** and **Archived** are folded below. The area chips at the top show the tasks of one area. Select a task to edit its title, notes, area, due date and priority. **Focus** on a task opens Focus with its area and the task as the intention.
+- **Goals keep the workflow.** The panel shows only tasks without a goal. Tasks of a goal, their roadmap steps and session planning stay in the goal's **Tasks** tab, which can now edit a goal task and move it out of its goal. Categories, search, filters and the session checklist are no longer in the interface. Their data stays in the database and in backups.
+- **No area.** A task without an area goes to a new area, **General**, which the app makes the first time. You can rename or delete it, but not archive it. Its focus time counts as time in the General area.
+- **Calendar.** Tasks with a due date show on their day, in the Plans row of the day and week views and in the new **Tasks due** card. **Show tasks** hides them.
+- **AI agent.** `get_overview` also returns the tasks without a goal. `propose_tasks` can propose tasks without a goal (in an area, or without an area); you apply them in the task panel. At the `edit` level, the agent still changes only goal tasks directly.
+- No schema change. The backup format stays at version 11, but a backup that holds a task proposal without a goal cannot be restored by 3.11.0 or earlier.
+
+## Unreleased (3.11.0) — TypeSafe window check
+
+- **New, off by default.** **Settings > TypeSafe judgments > Window check during focus**: every 5 minutes of focus, TypeSafe Jev rates how closely the window in front matches the session's area (0–3) and its goal, task and intention (0–3), with a confidence for each, and whether the window shows what you are doing. Choose **Title** (window title and program name) or **Title and capture** (also a picture of the window).
+- **Kept apart.** The ratings and window titles go to a new table and are not used in Patterns, backups or the AI agent tools yet. **Patterns > Window checks (review)** lists them, exports them as CSV and deletes them.
+- **Privacy.** The title, the program name, the session's area, goal, task and intention, and with **Title and capture** the picture, leave this computer and go to TypeSafe. The picture is never stored. Focus Guide's own windows and private browsing windows are skipped. Restore turns the check off and deletes the ratings.
+- **Schema 12.** The migration saves a `before-schema-v12-<timestamp>.sqlite` snapshot first. The backup format does not change (version 11). The previous app cannot open a schema 12 database.
+- **Helper.** The activity helper has a new `window` command. Rebuild it with `npm.cmd run build`.
+- **Retries.** A TypeSafe request that gets status 503 (service briefly unavailable) is now tried again, like 429 and 529, before it becomes an error.
+
+## Unreleased (3.10.2) — Faster insights
+
+- **Speed.** An uncached Insights read takes about 330 ms instead of 420 ms at 1 020 sessions. Three new Rust kernels (`modelFits`, `modelBootstrap`, `kMeansStarts`) run whole loops of the engine in one WebAssembly call, so each matrix is copied once. Interaction states also filter the activity minutes once per column instead of four times.
+- **Same numbers.** Every value is the same to the last bit. No schema or backup format change.
+- **Build.** Changing `native/stats` needs the `wasm32-unknown-unknown` Rust target (`rustup target add wasm32-unknown-unknown`).
+
+## Unreleased (3.10.1) — Backups from 3.9.0 restore again
+
+- **Fix.** In 3.9.0, every JSON backup included `settings.jevAssist`, but restore did not accept that key. Each restore of such a backup stopped with "The backup contains unsupported fields." Now a backup does not include `jevAssist`, and restore accepts a backup that has it. Restore still turns TypeSafe judgments off.
+- No schema change.
+
+## Unreleased (3.10.0) — Calendar hours and a 12-hour clock
+
+- **Day and week views.** The Calendar has a **Day / Week / Month** switch. Week is the default. Day and week show the hours 00–23 on a vertical axis, as in a planner. Each recorded session is a block in the colour of its area. The block goes from the first to the last active minute of the session on that day, in the session's recording timezone. A session that continues past midnight shows on both days. Excluded sessions have a dashed, faded block. A red line marks the current time on today.
+- **Planned actions** have a date but no time of day. They show as dashed chips in a **Plans** row above the hours. A done or smaller action has a solid border, and a skipped one is struck through. The month view keeps the outlined dots.
+- **Session actions.** Select a block to open its session in **A closer look**, with **Edit**, **Exclude** and **Delete** as before.
+- **Time format.** **Settings > Appearance & feedback > Time format** selects 24-hour (13:00) or 12-hour (1:00 PM) time. It applies to the hour axis, the block times and the session times on the Calendar.
+- **Fix.** In the month view, the planned-action dot moved to the top right of the day cell, beside the session dot. It no longer covers the recorded time.
+- New optional setting `timeFormat` (`24h` or `12h`, default `24h`). No schema change. A backup has `timeFormat` only when it is `12h`, so a 24-hour backup is the same as before.
+
+## Unreleased (3.9.0) — TypeSafe Jev judgments
+
+- **Fill missing reflections.** With **Settings > TypeSafe judgments (Jev)** on and an API key saved, **Patterns > Overview** has a check. It reads up to 50 sessions of the last 90 days that have a note, parked thoughts or interruption notes but no answer to "What got in the way most?". TypeSafe Jev suggests an answer for each session. Nothing changes until you pick **Use suggestion** or another answer. If the text does not settle the answer, the app makes no suggestion.
+- **Privacy.** This is the first network call of the app. It is off by default, sends text only when you start a check, and goes from the main process. Restore turns it off. The API key is encrypted with Windows in the data folder and is never in settings or backups. **What was sent** shows the last 20 requests.
+- **Design.** [TypeSafe Jev in Focus Guide](JEV-USE-CASES.md) describes this use case and the next ones: task links, planned-action barriers, old interruption categories, plan quality checks and text features for the focus model.
+- New setting `jevAssist`. No schema change. Backups do not change.
+
+## Unreleased (3.8.1) — Type tokens in the component layer
+
+- **Type tokens.** The 33 raw font sizes in the component layer of `app.css` (Insights, reflection questions, focus hints, check-in prompt) now use the type tokens. 28 matched a token exactly and look the same. Four small labels in the Insights charts and tables use `--text-badge` (12px), as before. The title of the weekly adjustment hint on Focus grows from 12px to 13px (`--text-caption`), the size of its text.
+- With this change, every font size in the main window comes from a token. Only the compact floating window keeps raw sizes, as documented in [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
+- **Correction.** The 3.7.0 notes said that every font size in the stylesheets came from a token. That was true only for `styles.css`. The 3.7.0 entry now says so.
+- No change to data, schema or backups.
+
 ## Unreleased (3.8.0) — Claude Code plugin marketplace on GitHub
 
 - **Marketplace.** The repository root has `.claude-plugin/marketplace.json` (marketplace `focus-guide`), so `/plugin marketplace add lucasprac/focus-guide` works. The plugin `focus-guide` is in `Arquivos/agent-plugin/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json`, the four skills and `scripts/focus-guide.cmd`.
@@ -11,7 +82,7 @@
 
 - **Icon.** The icon is now a white brain-and-eye glyph on a purple-to-blue tile. The old dark-blue line drawing on a transparent background was almost invisible in the dark theme, on a dark taskbar and in the tray. The windows, the tray and notifications use a multi-size `icon.ico` (16 to 256 pixels). The tray sizes show a simplified eye, so the mark stays readable at 16 pixels. Notifications now show the icon.
 - **Window background.** The main window opens with the background colour of the saved theme, so the dark theme no longer flashes white at startup.
-- **Design standardization.** Every radius and font size in the stylesheets comes from a token. The radius scale has a new `rounded-chip` (6px) step and `--radius-float` (22px) for the floating bar. In the main window, text is 13px or larger, and only badges and chart labels use 12px. The Patterns filters wrap at the minimum window width instead of squeezing the pickers. Agent proposal rows use SVG check boxes, not text glyphs. Goal cards align their content to the top and show a hover border. The Neural World header shows recorded time as `51h 12m`, as in the rest of the app. See [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
+- **Design standardization.** Every radius in the stylesheets and every font size in the legacy stylesheet (`styles.css`) comes from a token. (Correction: the first version of this note said "every font size in the stylesheets". The component layer in `app.css` was tokenized only in 3.8.1.) The radius scale has a new `rounded-chip` (6px) step and `--radius-float` (22px) for the floating bar. In the main window, text is 13px or larger, and only badges and chart labels use 12px. The Patterns filters wrap at the minimum window width instead of squeezing the pickers. Agent proposal rows use SVG check boxes, not text glyphs. Goal cards align their content to the top and show a hover border. The Neural World header shows recorded time as `51h 12m`, as in the rest of the app. See [Visual design](VISUAL-DESIGN.md#standardization-pass-370).
 - **Cleanup.** Unused code is removed: the `Empty` component, the `Disclosure` alias, `ridgeLoo`, `upperFirst`, three unused imports and parameters, and CSS rules for classes that no source uses. The type check now fails on unused variables, parameters and imports (`noUnusedLocals`, `noUnusedParameters`).
 - **Repository.** The repository has a new README with screenshots, `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates, and a CI workflow that runs the type check. `LICENSE` moved to the repository root. `package.json` has the repository links and `private: true`. `.gitignore` no longer ignores the whole `Docs/` folder, only local working notes. The two Portuguese design proposals moved to `Docs/design-history/`, with an English index that summarizes them and links to the current documentation.
 - No change to data, schema or backups.

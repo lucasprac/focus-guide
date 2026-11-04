@@ -57,7 +57,8 @@ export function validateGoalRecord(key: keyof GoalData, value: unknown): GoalDat
     if (typeof r.kind !== 'string' || !(PROPOSAL_KINDS as readonly string[]).includes(r.kind) || typeof r.status !== 'string' || !['pending','applied','rejected','stale'].includes(r.status)) throw new Error(t('Invalid agent proposal kind or status.'));
     const payload = v.object(r.payload);
     if (JSON.stringify(payload).length > PROPOSAL_LIMITS.payload) throw new Error(t('An agent proposal is too large.'));
-    if ((r.kind === 'goal.create') !== (r.goalId === null)) throw new Error(t('Only a new-goal proposal has no goal.'));
+    // A new goal has no goal yet; tasks can be proposed without a goal; calendar commitments never belong to a goal. Every other kind belongs to a goal.
+    if (r.kind === 'goal.create' || r.kind === 'commitments.add' ? r.goalId !== null : r.goalId === null && r.kind !== 'tasks.add') throw new Error(t('Only a new-goal, task or commitment proposal has no goal.'));
     const decidedAt = r.decidedAt === null ? null : v.timestamp(r.decidedAt);
     if ((r.status === 'applied' || r.status === 'rejected') !== (decidedAt !== null)) throw new Error(t('Invalid agent proposal decision time.'));
     return { id, goalId: r.goalId === null ? null : v.id(r.goalId), kind: r.kind, summary: v.text(r.summary,t('Proposal summary'),PROPOSAL_LIMITS.summary,true), rationale: v.text(r.rationale,t('Proposal rationale'),PROPOSAL_LIMITS.rationale), source: v.text(r.source,t('Proposal source'),PROPOSAL_LIMITS.source), payload, basis: r.basis === null ? null : v.text(r.basis,t('Proposal basis'),PROPOSAL_LIMITS.basis), status: r.status, createdAt: v.timestamp(r.createdAt), decidedAt } as AgentProposal;
@@ -65,9 +66,10 @@ export function validateGoalRecord(key: keyof GoalData, value: unknown): GoalDat
   if (key === 'agentChanges') {
     exact(r, ['id','goalId','at','source','tool','target','summary','rationale','before','after','undoneAt']);
     if (!AGENT_CHANGE_TARGETS.includes(r.target as AgentChangeTarget)) throw new Error(t('Invalid agent change target.'));
+    if ((r.target === 'commitment') !== (r.goalId === null)) throw new Error(t('Only a calendar change has no goal.'));
     const before = v.object(r.before), after = v.object(r.after);
     if (JSON.stringify(before).length > CHANGE_LIMITS.state || JSON.stringify(after).length > CHANGE_LIMITS.state) throw new Error(t('An agent change record is too large.'));
-    return { id, goalId: v.id(r.goalId), at: v.timestamp(r.at), source: v.text(r.source,t('Change source'),CHANGE_LIMITS.source), tool: v.text(r.tool,t('Change tool'),CHANGE_LIMITS.tool,true), target: r.target, summary: v.text(r.summary,t('Change summary'),CHANGE_LIMITS.summary,true), rationale: v.text(r.rationale,t('Change rationale'),CHANGE_LIMITS.rationale), before, after, undoneAt: r.undoneAt === null ? null : v.timestamp(r.undoneAt) } as AgentChange;
+    return { id, goalId: r.goalId === null ? null : v.id(r.goalId), at: v.timestamp(r.at), source: v.text(r.source,t('Change source'),CHANGE_LIMITS.source), tool: v.text(r.tool,t('Change tool'),CHANGE_LIMITS.tool,true), target: r.target, summary: v.text(r.summary,t('Change summary'),CHANGE_LIMITS.summary,true), rationale: v.text(r.rationale,t('Change rationale'),CHANGE_LIMITS.rationale), before, after, undoneAt: r.undoneAt === null ? null : v.timestamp(r.undoneAt) } as AgentChange;
   }
   const goalId = v.id(r.goalId), updatedAt = v.timestamp(r.updatedAt);
   if (key === 'milestones') {

@@ -12,7 +12,8 @@ const PT_BR = {
   barrier: { capability: 'Habilidades ou estratégia', opportunity: 'Tempo, espaço ou acesso', motivation: 'Valor ou motivação', other: 'Outro / a ação pareceu grande demais' } as Labels,
   eventSource: { shortcut: 'atalho', floating: 'timer flutuante', main: 'janela principal' } as Labels,
   occurrenceStatus: { unrecorded: 'sem registro', done: 'feita', smaller: 'versão menor', skipped: 'pulada' } as Labels,
-  goalStatus: { draft: 'rascunho', active: 'ativa', paused: 'pausada', archived: 'arquivada', achieved: 'alcançada' } as Labels
+  goalStatus: { draft: 'rascunho', active: 'ativa', paused: 'pausada', archived: 'arquivada', achieved: 'alcançada' } as Labels,
+  commitmentState: { planned: 'planejado', active: 'em andamento', done: 'feito', missed: 'perdido', skipped: 'pulado', cancelled: 'cancelado' } as Labels
 };
 const label = (map: Labels, value: string): string => getLanguage() === 'pt-BR' ? map[value] ?? value : value;
 
@@ -24,3 +25,5 @@ export function eventSourceLabel(source: string | null | undefined): string { re
 export function occurrenceStatusLabel(status: string): string { return label(PT_BR.occurrenceStatus, status); }
 /* Lower case, as the stored status; badges capitalise it with CSS. */
 export function goalStatusLabel(status: string): string { return label(PT_BR.goalStatus, status); }
+/* A commitment state (planned, active, done, missed, skipped, cancelled), lower case like the other stored values. */
+export function commitmentStateLabel(state: string): string { return label(PT_BR.commitmentState, state); }

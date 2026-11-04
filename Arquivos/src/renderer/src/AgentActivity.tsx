@@ -5,7 +5,7 @@ import { Badge, Button, Card, Fold } from './ui';
 import { eventSourceLabel } from '../../shared/labels';
 import { t, dateLocale } from '../../shared/i18n';
 
-const TARGET_LABELS: Record<AgentChange['target'], string> = { get goal() { return t('Goal'); }, get roadmap() { return t('Roadmap'); }, get step() { return t('Step'); }, get task() { return t('Tasks'); }, get action() { return t('Weekly action'); }, get review() { return t('Review note'); } };
+const TARGET_LABELS: Record<AgentChange['target'], string> = { get goal() { return t('Goal'); }, get roadmap() { return t('Roadmap'); }, get step() { return t('Step'); }, get task() { return t('Tasks'); }, get action() { return t('Weekly action'); }, get review() { return t('Review note'); }, get commitment() { return t('Commitment'); } };
 
 function ChangeRow({ data, act, change }: ViewProps & { change: AgentChange }) {
   const [busy, setBusy] = useState(false), [conflict, setConflict] = useState(false), [error, setError] = useState('');
@@ -28,9 +28,9 @@ function ChangeRow({ data, act, change }: ViewProps & { change: AgentChange }) {
   </div>;
 }
 
-/* Direct changes that a local AI agent made, newest first. With goalId, only that goal's changes. */
-export function AgentActivity({ data, act, goalId }: ViewProps & { goalId?: string }) {
-  const changes = goalData(data).agentChanges.filter(c => !goalId || c.goalId === goalId).sort((a, b) => b.at.localeCompare(a.at));
+/* Direct changes that a local AI agent made, newest first. With goalId, only that goal's changes; with targets, only those kinds. */
+export function AgentActivity({ data, act, goalId, targets }: ViewProps & { goalId?: string; targets?: readonly AgentChange['target'][] }) {
+  const changes = goalData(data).agentChanges.filter(c => (!goalId || c.goalId === goalId) && (!targets || targets.includes(c.target))).sort((a, b) => b.at.localeCompare(a.at));
   if (!changes.length) return null;
   const recent = changes.filter(c => Date.parse(c.at) > Date.now() - 7 * 86400000 && !c.undoneAt);
   return <Card className="agent-activity" title={t('Agent activity')} icon="spark" actions={<span className="hint">{t('{v1} in the last 7 days', { v1: recent.length === 1 ? t('1 change') : t('{length} changes', { length: recent.length }) })}</span>}>

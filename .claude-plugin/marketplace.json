@@ -6,7 +6,7 @@
     {
       "name": "focus-guide",
       "source": "./Arquivos/agent-plugin",
-      "description": "Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan and roadmaps.",
+      "description": "Skills and hooks for the Focus Guide AI agent: weekly review, pattern analysis, day plan, calendar commitments and roadmaps.",
       "category": "productivity",
       "keywords": ["focus", "goals", "productivity", "mcp"]
     }

@@ -52,8 +52,8 @@ Neural World is a 2D overview on one canvas (`WorldCanvas.ts`). `world-map.ts` b
 
 ## UX decisions
 
-- **Focus** starts with the field, timing mode, duration and an optional intention. Goal, activity mode and energy are in **Optional details**. Preparation that already exists from Goals or Tasks shows as a compact linked summary.
-- **Tasks** starts with creation, search and the list. Task details, advanced filters and category management are disclosures. On wide layouts, session preparation is next to the list. On smaller layouts, it is below the list.
+- **Focus** starts with the field, timing mode, duration and an optional intention. Goal, activity mode and energy are in **Optional details**. Preparation that already exists from Goals or the task panel shows as a compact linked summary.
+- **Task panel** (3.12.0) is a side sheet on the right, 440 px wide or the full width on narrow windows, opened by **Tasks** in the top bar or `Ctrl+Shift+T`. It starts with quick capture (title, area, due date), then area chips, then the date groups. Completed and archived tasks are folds. A row opens an inline editor; its actions are the **Focus** and **Archive** / **Restore** icon buttons. The top-bar button shows a count of open tasks that are due today or earlier.
 - **Calendar** shows the calendar before the planned actions of the selected day. Plans and the heat of recorded time keep different meanings.
 - **Goals** empty states use less vertical space.
 - **Patterns** keeps its chart hierarchy. Its filters wrap.
@@ -179,7 +179,7 @@ During an attention check-in only, a banner shows below the bar. See [Attention 
 
 ### Page headers
 
-Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one-line description at caption size. Tasks, Calendar and Settings have no description, to give more space to their content. The headings keep their names because tests and the entrance animation use them.
+Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one-line description at caption size. Calendar and Settings have no description, to give more space to their content. The headings keep their names because tests and the entrance animation use them.
 
 ## Page migration: Focus
 
@@ -189,6 +189,8 @@ Every page uses `PageHeader`. Focus, Goals, Patterns and Neural World keep a one
 - Fix: the separator in the prepared summary had an invalid Latin-1 byte from an earlier version. It showed as a replacement character. It is now a UTF-8 middle dot.
 
 ## Page migration: Tasks
+
+The Tasks page was replaced by the task panel in 3.12.0. This section records the earlier page.
 
 - One toolbar contains search, status, sort and a **More filters** toggle.
   - The toggle shows a count badge for the active goal, field, category and priority filters.
@@ -277,6 +279,14 @@ The check-in is a prompt, not a dialog. It never takes keyboard focus, and it ne
 - Excluded and Recovered show as badges.
 - An empty day uses `EmptyState`.
 - Planned actions and the year overview use `Card`. Labels that were uppercase now use sentence case.
+- **Time grid (3.10.0).** A `Segments` control in the calendar header selects **Day**, **Week** (default) or **Month**. Day and week use `CalendarTimeGrid.tsx`; its rules are in the component layer of `app.css` (`.time-grid*`, `.time-block`).
+  - One row for every hour, `--hour-height` 48px, in a scroll area of `clamp(320px, 100vh - 360px, 620px)`. The grid opens at 07:00, or earlier when a session starts earlier. A 60px gutter holds the hour labels (`--text-badge`).
+  - Recorded time is a filled block: area colour at 22% over the panel, with a 3px area-colour left border and `--radius-chip`. Planned actions have no time of day, so they are dashed chips with an accent border in a **Plans** row above the hours. Recorded time is filled and plans are outlined, as in the month view.
+  - A block shows its title, then the time range from 50 minutes, then the recorded time from 70 minutes, so no line is cut in half. Below 110px of column width (a container query), the range shows only the start time. The full range is in the tooltip and the accessible name. Titles end in an ellipsis in narrow week columns; the full title is in the tooltip, the accessible name and **A closer look**.
+  - Selected day: accent date circle and a 4% accent tint on its column. Selected session: a 2px accent ring on the block and an accent bar on its row in **A closer look**. Current time: a 2px `--danger` line on today.
+  - Day and week give the grid more width (`2.2fr` against `1fr`). Below 900px of workspace, the layout has one column, as in the month view.
+  - Times go through `clockLabel` and `hourLabel` in `components.tsx`, which follow `settings.timeFormat`.
+- **Plan dot (3.10.0).** In the month view, `.day-plan-dot` moved from the bottom left to the top right, beside the session dot. At the bottom left it covered the recorded time in some cells.
 
 ## Page migration: Goals
 
@@ -313,6 +323,13 @@ The check-in is a prompt, not a dialog. It never takes keyboard focus, and it ne
 - **Dead rules.** Rules for `.stage-top`, `.goal-milestone`, `.goal-detail`, `.goal-detail-columns`, `.goal-behaviour-table` and `.goal-behaviour-row` are removed. No source contains these classes. The `Disclosure` alias is removed. Pages import `Fold` from `ui.tsx`.
 - **Patterns filters.** The goal and area pickers keep at least 200px. At the minimum window width (1050px) the toolbar wraps them to the next row instead of squeezing them to 96px.
 - **Check.** At 1366 × 840 and at 1050 × 650, no page overflows horizontally. The only shortened text is the long goal-filter label, which ends with an ellipsis in its picker.
+
+## Component layer type tokens (3.8.1)
+
+- The component layer in `app.css` (Insights, reflection questions, focus hints, check-in prompt) had 33 raw font sizes. They now use the type tokens: 13px → `--text-caption`, 14px → `--text-label`, 20px → `--text-heading`. Small labels inside Insights charts and tables (`.insight-heat th small`, `.mean-row-value small`, `.plain-rows small`, `.forest-value small`, `.forest-label small`, `.insight-cycle-table small`) use `--text-badge`. The weekly-adjustment title (`.focus-adjustment strong`) moves from 12px to `--text-caption`, the size of its own text.
+- Raw sizes stay only in the compact floating window (`.fbar-*`, `.probe-bar`, `.probe-mini`, `.mini-*`) and in the disclosure-icon box, which is not text.
+- Check: the token scan of the `ui-standards-audit` skill reports 0 raw font sizes and 0 raw radii of 5px or more outside these exceptions. At 1366 × 840 and 1050 × 650, in both themes, no page overflows horizontally, including the Insights tab.
+- Still open: the Behaviour timeline legend uses text marks (`●`, `○`, `◐`, `↩`), and `MilestoneChecklist.tsx` shows `•` for bullet rows.
 
 ## App icon
 

@@ -4,8 +4,9 @@ import { TIME_BANDS, WEEKDAYS } from './behaviour-analytics';
 import { durationSuggestion } from './goal-planning';
 import { goalData } from './goal-types';
 import { activityModeLabel } from './labels';
-import { Z90, collinearity, differenceInterval, kMeans, kaplanMeier, meanInterval, mulberry32, penalizedFit, penalizedSelect, quantile, ridgeFit, ridgeSelect, silhouettes, t90, zUpper } from './insight-stats';
+import { Z90, collinearity, differenceInterval, kMeansStarts, kaplanMeier, meanInterval, modelBootstrap, modelFits, mulberry32, quantile, silhouettes, t90, zUpper } from './insight-stats';
 import { t, type Language } from './i18n';
+import { PHASE_MINUTES, isAttentionPhase, phaseAt, phaseSpans, type AttentionPhase, type PhaseMarker } from './attention-phase';
 
 /* Personal insight engine: processing rules, analyses and suggestions over the selected sessions.
    The main process runs it for `insights.read`; the renderer runs it for the example dataset. It is pure
@@ -20,7 +21,7 @@ export const INSIGHT_THRESHOLDS = {
   rhythm: { ratedSessions: 10, bandwidthHours: 1.5, hourWeight: 3, cellSessions: 3 },
   /* warmUpMinutes and fatigueMinutes cut a session into warm-up (before), sustain (between) and fatigue (from). A recovery interval is censored
      when at least recoveryCensorMs of active time follow the last drift. Warm-up friction: at least warmupDrifts drifts in the warm-up phase and a rate of warmupRatio times the sustain rate. */
-  attentionSpan: { sessions: 15, events: 8, groupSessions: 8, groupEvents: 4, warmUpMinutes: 10, fatigueMinutes: 25, recoveryEvents: 8, recoveryCensorMs: 60000, phaseSessions: 5, warmupDrifts: 5, warmupRatio: 1.5 },
+  attentionSpan: { sessions: 15, events: 8, groupSessions: 8, groupEvents: 4, warmUpMinutes: PHASE_MINUTES.warmUp, fatigueMinutes: PHASE_MINUTES.fatigue, recoveryEvents: 8, recoveryCensorMs: 60000, phaseSessions: 5, warmupDrifts: 5, warmupRatio: 1.5 },
   sessionShape: { sessions: 10, blockMinutes: 5, maxMinutes: 120, blockSessions: 5, preDriftMinutes: 2, preDriftEvents: 8 },
   states: { minutes: 300, sessions: 5, minK: 2, maxK: 5, starts: 4, trainMinutes: 5000, silhouettePoints: 1500, quietInputShare: 0.15, fragmentationPairs: 10, switchCoverage: 0.8, driftMinutes: 30 },
   detractors: { sessions: 10, meanSessions: 3 },
@@ -54,10 +55,11 @@ export interface SurvivalCurve {
   /* True when the upper band never falls to one half: the median's upper limit is then open, and median.high is only the last observed time. */
   medianOpen?: boolean;
 }
-/* One phase of a session: warm-up (first minutes), sustain, fatigue (from fatigueMinutes on). toMinute is null for the open last phase. */
+/* One phase of a session: warm-up (first minutes), sustain, fatigue (from fatigueMinutes on). toMinute is null for the open last phase.
+   fromMinute and toMinute are the automatic cuts; manualSessions counts the sessions whose phases came from manual attention states. */
 export interface PhaseRate {
-  id: 'warm-up' | 'sustain' | 'fatigue'; label: string; fromMinute: number; toMinute: number | null;
-  sessions: number; exposureHours: number; drifts: number; driftPerHour: number | null; offTaskShare: number | null;
+  id: AttentionPhase; label: string; fromMinute: number; toMinute: number | null;
+  sessions: number; manualSessions: number; exposureHours: number; drifts: number; driftPerHour: number | null; offTaskShare: number | null;
 }
 export interface AttentionSpanSection extends Eligibility {
   /* The curve to the first drift of each session, the primary reference. */
@@ -165,7 +167,7 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V): void { const rows = map
 /* One analysed session: local start, drift markers and probe answers inside its active time, and its recorded activity rows. */
 interface Facts {
   s: FocusSession; version: number; hour: number; weekday: string; day: string; band: number; mode: ActivityMode; hours: number;
-  drifts: number[]; interruptions: string[]; probes: Array<{ offset: number; offTask: boolean }>; offTask: number; missed: number; rows: ActivitySample[];
+  drifts: number[]; phaseMarkers: PhaseMarker[]; interruptions: string[]; probes: Array<{ offset: number; offTask: boolean }>; offTask: number; missed: number; rows: ActivitySample[];
   observedMs: number; inputMs: number; inputObservedMs: number; switches: number; switchObservedMs: number;
 }
 interface Block { minute: number; sessions: number; exposureMinutes: number; drifts: number; input: number; inputObserved: number; switches: number; switchObserved: number; answered: number; offTask: number }
@@ -175,7 +177,7 @@ function collect(data: Dataset, activity: ActivitySample[], sessions: FocusSessi
   const ids = new Set(sessions.map(s => s.id)), intervals = new Map<string, Array<{ start: number; ms: number }>>(), markers = new Map<string, SessionEvent[]>(), rows = new Map<string, ActivitySample[]>();
   for (const e of data.events) if (ids.has(e.sessionId)) {
     if (e.kind === 'active') push(intervals, e.sessionId, { start: Date.parse(e.startedAt), ms: e.durationMs });
-    else if (e.kind === 'attention-return' || e.kind === 'interruption' || e.kind === 'probe') push(markers, e.sessionId, e);
+    else if (e.kind === 'attention-return' || e.kind === 'interruption' || e.kind === 'probe' || e.kind === 'attention-phase') push(markers, e.sessionId, e);
   }
   for (const a of activity) if (ids.has(a.sessionId) && a.status === 'recorded') push(rows, a.sessionId, a);
   let droppedMarkers = 0;
@@ -188,15 +190,16 @@ function collect(data: Dataset, activity: ActivitySample[], sessions: FocusSessi
       let offset = 0; for (const i of own) { if (i.start >= at) break; offset += Math.min(i.ms, at - i.start); } return offset;
     };
     const f: Facts = { s, version, hour: p.hour, weekday: p.weekday, day: p.day, band: TIME_BANDS.findIndex(b => p.hour >= b.from && p.hour < b.to), mode: s.activityMode ?? 'Unspecified', hours: s.activeMs / 3600000,
-      drifts: [], interruptions: [], probes: [], offTask: 0, missed: 0, rows: (rows.get(s.id) ?? []).sort((a, b) => a.startMs - b.startMs), observedMs: 0, inputMs: 0, inputObservedMs: 0, switches: 0, switchObservedMs: 0 };
+      drifts: [], phaseMarkers: [], interruptions: [], probes: [], offTask: 0, missed: 0, rows: (rows.get(s.id) ?? []).sort((a, b) => a.startMs - b.startMs), observedMs: 0, inputMs: 0, inputObservedMs: 0, switches: 0, switchObservedMs: 0 };
     for (const e of markers.get(s.id) ?? []) {
       const offset = offsetOf(e);
       if (!(offset >= 0 && offset <= s.activeMs)) { droppedMarkers++; continue; }
+      if (e.kind === 'attention-phase') { if (isAttentionPhase(e.category)) f.phaseMarkers.push({ offsetMs: offset, phase: e.category }); continue; }
       if (e.kind !== 'probe') { f.drifts.push(offset); if (e.kind === 'interruption') f.interruptions.push(e.category || 'Unspecified'); }
       else if (e.category === 'missed') f.missed++;
       else if ((PROBE_ANSWERS as readonly string[]).includes(e.category)) { const offTask = e.category !== 'on-task'; f.probes.push({ offset, offTask }); if (offTask) f.offTask++; }
     }
-    f.drifts.sort((a, b) => a - b);
+    f.drifts.sort((a, b) => a - b); f.phaseMarkers.sort((a, b) => a.offsetMs - b.offsetMs);
     const measured = version >= T.inputVersion;
     for (const a of f.rows) {
       f.observedMs += a.observedMs;
@@ -282,21 +285,29 @@ function survivalOf(label: string, times: Array<{ time: number; event: boolean }
 }
 const survivalCurve = (label: string, rows: Facts[]) => survivalOf(label, rows.map(f => ({ time: (f.drifts[0] ?? f.s.activeMs) / 60000, event: f.drifts.length > 0 })), rows.length);
 
-/* Warm-up, sustain and fatigue: drifts and off-task check-ins over the active time each phase covers. A rate needs phaseSessions sessions that reached the phase. */
+/* Warm-up, sustain and fatigue: drifts and off-task check-ins over the active time each phase covers. A session with manual attention states
+   uses them (phaseSpans); the others use the automatic cuts. A rate needs phaseSessions sessions that reached the phase. */
 function phasesOf(base: Facts[]): PhaseRate[] {
   const A = T.attentionSpan, cuts = [0, A.warmUpMinutes, A.fatigueMinutes], defs = [{ id: 'warm-up', label: t('Warm-up') }, { id: 'sustain', label: t('Sustain') }, { id: 'fatigue', label: t('Fatigue') }] as const;
+  const spans = base.map(f => phaseSpans(f.s.activeMs, f.phaseMarkers));
   return defs.map((def, i): PhaseRate => {
-    const from = cuts[i] * 60000, to = i < 2 ? cuts[i + 1] * 60000 : Infinity;
-    let sessions = 0, exposureMs = 0, drifts = 0, answered = 0, offTask = 0;
-    for (const f of base) {
-      if (f.s.activeMs <= from) continue;
-      sessions++; exposureMs += Math.min(f.s.activeMs, to) - from;
-      for (const d of f.drifts) if (d >= from && d < to) drifts++;
-      for (const p of f.probes) if (p.offset >= from && p.offset < to) { answered++; if (p.offTask) offTask++; }
+    let sessions = 0, manualSessions = 0, exposureMs = 0, drifts = 0, answered = 0, offTask = 0;
+    for (const [k, f] of base.entries()) {
+      const exposure = spans[k].filter(sp => sp.phase === def.id).reduce((sum, sp) => sum + sp.toMs - sp.fromMs, 0);
+      if (exposure <= 0) continue;
+      sessions++; exposureMs += exposure; if (f.phaseMarkers.length) manualSessions++;
+      for (const d of f.drifts) if (phaseAt(d, f.phaseMarkers) === def.id) drifts++;
+      for (const p of f.probes) if (phaseAt(p.offset, f.phaseMarkers) === def.id) { answered++; if (p.offTask) offTask++; }
     }
     const hours = exposureMs / 3600000;
-    return { id: def.id, label: def.label, fromMinute: cuts[i], toMinute: i < 2 ? cuts[i + 1] : null, sessions, exposureHours: hours, drifts, driftPerHour: sessions >= A.phaseSessions && hours > 0 ? drifts / hours : null, offTaskShare: answered >= A.phaseSessions ? offTask / answered : null };
+    return { id: def.id, label: def.label, fromMinute: cuts[i], toMinute: i < 2 ? cuts[i + 1] : null, sessions, manualSessions, exposureHours: hours, drifts, driftPerHour: sessions >= A.phaseSessions && hours > 0 ? drifts / hours : null, offTaskShare: answered >= A.phaseSessions ? offTask / answered : null };
   });
+}
+/* Where the warm-up ends: the automatic cut, or the first manual state after warm-up. A manual session that never left warm-up ends it at its end. */
+function warmUpEndMs(f: Facts): number {
+  if (!f.phaseMarkers.length) return T.attentionSpan.warmUpMinutes * 60000;
+  const spans = phaseSpans(f.s.activeMs, f.phaseMarkers), first = spans.find(sp => sp.phase !== 'warm-up');
+  return first ? first.fromMs : f.s.activeMs;
 }
 /* Active time from a return to the next drift. The time after the last drift is censored once it lasts recoveryCensorMs. */
 function recoveryTimes(base: Facts[]): Array<{ time: number; event: boolean }> {
@@ -315,8 +326,8 @@ function attentionSpanSection(base: Facts[]): AttentionSpanSection {
   const phases = phasesOf(base), [warm, sustain] = phases, warmUpFriction = warm.driftPerHour !== null && sustain.driftPerHour !== null && warm.drifts >= A.warmupDrifts && warm.driftPerHour >= A.warmupRatio * sustain.driftPerHour;
   const recovery = recoveryTimes(base), recoveryEvents = recovery.filter(r => r.event).length;
   // Past the warm-up, a drift before it is ignored: the clock still runs from the start of the session.
-  const lasting = base.filter(f => f.s.activeMs > A.warmUpMinutes * 60000), afterWarmUp = warmUpFriction && lasting.length >= A.groupSessions
-    ? survivalOf(t('After the warm-up'), lasting.map(f => { const first = f.drifts.find(d => d >= A.warmUpMinutes * 60000); return { time: (first ?? f.s.activeMs) / 60000, event: first !== undefined }; }), lasting.length) : null;
+  const lasting = base.filter(f => f.s.activeMs > warmUpEndMs(f)), afterWarmUp = warmUpFriction && lasting.length >= A.groupSessions
+    ? survivalOf(t('After the warm-up'), lasting.map(f => { const end = warmUpEndMs(f), first = f.drifts.find(d => d >= end); return { time: (first ?? f.s.activeMs) / 60000, event: first !== undefined }; }), lasting.length) : null;
   return { eligible: true, n: base.length, reason: t('Active time until the first I\'m back or interruption. A session without one counts until it ends. Group curves need {groupSessions} sessions and {groupEvents} drifts.', { groupSessions: A.groupSessions, groupEvents: A.groupEvents }),
     overall: survivalCurve(t('All sessions'), base), recovery: recoveryEvents >= A.recoveryEvents ? survivalOf(t('After a return'), recovery, base.filter(f => f.drifts.length).length) : null, phases, warmUpFriction,
     afterWarmUp: afterWarmUp && afterWarmUp.events >= A.groupEvents ? afterWarmUp : null,
@@ -394,9 +405,9 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
   if (minutes.length < S.minutes || sessions < S.sessions) return unavailable(t('Needs {minutes} activity minutes with input time from {sessions} sessions ({plural} from {plural2} so far).', { minutes: S.minutes, sessions: S.sessions, plural: plural(minutes.length, 'minute'), plural2: plural(sessions, 'session') }));
   // Window switches join the clustering as a sixth column when most minutes have them; a minute without a count takes the mean.
   const dims = minutes.filter(m => !Number.isNaN(m.v[5])).length >= S.switchCoverage * minutes.length ? 6 : 5, columns = Array.from({ length: dims }, (_, j) => j);
-  const present = (j: number) => minutes.filter(m => !Number.isNaN(m.v[j]));
-  const means = columns.map(j => present(j).reduce((sum, m) => sum + m.v[j], 0) / present(j).length);
-  const sds = columns.map(j => Math.sqrt(present(j).reduce((sum, x) => sum + (x.v[j] - means[j]) ** 2, 0) / present(j).length));
+  const present = columns.map(j => minutes.filter(m => !Number.isNaN(m.v[j])));
+  const means = columns.map(j => present[j].reduce((sum, m) => sum + m.v[j], 0) / present[j].length);
+  const sds = columns.map(j => Math.sqrt(present[j].reduce((sum, x) => sum + (x.v[j] - means[j]) ** 2, 0) / present[j].length));
   const z = minutes.map(m => columns.map(j => sds[j] > 1e-9 && !Number.isNaN(m.v[j]) ? (m.v[j] - means[j]) / sds[j] : 0));
   // A seeded partial shuffle picks the training minutes; the silhouette uses the first of them.
   const random = mulberry32(42), order = minutes.map((_, i) => i), take = Math.min(order.length, S.trainMinutes);
@@ -405,12 +416,7 @@ function statesSection(facts: Facts[]): { section: StatesSection; changes: Map<F
   const fits: Array<{ centroids: number[][]; labels: number[] }> = [];
   for (let k = S.minK; k <= S.maxK; k++) {
     // One k-means++ start can stop in a poor local optimum; the start with the lowest within-state spread stays.
-    let best: { centroids: number[][]; labels: number[]; spread: number } | null = null;
-    for (let start = 0; start < S.starts; start++) {
-      const fit = kMeans(train, k, random); if (fit.centroids.length < k) break;
-      let spread = 0; train.forEach((v, i) => { const c = fit.centroids[fit.labels[i]]; for (let j = 0; j < v.length; j++) spread += (v[j] - c[j]) ** 2; });
-      if (!best || spread < best.spread - 1e-9) best = { ...fit, spread };
-    }
+    const best = kMeansStarts(train, k, random, S.starts);
     if (!best) break; fits.push(best);
   }
   if (!fits.length) return unavailable(t('Your activity minutes are too similar to separate into states.'));
@@ -548,7 +554,7 @@ function estimateModel(rated: Facts[], y: number[], contexts: DayContext[], base
   let baseline = 0;
   for (let tk = n - tests; tk < n; tk++) {
     const { columns, rows } = design(tk), scale = scalerOf(rows, tk), train = rows.slice(0, tk).map(scale.apply), target = y.slice(0, tk), row = scale.apply(rows[tk]);
-    const fits = { ridge: ridgeSelect(train, target, lambdas(tk)), lasso: penalizedSelect(train, target, 1), 'elastic-net': penalizedSelect(train, target, alpha) };
+    const fits = modelFits(train, target, lambdas(tk), alpha);
     for (const id of ['ridge', 'lasso', 'elastic-net'] as const) error[id] += Math.abs(predict(fits[id], row) - y[tk]);
     for (const id of ['lasso', 'elastic-net'] as const) kept[id].push(new Set(columns.filter((_, j) => scale.sds[j] > 1e-9 && Math.abs(fits[id].coefficients[j]) > M.selectedAbove).map(c => c.name)));
     baseline += Math.abs(mean(y.slice(0, tk))! - y[tk]);
@@ -572,22 +578,22 @@ function estimateModel(rated: Facts[], y: number[], contexts: DayContext[], base
   const diagnostics: ModelDiagnostics = { maxVif, maxCorrelation, collinear, pairs: pairs.slice(0, 5) };
   const useful = !gated || (baselineMae > 0 && mae[estimator] <= (1 - M.usefulGain) * baselineMae);
   const comparison = t('{v1} vs {v2} points of error over {tests} later sessions', { v1: mae[estimator].toFixed(2), v2: baselineMae.toFixed(2), tests });
-  const ridgeFinal = ridgeSelect(x, y, lambdas(n)), lassoFinal = penalizedSelect(x, y, 1), netFinal = penalizedSelect(x, y, alpha);
+  const { ridge: ridgeFinal, lasso: lassoFinal, 'elastic-net': netFinal } = modelFits(x, y, lambdas(n), alpha);
   const chosen = estimator === 'ridge' ? ridgeFinal : estimator === 'lasso' ? lassoFinal : netFinal;
   const result = { eligible: true, n, useful, trainedOn: n, tested: tests, lambda: chosen.lambda, mae: mae[estimator], baselineMae, estimator, candidates, diagnostics, decision };
   if (!useful) return { ...result, reason: t('The model does not predict your next rating clearly better than your average rating ({comparison}), so no associations are shown.', { comparison }), features: [], zeroed: [] };
   const effects = (beta: number[]) => beta.map((b, j) => scale.sds[j] <= 1e-9 ? 0 : columns[j].kind === 'sd' ? b : b / scale.sds[j] * (columns[j].kind === 'contrast' ? 2 : 1));
   const sinAt = columns.findIndex(c => c.name === 'hourSin'), cosAt = columns.findIndex(c => c.name === 'hourCos'), merged = sinAt >= 0 && cosAt >= 0 && live[sinAt] && live[cosAt];
   const peak = (effect: number[]) => Math.hypot(effect[sinAt], effect[cosAt]);
-  const random = mulberry32(42), draws: number[][] = [], amplitudes: number[] = [], lassoCount = new Array<number>(columns.length).fill(0);
+  // Resample b refits the rows picks[b * n …]; all resamples run in one call.
+  const random = mulberry32(42), picks = new Float64Array(M.bootstrap * n).map(() => Math.floor(random() * n)), draws: number[][] = [], amplitudes: number[] = [], lassoCount = new Array<number>(columns.length).fill(0);
+  const resampled = modelBootstrap(x, y, picks, estimator, { ridge: ridgeFinal.lambda, lasso: lassoFinal.lambda, 'elastic-net': netFinal.lambda }, alpha);
   let peakCount = 0;
-  for (let b = 0; b < M.bootstrap; b++) {
-    const pick = Array.from({ length: n }, () => Math.floor(random() * n)), xb = pick.map(i => x[i]), yb = pick.map(i => y[i]);
-    const lassoDraw = penalizedFit(xb, yb, lassoFinal.lambda, 1), draw = estimator === 'lasso' ? lassoDraw : estimator === 'ridge' ? ridgeFit(xb, yb, ridgeFinal.lambda) : penalizedFit(xb, yb, netFinal.lambda, alpha);
-    const effect = effects(draw.coefficients); draws.push(effect); if (merged) amplitudes.push(peak(effect));
-    lassoDraw.coefficients.forEach((v, j) => { if (Math.abs(v) > M.selectedAbove) lassoCount[j]++; });
-    if (merged && (Math.abs(lassoDraw.coefficients[sinAt]) > M.selectedAbove || Math.abs(lassoDraw.coefficients[cosAt]) > M.selectedAbove)) peakCount++;
-  }
+  resampled.draw.forEach((coefficients, b) => {
+    const lassoDraw = resampled.lasso[b], effect = effects(coefficients); draws.push(effect); if (merged) amplitudes.push(peak(effect));
+    lassoDraw.forEach((v, j) => { if (Math.abs(v) > M.selectedAbove) lassoCount[j]++; });
+    if (merged && (Math.abs(lassoDraw[sinAt]) > M.selectedAbove || Math.abs(lassoDraw[cosAt]) > M.selectedAbove)) peakCount++;
+  });
   // Plain percentile intervals: with shrinkage they need not contain the estimate.
   const estimate = effects(chosen.coefficients), windowShare = (matches: (name: string) => boolean) => kept.lasso.filter(set => [...set].some(matches)).length / kept.lasso.length;
   const feature = (j: number): ModelFeature => { const sorted = draws.map(d => d[j]).sort((a, b) => a - b); return { name: columns[j].name, label: columns[j].label(scale.sds[j]), effect: { estimate: estimate[j], low: quantile(sorted, 0.05), high: quantile(sorted, 0.95) },

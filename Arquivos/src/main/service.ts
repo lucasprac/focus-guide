@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Store } from './store';
 import { TimerEngine } from './timer';
-import type { ActivitySample, Command, Dataset, Task } from '../shared/types';
+import { GENERAL_FIELD_ID, MIN_INCLUDED_SESSION_MS, type ActivitySample, type Command, type Dataset, type Field, type Task } from '../shared/types';
 import * as v from '../shared/validation';
 import { addDays, selectedSessions } from '../shared/analytics';
 import { ACHIEVEMENT_IDS, PALETTES, evaluateAchievements, paletteUnlocked, paletteUnlockLabel } from '../shared/achievements';
@@ -9,7 +9,10 @@ import { INSIGHT_THRESHOLDS, focusInsights, type InsightOptions } from '../share
 import type { ProbeScheduler } from './probes';
 import { GoalService, dateRange } from './goal-service';
 import { AgentService } from './agent-service';
+import { CommitmentService } from './commitment-service';
 import { t, getLanguage } from '../shared/i18n';
+import { phaseAt, phaseMarkers } from '../shared/attention-phase';
+import { JEV_GAP_LIMITS, type JevReflectionGap, type ReflectionText } from '../shared/jev-decisions';
 
 export class FocusService {
   constructor(readonly store: Store, readonly timer: TimerEngine, private beforeDelete?: (kind: 'field' | 'goal') => void, readonly probes?: ProbeScheduler) {}
@@ -19,6 +22,18 @@ export class FocusService {
     if (value === null || value === undefined || value === '') return null;
     const id = v.id(value), category = this.store.category(id);
     if (!category || category.archived) throw new Error(t('Choose an active category.')); return id;
+  }
+  /* The area of a task. null means no area: the task goes to the General area, which is created here the first time. */
+  private taskField(value: unknown, now: string): Field {
+    if (value === null) {
+      const general = this.store.field(GENERAL_FIELD_ID);
+      if (general) { if (general.archived) throw new Error(t('Choose an active area.')); return general; }
+      if (this.store.allFields().length >= 1000) throw new Error(t('The area limit has been reached.'));
+      const created: Field = { id: GENERAL_FIELD_ID, name: t('General'), color: '#8A94A6', archived: false, createdAt: now };
+      this.store.putField(created); return created;
+    }
+    const field = this.store.field(v.id(value)); if (!field || field.archived) throw new Error(t('Choose an active area.'));
+    return field;
   }
   private taskSelection(input: Record<string, unknown>, fieldId: string, active = false): { primaryTaskId: string | null; checklistIds: string[] } {
     if (!Array.isArray(input.checklistIds) || input.checklistIds.length > 100) throw new Error(t('Select up to 100 tasks.'));
@@ -34,7 +49,7 @@ export class FocusService {
   }
   // Agent code runs commands through this; permanent deletion stays a user command only.
   private agentCommand = (command: Command, input: Record<string, unknown>): unknown => {
-    if (command === 'goal.delete' || command === 'field.delete') throw new Error(t('An agent cannot delete records.'));
+    if (command === 'goal.delete' || command === 'field.delete' || command === 'commitment.delete') throw new Error(t('An agent cannot delete records.'));
     return this.run(command, input);
   };
   // The local agent bridge calls only this method; it never reaches the renderer commands directly.
@@ -58,12 +73,30 @@ export class FocusService {
     if (key === null || revision !== this.store.revision()) return;
     this.insights = [{ key, value: structuredClone(value) }, ...this.insights.filter(entry => entry.key !== key && JSON.parse(entry.key)[0] === revision)].slice(0, 4);
   }
+  /* jev.gaps.scan reads its candidates here, inside the command queue; the requests to TypeSafe run outside it.
+     A candidate is a finished, included session of the last 90 days with no main-distraction answer but with text to read. */
+  jevReflectionGaps(now = Date.now()): Array<Omit<JevReflectionGap, 'status'> & { text: ReflectionText }> {
+    if (!this.store.getSettings().jevAssist) throw new Error(t('Turn on TypeSafe judgments in Settings first.'));
+    const data = this.store.all(), since = now - JEV_GAP_LIMITS.days * 86400000, texts = new Map<string, { thoughts: string[]; interruptions: string[] }>();
+    for (const e of data.events) {
+      if ((e.kind !== 'thought' && e.kind !== 'interruption') || !e.text.trim()) continue;
+      const entry = texts.get(e.sessionId) ?? { thoughts: [], interruptions: [] };
+      (e.kind === 'thought' ? entry.thoughts : entry.interruptions).push(e.text.trim()); texts.set(e.sessionId, entry);
+    }
+    return data.sessions
+      .filter(s => s.status === 'completed' && !s.excluded && s.activeMs >= MIN_INCLUDED_SESSION_MS && s.detractor == null && Date.parse(s.startedAt) >= since)
+      .map(s => ({ s, text: { intention: s.intention.trim(), note: s.note.trim(), thoughts: texts.get(s.id)?.thoughts ?? [], interruptions: texts.get(s.id)?.interruptions ?? [] } }))
+      .filter(({ text }) => text.note || text.thoughts.length || text.interruptions.length)
+      .sort((a, b) => b.s.startedAt.localeCompare(a.s.startedAt)).slice(0, JEV_GAP_LIMITS.sessions)
+      .map(({ s, text }) => ({ sessionId: s.id, startedAt: s.startedAt, timezone: s.timezone, fieldName: data.fields.find(f => f.id === s.fieldId)?.name ?? '', intention: s.intention, note: s.note, text }));
+  }
   run(command: Command, input: Record<string, unknown> = {}): unknown {
     const now = new Date().toISOString();
     const goals = new GoalService(this.store);
     if (command === 'goal.delete') { goals.remove(input, this.timer.current?.goalId ?? null, this.beforeDelete); return; }
     if (command.startsWith('goal.')) return goals.run(command,input,now);
     if (command.startsWith('agent.')) return new AgentService(this.store,this.agentCommand).run(command,input,now);
+    if (command.startsWith('commitment.')) return new CommitmentService(this.store).run(command,input,now);
     switch (command) {
       case 'field.create': {
         if (this.store.allFields().length >= 1000) throw new Error(t('The area limit has been reached.'));
@@ -72,7 +105,7 @@ export class FocusService {
       }
       case 'field.update': case 'field.archive': {
         const f = this.store.field(v.id(input.id)); if (!f) throw new Error(t('This area no longer exists.'));
-        if (command === 'field.archive') { f.archived = v.bool(input.archived, t('Archived')); }
+        if (command === 'field.archive') { f.archived = v.bool(input.archived, t('Archived')); if (f.archived && f.id === GENERAL_FIELD_ID) throw new Error(t('The General area holds tasks without an area. You cannot archive it.')); }
         else { f.name = v.text(input.name, t('Field name'), 60, true); f.color = v.color(input.color); }
         this.store.putField(f); return;
       }
@@ -96,17 +129,26 @@ export class FocusService {
         this.store.putCategory(c); return;
       }
       case 'task.create': {
-        const field = this.store.field(v.id(input.fieldId)); if (!field || field.archived) throw new Error(t('Choose an active area.'));
-        const tk: Task = { categoryId: this.categoryInput(input.categoryId), notes: v.text(input.notes ?? '', t('Task notes'), 2000), priority: v.priority(input.priority ?? 'normal'), dueDate: v.date(input.dueDate ?? null), id: randomUUID(), fieldId: field.id, title: v.text(input.title, t('Task title'), 200, true), completed: false, archived: false, createdAt: now, updatedAt: now };
-        Object.assign(tk,goals.taskLinks(tk,input));
-        this.store.db.transaction(() => { this.store.putTask(tk); if (input.attachToSession === true && this.timer.current?.fieldId === field.id) this.timer.addTask(tk.id); })(); return tk.id;
+        return this.store.db.transaction(() => {
+          const field = this.taskField(input.fieldId ?? null, now);
+          const tk: Task = { categoryId: this.categoryInput(input.categoryId), notes: v.text(input.notes ?? '', t('Task notes'), 2000), priority: v.priority(input.priority ?? 'normal'), dueDate: v.date(input.dueDate ?? null), id: randomUUID(), fieldId: field.id, title: v.text(input.title, t('Task title'), 200, true), completed: false, archived: false, createdAt: now, updatedAt: now };
+          Object.assign(tk,goals.taskLinks(tk,input));
+          this.store.putTask(tk); if (input.attachToSession === true && this.timer.current?.fieldId === field.id) this.timer.addTask(tk.id);
+          return tk.id;
+        })();
       }
       case 'task.update': case 'task.delete': {
         const tk = this.store.task(v.id(input.id)); if (!tk) throw new Error(t('This task no longer exists.'));
         if (command === 'task.delete') tk.archived = true;
         else { if ('archived' in input) tk.archived = v.bool(input.archived, t('Archived')); if ('notes' in input) tk.notes = v.text(input.notes, t('Task notes'), 2000); if ('priority' in input) tk.priority = v.priority(input.priority); if ('dueDate' in input) tk.dueDate = v.date(input.dueDate); if ('categoryId' in input && input.categoryId !== tk.categoryId) tk.categoryId = this.categoryInput(input.categoryId); if ('title' in input) tk.title = v.text(input.title, t('Task title'), 200, true); if ('completed' in input) tk.completed = v.bool(input.completed, t('Completed')); }
-        Object.assign(tk,goals.taskLinks(tk,input));
-        tk.updatedAt = now; this.store.putTask(tk); return;
+        // A goal task keeps its goal's area, and a task in the current session keeps the session's area.
+        const moves = command === 'task.update' && 'fieldId' in input && (input.fieldId ?? GENERAL_FIELD_ID) !== tk.fieldId;
+        if (moves && (tk.goalId || this.timer.current?.checklistIds.includes(tk.id))) throw new Error(t('This task keeps its area while it belongs to a goal or to the current session.'));
+        this.store.db.transaction(() => {
+          if (moves) tk.fieldId = this.taskField(input.fieldId ?? null, now).id;
+          Object.assign(tk,goals.taskLinks(tk,input));
+          tk.updatedAt = now; this.store.putTask(tk);
+        })(); return;
       }
       case 'session.tasks': {
         if (!this.timer.current) throw new Error(t('Start a session first.'));
@@ -120,12 +162,12 @@ export class FocusService {
         const timingMode = input.timingMode ?? 'countdown';
         if (timingMode !== 'countdown' && timingMode !== 'stopwatch') throw new Error(t('Choose Timer or Stopwatch.'));
         const activityMode = v.activityMode(input.activityMode ?? this.store.getSettings().activityModes?.[f.id] ?? 'Unspecified');
-        const links = goals.sessionLinks(f.id,primaryTaskId,input,now);
+        const links = goals.sessionLinks(f.id,primaryTaskId,input,now), commitmentId = new CommitmentService(this.store).sessionLink(input,f.id,now);
         const intention = v.text(input.intention ?? '', t('Intention'), 500), energy = v.rating(input.energy), warmUp = v.warmUp(input.warmUp), medication = v.medication(input.medication);
         const plannedMs = timingMode === 'stopwatch' ? null : v.number(input.durationMinutes,t('Duration'),1,1440) * 60000;
         try { this.store.db.transaction(() => {
           if (links.occurrence) this.store.putGoalRecord('goalOccurrences',links.occurrence);
-          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication });
+          this.timer.start({ goalId: links.goalId,occurrenceId: links.occurrenceId,milestoneId: links.milestoneId,commitmentId,activityMode,behaviourVersion: 4,timingMode,autoOvertime: timingMode === 'countdown' && this.store.getSettings().autoOvertime,fieldId: f.id,primaryTaskId,checklistIds,intention,plannedMs,timezone: this.store.getSettings().timezone,energy,detractor: null,challenge: null,warmUp,medication }, this.store.getSettings().attentionPhaseMode === 'manual');
           this.store.setMeta('settings',{ ...this.store.getSettings(),activityModes: { ...this.store.getSettings().activityModes,[f.id]: activityMode } });
         })(); } catch (error) { this.timer.recover(); throw error; }
         return this.timer.current!.id;
@@ -144,7 +186,7 @@ export class FocusService {
           if ('challenge' in input) s.challenge = v.challenge(input.challenge);
           if (command === 'session.edit') {
             const f = this.store.field(v.id(input.fieldId)); if (!f) throw new Error(t('Choose an existing area.'));
-            if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; s.milestoneId = null; }
+            if (f.id !== s.fieldId) { s.primaryTaskId = null; s.checklistIds = []; s.goalId = null; s.occurrenceId = null; s.milestoneId = null; s.commitmentId = null; }
             s.fieldId = f.id; s.intention = v.text(input.intention ?? '', t('Intention'), 500); s.energy = v.rating(input.energy);
           }
         }
@@ -155,6 +197,17 @@ export class FocusService {
         const source = input.source ?? 'main';
         if (source !== 'main' && source !== 'floating' && source !== 'shortcut') throw new Error(t('Invalid return source.'));
         return this.timer.recordReturn(source);
+      }
+      case 'attention.phase': {
+        const phase = v.attentionPhase(input.phase), source = input.source ?? 'main';
+        if (source !== 'main' && source !== 'floating') throw new Error(t('Invalid attention state source.'));
+        const current = this.timer.current;
+        if (!current || this.timer.snapshot().mode !== 'focus') throw new Error(t('Start a focus session first.'));
+        // A session is manual when it started with a phase marker; the setting applies from the next session.
+        const markers = phaseMarkers(this.store.phaseEvents(current.id), current.id);
+        if (!markers.length) throw new Error(t('This session follows the automatic attention state. Manual states apply from the next session.'));
+        if (phaseAt(this.timer.snapshot().elapsedMs, markers) === phase) return null;
+        return this.timer.recordPhase(phase, source);
       }
       case 'attention.remove': this.store.removeReturn(v.id(input.id)); return;
       case 'probe.answer': {
