@@ -1141,6 +1141,7 @@ export const PT_BR: Record<string, string> = {
   'Opening your focus space…': 'Abrindo seu espaço de foco…',
   'Optional': 'Opcional',
   'Optional details': 'Detalhes opcionais',
+  'Add context to this session, or skip and start now. The timer starts when you choose.': 'Adicione contexto a esta sessão ou pule e comece agora. O cronômetro começa quando você escolher.',
   'Optional numeric outcome': 'Resultado numérico opcional',
   'Optional reflections add this perspective.': 'Reflexões opcionais acrescentam essa perspectiva.',
   'Optional: share insights with an AI agent': 'Opcional: compartilhe insights com um agente de IA',

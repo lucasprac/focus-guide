@@ -52,7 +52,7 @@ Neural World is a 2D overview on one canvas (`WorldCanvas.ts`). `world-map.ts` b
 
 ## UX decisions
 
-- **Focus** starts with the field, timing mode, duration and an optional intention. Goal, activity mode and energy are in **Optional details**. Preparation that already exists from Goals or the task panel shows as a compact linked summary.
+- **Focus** starts with the field, timing mode, duration and an optional intention. Goal, activity mode and energy are in the **Optional details** window, which **Begin focus** opens before the timer starts (**Skip** or **Start focus**). Preparation that already exists from Goals or the task panel shows as a compact linked summary.
 - **Task panel** (3.12.0) is a side sheet on the right, 440 px wide or the full width on narrow windows, opened by **Tasks** in the top bar or `Ctrl+Shift+T`. It starts with quick capture (title, area, due date), then area chips, then the date groups. Completed and archived tasks are folds. A row opens an inline editor; its actions are the **Focus** and **Archive** / **Restore** icon buttons. The top-bar button shows a count of open tasks that are due today or earlier.
 - **Calendar** shows the calendar before the planned actions of the selected day. Plans and the heat of recorded time keep different meanings.
 - **Goals** empty states use less vertical space.

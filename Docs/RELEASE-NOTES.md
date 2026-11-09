@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased (3.16.0) — Optional details before the timer
+
+- **Optional details open as a window.** **Begin focus** on the Focus page now opens the **Optional details** window before the timer starts. It holds the activity mode, the goal and roadmap step, the starting energy, **I'm already warm** and **Have you taken medications?**. The fold under the preparation card is gone.
+- **Start focus** starts the session with your answers. **Skip** starts it at once without energy, warm-up and medication answers and with the area's own activity mode; the goal and step stay. Closing the window starts nothing.
+- Both languages have the new text. No change to data, schema or backups.
+
 ## Unreleased (3.15.1) — Tutorial for the new features
 
 - **Behaviour tutorial.** It has 12 steps (was 9). New steps: **Follow your attention state** (automatic or manual warm-up, sustain and fatigue), **Plan focus blocks** (commitments in the Calendar, **Start focus**, done and missed blocks, the task panel with **Ctrl+Shift+T**) and **Optional: TypeSafe judgments** (suggested reflection answers and the window check, with what leaves the computer). The Insights step explains the warm-up, sustain and fatigue phases. The AI agent step names the access levels, proposals, **Agent activity** and the plugin skills, `get-tutorial` too.

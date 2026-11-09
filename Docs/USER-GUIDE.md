@@ -147,12 +147,13 @@ After you update or move Focus Guide, select **Update plugin files**, then run `
 3. Optionally, write an intention.
 4. Select a duration: 25, 50, 90, or a custom value from 1 to 1440 minutes. Ninety minutes is a default that you can change. It is not a claim about the best duration.
 5. Select **Timer** for a countdown. Or, select **Stopwatch** to count up without a planned duration.
-6. Optionally, open **Optional details** to add a goal, an activity mode and your starting energy.
+6. Select **Begin focus**. The **Optional details** window opens before the timer starts. In it you can add a goal, a roadmap step, an activity mode and your starting energy.
    - Energy uses a scale from 1 to 5. To clear the value, click the selected value again.
    - **I'm already warm** records if you are already warmed up: **Yes**, **Kind of** or **No**.
    - **Have you taken medications?** records **Yes** or **No**.
    - Both answers are optional. To clear an answer, click it again or select **Clear**. You cannot change them after the session starts.
-   - If you collapse this section, the app keeps your draft.
+   - Select **Start focus** to start with your answers. Select **Skip** to start without energy, warm-up and medication answers and with the area's own activity mode. The goal and step stay selected.
+   - If you close the window, no session starts and the app keeps your draft.
 
 The field, timing and intention stay visible together. Preparation from Goals or from the task panel shows as a compact linked summary.
 

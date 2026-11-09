@@ -15,7 +15,7 @@ A goal is a learning workspace. Open it from **Goals**. It has five sections:
 | Plan & review | Edit weekly actions, record outcome observations and write the weekly review. |
 
 - A session that you start from a goal records the goal, and the step when you choose one. The next session stays in the same goal until you select **Free focus**.
-- The Focus page shows the goal and step that you study. Under **Optional details**, you can choose another roadmap step.
+- The Focus page shows the goal and step that you study. In the **Optional details** window that opens from **Begin focus**, you can choose another roadmap step.
 - A step's recorded time is effort. It does not show mastery. Tick a step only when you confirm its result.
 
 ### Behaviour profile
