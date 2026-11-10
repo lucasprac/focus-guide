@@ -6,23 +6,25 @@
 |---|---|
 | Desktop lifecycle | `src/main/index.ts`, `coordination.ts`: windows, IPC and serialized native operations |
 | Domain and persistence | `src/main/service.ts`, `timer.ts`, `store.ts`, `backup.ts`, `behaviour.ts`, `goal-service.ts`, `agent-service.ts`, `agent-edits.ts` |
-| AI agent integration | `src/main/agent-bridge.ts` (named pipe), `src/mcp/server.ts` (stdio MCP server), `src/shared/agent-tools.ts`. `scripts/build-mcp.cjs` bundles the server to `out/mcp/`. |
+| AI agent integration | `src/main/agent-bridge.ts` (named pipe on Windows, Unix socket on macOS), `src/mcp/server.ts` (stdio MCP server), `src/shared/agent-tools.ts`. `scripts/build-mcp.cjs` bundles the server to `out/mcp/`. |
 | Process boundary | `src/preload/index.ts`: restricted bridge |
 | Shared contracts | `src/shared/types.ts`, `validation.ts`, `analytics.ts`, goal planning, timer and brain display helpers |
 | Renderer | `src/renderer/src/App.tsx`, page components, `ui.tsx`, `components.tsx`, `app.css` |
 | Neural visuals | `NeuralVisual.tsx`, `ThreeScene.tsx`, `BrainScene.ts`, `NeuronScene.ts`, `WorldCanvas.ts`, `styles.css`: bounded local scenes with SVG fallback |
 | Browser preview | `preview.vite.config.ts`, `src/renderer/src/preview.ts`: synthetic adapter |
-| Windows helper | `native/activity-helper.cpp`. `scripts/build-helper.cjs` compiles it to `native/bin/`. |
+| Activity helper | `native/activity-helper.cpp` (Windows) and `native/activity-helper-mac.cpp` (macOS). `scripts/build-helper.cjs` compiles the one for the current system to `native/bin/`. Both write the same lines, which `src/main/behaviour.ts` reads. |
+| Platform differences | `src/shared/platform.ts` (key names, shortcut accelerator) and the `mac` checks in `src/main/index.ts`. See "macOS build" in [Architecture](ARCHITECTURE.md). |
 | Statistics module | `native/stats/` (Rust). `scripts/build-stats.cjs` compiles it to WebAssembly and writes `src/shared/stats-wasm.ts`. |
-| Packaging assets | `build/icon.ico` (copied to `src/renderer/public/icon.ico` for the windows, tray and notifications), `build/THIRD-PARTY-NOTICES.txt`, `scripts/Start-Software-Rendering.cmd` |
+| Packaging assets | `build/icon.ico` (copied to `src/renderer/public/icon.ico` for the windows, tray and notifications), `build/icon.icns` and `src/renderer/public/trayTemplate*.png` (macOS), `build/THIRD-PARTY-NOTICES.txt`, `scripts/Start-Software-Rendering.cmd` |
 
 ## Prerequisites
 
 - Node.js 22 or later. The current build uses 22.14.0.
 - npm.
-- Windows x64.
+- Windows x64, or macOS 11 or later (Apple silicon or Intel).
 - Internet access for the first install. The install downloads the dependencies and Electron.
-- MinGW C++ to build the helper. The default compiler is `C:\msys64\ucrt64\bin\g++.exe`. To use a different compiler, set `FOCUS_GUIDE_CXX`.
+- Windows: MinGW C++ to build the helper. The default compiler is `C:\msys64\ucrt64\bin\g++.exe`. To use a different compiler, set `FOCUS_GUIDE_CXX`.
+- macOS: the Xcode command line tools (`xcode-select --install`). They supply `clang++` for the helper and for `better-sqlite3`. `FOCUS_GUIDE_CXX` also selects a different compiler here.
 
 - Rust, only to change the statistics module in `native/stats/`: install [rustup](https://rustup.rs), then run `rustup target add wasm32-unknown-unknown`. To use another `cargo`, set `FOCUS_GUIDE_CARGO`. Without Rust, the build uses the committed `src/shared/stats-wasm.ts` when it matches the crate sources.
 
@@ -39,6 +41,8 @@ npm.cmd run dev
 npm.cmd run build
 npm.cmd run package
 ```
+
+On macOS, use `npm` in place of `npm.cmd`, and `npm run package:mac` in place of `npm.cmd run package`.
 
 `npm.cmd run build` also runs `npm.cmd run build:stats` and `npm.cmd run build:mcp`. After a change to `native/stats/`, run `npm.cmd run build:stats` before `dev` or `preview`, because only the build regenerates `src/shared/stats-wasm.ts`. Commit that file with the change.
 
@@ -64,22 +68,33 @@ The server finds the app through `agent-bridge.json` in the data folder. Without
 3. Open **Focus Guide.lnk**.
 4. Resume a paused session manually, if one exists.
 
-A schema upgrade saves a snapshot of the database before the migration. The snapshot goes to `%APPDATA%\Focus Guide\backups`. To go back to an older app version, you need the snapshot that matches that version. Keep a separate copy of the records that you made after the upgrade.
+A schema upgrade saves a snapshot of the database before the migration. The snapshot goes to `%APPDATA%\Focus Guide\backups` (on macOS, `~/Library/Application Support/Focus Guide/backups`). To go back to an older app version, you need the snapshot that matches that version. Keep a separate copy of the records that you made after the upgrade.
+
+## Build the macOS app
+
+A macOS build needs macOS: `better-sqlite3` and the helper compile there. There are two ways.
+
+- **On a Mac.** Run `npm ci`, then `npm run package:mac`. The app is in `Arquivos/dist/mac-arm64/Focus Guide.app` (Apple silicon) or `Arquivos/dist/mac/Focus Guide.app` (Intel). The build is for the processor of the Mac that builds it.
+- **Without a Mac.** Push the branch and run the **CI** workflow by hand (**Actions > CI > Run workflow**), or open a pull request. The `macos` job builds the app for Apple silicon, checks it and keeps it as the artifact **Focus-Guide-macOS**.
+
+The package has an ad-hoc signature (`mac.identity: "-"`) and is not notarized. This is for personal use only. See "Install on macOS" in the [User guide](USER-GUIDE.md) for the first start. A release for other people needs an Apple Developer ID, the hardened runtime and notarization.
+
+The `macos` job checks these points: the helper has both processor types and answers the protocol, the signature is valid, the packaged executable runs the MCP bundle as Node, and `better-sqlite3` loads. It cannot check windows, the menu bar icon, permissions or real input counts. Check those on a Mac before you call a macOS build released.
 
 ## Browser preview
 
 1. Run `npm.cmd run preview`.
-2. Open `http://127.0.0.1:4173/?preview=1`.
+2. Open `http://127.0.0.1:4173/?preview=1`. Add `&platform=mac` to see the macOS key names (Cmd, Option) on a Windows computer.
 
-The preview adapter is for development only. It uses the production `TimerEngine` and `FocusService` with synthetic browser storage. It never connects to the personal SQLite database. The packaged renderer does not contain it. Native windows, the tray, system pauses and file dialogs operate only in the Windows app.
+The preview adapter is for development only. It uses the production `TimerEngine` and `FocusService` with synthetic browser storage. It never connects to the personal SQLite database. The packaged renderer does not contain it. Native windows, the tray, system pauses and file dialogs operate only in the desktop app.
 
 ## Notes
 
 - All dependency versions and the lockfile are pinned.
 - Vite bundles the runtime React, Anime.js and Three.js code. Three.js loads as a separate local chunk.
 - `better-sqlite3` is the only production dependency that Vite does not bundle.
-- The MCP server runs inside `FocusGuide.exe` with `ELECTRON_RUN_AS_NODE=1`. Do not disable the `RunAsNode` Electron fuse, or the client configuration stops working.
+- The MCP server runs inside `FocusGuide.exe` (on macOS, `Focus Guide.app/Contents/MacOS/Focus Guide`) with `ELECTRON_RUN_AS_NODE=1`. Do not disable the `RunAsNode` Electron fuse, or the client configuration stops working.
 - The app needs no CDN and no downloaded model.
-- `AppState.graphicsMode` and `AppState.agent` are runtime-only fields. They must not go into persisted settings, datasets or backups.
+- `AppState.graphicsMode`, `AppState.platform` and `AppState.agent` are runtime-only fields. They must not go into persisted settings, datasets or backups.
 
 For rendering budgets, see [Visual design](VISUAL-DESIGN.md). For timer and data invariants, see [Architecture](ARCHITECTURE.md).

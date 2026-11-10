@@ -1,17 +1,23 @@
 import { connect } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { AGENT_BRIDGE_FILE, type AgentBridgeFile, type AgentTool } from '../shared/agent-tools';
+import { AGENT_BRIDGE_FILE, isAgentBridgeAddress, type AgentBridgeFile, type AgentTool } from '../shared/agent-tools';
 
 /* The client side of the local agent bridge, shared by the MCP server and the Claude Code hooks. It reads the
-   connection file that the running app writes to its data folder and sends one tool call over the named pipe. */
+   connection file that the running app writes to its data folder and sends one tool call over the named pipe
+   (Windows) or the Unix socket (macOS). */
 export const unavailable = 'Focus Guide is not running, or AI agent access is off. Open Focus Guide, then select Settings > AI agent and choose an access level.';
-export function dataDirectory(): string { return process.env.FOCUS_GUIDE_DATA_DIR || join(process.env.APPDATA ?? '', 'Focus Guide'); }
+/* The app passes its data folder in FOCUS_GUIDE_DATA_DIR. Without it, this is the default folder of each system. */
+export function dataDirectory(): string {
+  if (process.env.FOCUS_GUIDE_DATA_DIR) return process.env.FOCUS_GUIDE_DATA_DIR;
+  return process.platform === 'darwin' ? join(homedir(), 'Library', 'Application Support', 'Focus Guide') : join(process.env.APPDATA ?? '', 'Focus Guide');
+}
 function bridge(): AgentBridgeFile {
   let file: AgentBridgeFile;
   try { file = JSON.parse(readFileSync(join(dataDirectory(), AGENT_BRIDGE_FILE), 'utf8')) as AgentBridgeFile; } catch { throw new Error(unavailable); }
-  if (file.version !== 1 || typeof file.pipe !== 'string' || !file.pipe.startsWith('\\\\.\\pipe\\focus-guide-agent-') || typeof file.token !== 'string') throw new Error(unavailable);
+  if (file.version !== 1 || !isAgentBridgeAddress(process.platform, file.pipe) || typeof file.token !== 'string') throw new Error(unavailable);
   return file;
 }
 export function call(tool: AgentTool, input: Record<string, unknown>, options: { client?: string; timeoutMs?: number } = {}): Promise<unknown> {
@@ -30,7 +36,8 @@ export function call(tool: AgentTool, input: Record<string, unknown>, options: {
       try { const reply = JSON.parse(buffer.slice(0, end)) as { ok: boolean; value?: unknown; error?: string }; finish(reply.ok ? null : new Error(reply.error ?? 'The request failed.'), reply.value); }
       catch { finish(new Error('Focus Guide sent a reply that is not valid.')); }
     });
-    socket.on('error', (error: NodeJS.ErrnoException) => finish(error.code === 'ENOENT' ? new Error(unavailable) : error));
+    // A Unix socket that an app left behind refuses the connection; a pipe or socket that is gone does not exist.
+    socket.on('error', (error: NodeJS.ErrnoException) => finish(error.code === 'ENOENT' || error.code === 'ECONNREFUSED' ? new Error(unavailable) : error));
     socket.on('close', () => finish(new Error('Focus Guide closed the connection before it answered.')));
   });
 }

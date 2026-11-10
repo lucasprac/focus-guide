@@ -1,6 +1,6 @@
 {
   "name": "focus-guide",
-  "version": "3.16.0",
+  "version": "3.17.0",
   "description": "An offline focus and goal-planning companion with a private personal dataset.",
   "main": "out/main/index.js",
   "author": "Focus Guide contributors",
@@ -23,6 +23,7 @@
     "build:stats": "node scripts/build-stats.cjs",
     "build": "npm run build:helper && npm run build:stats && electron-vite build && npm run build:mcp",
     "package": "npm run build && electron-builder --win --x64 --dir",
+    "package:mac": "npm run build && electron-builder --mac --dir",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -68,27 +69,46 @@
       "target": "dir",
       "executableName": "FocusGuide",
       "icon": "build/icon.ico",
-      "signExecutable": false
+      "signExecutable": false,
+      "extraResources": [
+        {
+          "from": "native/bin/activity-helper.exe",
+          "to": "activity-helper.exe"
+        }
+      ],
+      "extraFiles": [
+        {
+          "from": "scripts/Start-Software-Rendering.cmd",
+          "to": "Start-Software-Rendering.cmd"
+        },
+        {
+          "from": "build/THIRD-PARTY-NOTICES.txt",
+          "to": "THIRD-PARTY-NOTICES.txt"
+        }
+      ]
+    },
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "extraResources": [
+        {
+          "from": "native/bin/activity-helper",
+          "to": "activity-helper"
+        },
+        {
+          "from": "build/THIRD-PARTY-NOTICES.txt",
+          "to": "THIRD-PARTY-NOTICES.txt"
+        }
+      ]
     },
     "npmRebuild": true,
     "extraResources": [
       {
-        "from": "native/bin/activity-helper.exe",
-        "to": "activity-helper.exe"
-      },
-      {
         "from": "out/mcp/focus-guide-mcp.cjs",
         "to": "mcp/focus-guide-mcp.cjs"
-      }
-    ],
-    "extraFiles": [
-      {
-        "from": "scripts/Start-Software-Rendering.cmd",
-        "to": "Start-Software-Rendering.cmd"
-      },
-      {
-        "from": "build/THIRD-PARTY-NOTICES.txt",
-        "to": "THIRD-PARTY-NOTICES.txt"
       }
     ]
   }

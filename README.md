@@ -2,11 +2,11 @@
 
 <h1 align="center">Focus Guide</h1>
 
-<p align="center">A local-first Windows app that records your focus sessions, goals, tasks and behaviour, and shows you the patterns in them.</p>
+<p align="center">A local-first desktop app for Windows, with an experimental macOS build, that records your focus sessions, goals, tasks and behaviour, and shows you the patterns in them.</p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6D4AFF"></a>
-  <img alt="Platform: Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-2F62D9">
+  <img alt="Platform: Windows x64, macOS experimental" src="https://img.shields.io/badge/platform-Windows%20x64%20%7C%20macOS%20(experimental)-2F62D9">
   <img alt="Version 3.10.2" src="https://img.shields.io/badge/version-3.10.2-6D4AFF">
 </p>
 
@@ -28,7 +28,7 @@
 
 ## Your data stays on your computer
 
-Focus Guide keeps all records in a local SQLite database in `%APPDATA%\Focus Guide`. The app has no account, no telemetry and no network service. It makes daily backups and takes a snapshot before each schema migration. You can export a JSON backup or a CSV file at any time.
+Focus Guide keeps all records in a local SQLite database in `%APPDATA%\Focus Guide` (on macOS, `~/Library/Application Support/Focus Guide`). The app has no account, no telemetry and no network service. It makes daily backups and takes a snapshot before each schema migration. You can export a JSON backup or a CSV file at any time.
 
 If you connect an AI agent that uses a cloud model, the data that the agent reads goes to that model provider. Agent access is `off` by default, and the Settings page explains each level before you turn it on.
 
@@ -44,6 +44,10 @@ Focus Guide runs on Windows 10 and 11 (x64).
 
 Closing the main window keeps the app in the tray, so a running session continues. Use **Quit** in the tray menu to stop the app.
 
+### macOS (experimental)
+
+Version 3.17.0 adds a macOS build for macOS 11 or later. It passes automatic checks, but no person has used it on a Mac yet. There is no macOS download: build it on a Mac, or use the build of the **CI** workflow. The app has no Apple signature, and macOS asks again for its permissions after each update. See "Use the app on macOS" in the [User guide](Docs/USER-GUIDE.md).
+
 ### Claude Code plugin
 
 This repository is also a Claude Code plugin marketplace. The plugin contains the Focus Guide MCP server, four skills and hooks.
@@ -57,6 +61,8 @@ This repository is also a Claude Code plugin marketplace. The plugin contains th
    ```
 
 3. Restart Claude Code.
+
+This marketplace plugin is for Windows. On macOS, use **Write plugin files** in **Settings > AI agent (MCP)** and the commands that the app shows.
 
 The plugin finds the app through `agent-launch.cmd`, which Focus Guide writes to `%APPDATA%\Focus Guide` each time it starts. If you move the app, open it once again.
 
@@ -73,13 +79,15 @@ npm.cmd run package     # writes the app to Arquivos/dist/win-unpacked
 
 To look at the interface without your personal data, run `npm.cmd run preview` and open `http://127.0.0.1:4173/?preview=1`. The preview uses synthetic data in browser storage.
 
+On macOS you need the Xcode command line tools in place of MinGW. Use `npm` in place of `npm.cmd`, and `npm run package:mac` to write `Focus Guide.app` to `Arquivos/dist/`.
+
 See [Development](Docs/DEVELOPMENT.md) for the prerequisites, the browser preview, the MCP server tests and packaging.
 
 ## Repository layout
 
 | Folder | Contents |
 |---|---|
-| [`Arquivos/`](Arquivos/) | Source code (Electron, React 19, TypeScript, better-sqlite3), build scripts, the native Windows activity helper and the Rust statistics module. |
+| [`Arquivos/`](Arquivos/) | Source code (Electron, React 19, TypeScript, better-sqlite3), build scripts, the native activity helpers (Windows and macOS) and the Rust statistics module. |
 | [`Docs/`](Docs/) | User guide, architecture, data dictionary, goal planning, visual design, development and release notes. |
 | `Aplicativo/` | Local copy of the packaged app. Not in the repository. |
 

@@ -5,6 +5,7 @@ import { ROADMAP_CHANGED, rowsRevision } from '../../shared/goal-planning';
 import { MILESTONE_LIMITS, blockShortcut, formatMilestoneMarkdown, listNumber, parseMilestoneMarkdown, reconnectMilestones } from '../../shared/milestone-markdown';
 import { Button, CheckControl, IconButton, Segments, cn } from './ui';
 import { t } from '../../shared/i18n';
+import { alternateModifier, primaryModifier } from '../../shared/platform';
 
 /* A light block editor for a goal's milestones. Each row is a to-do, heading, bullet, numbered item or
    text line; only to-dos can be ticked and count as progress. The rows can also be edited as Markdown.
@@ -141,7 +142,7 @@ export function MilestoneChecklist({ items, onChange, onCommit, disabled, remove
           onPaste={e => { const text = e.clipboardData.getData('text'); if (/\r?\n/.test(text.trim())) { e.preventDefault(); add(text); } }} />
           <Button size="sm" disabled={disabled || !draft.trim()} onClick={() => add(draft)}>{t('Add')}</Button></div>
         <span className="hint" role="status">{message}</span>
-        <span className="hint" id={hintId}>{t('Start a row with # for a heading, - for a bullet, 1. for a numbered item or [ ] for a to-do. Enter adds a row, Backspace at the start turns a row into text, Ctrl+Enter ticks a to-do, Alt+Up or Alt+Down moves a row.')}</span>
+        <span className="hint" id={hintId}>{t('Start a row with # for a heading, - for a bullet, 1. for a numbered item or [ ] for a to-do. Enter adds a row, Backspace at the start turns a row into text, {mod}+Enter ticks a to-do, {alt}+Up or {alt}+Down moves a row.', { mod: primaryModifier(), alt: alternateModifier() })}</span>
       </>}
   </div>;
 }

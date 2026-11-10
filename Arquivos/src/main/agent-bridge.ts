@@ -1,14 +1,15 @@
 import { createServer, type Server, type Socket } from 'node:net';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { unlinkSync } from 'node:fs';
+import { chmodSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentAccess, AgentBridgeStatus } from '../shared/types';
-import { AGENT_BRIDGE_FILE, AGENT_MESSAGE_LIMIT, accessError, allowsTool, isAgentTool, type AgentBridgeFile } from '../shared/agent-tools';
+import { AGENT_BRIDGE_FILE, AGENT_MESSAGE_LIMIT, accessError, agentBridgeAddress, allowsTool, isAgentTool, type AgentBridgeFile } from '../shared/agent-tools';
 import { atomicWrite } from './backup';
 import { t } from '../shared/i18n';
 
-/* A local endpoint for the MCP server that an AI agent starts. It listens on a Windows named pipe only while
-   the user allows agent access. Each request carries a random token that the app writes to its data folder,
+/* A local endpoint for the MCP server that an AI agent starts. It listens on a Windows named pipe, or on a Unix
+   socket on macOS, only while the user allows agent access. Each request carries a random token that the app writes to its data folder,
    and only the agent tools are accepted: never the renderer commands, timer changes, deletions or restores. */
 export class AgentBridge {
   private server: Server | null = null;
@@ -21,13 +22,16 @@ export class AgentBridge {
   private get file() { return join(this.options.directory, AGENT_BRIDGE_FILE); }
   sync(): void { if (this.options.access() === 'off') this.stop(); else if (!this.server) this.start(); }
   private start(): void {
-    const pipe = `\\\\.\\pipe\\focus-guide-agent-${randomUUID()}`;
+    const windows = process.platform === 'win32';
+    const pipe = agentBridgeAddress(process.platform, tmpdir(), windows ? randomUUID() : randomBytes(8).toString('hex'));
     this.token = randomBytes(32).toString('hex');
     const server = createServer({ allowHalfOpen: false }, socket => this.connection(socket));
     server.maxConnections = 4;
     server.on('error', error => { this.status = { ...this.status, state: 'error', message: t('The agent bridge stopped: {message}', { message: error.message }) }; this.stop(false); this.options.onStatus?.(); });
     server.listen(pipe, () => {
       try {
+        // The socket is a file: only this user may connect. The temporary folder of macOS is already private to the user.
+        if (!windows) chmodSync(pipe, 0o600);
         atomicWrite(this.file, JSON.stringify({ version: 1, pipe, token: this.token, pid: process.pid } satisfies AgentBridgeFile));
         this.status = { ...this.status, state: 'ready', message: t('Ready for a local MCP server while Focus Guide is open.') };
       } catch (error) { this.status = { ...this.status, state: 'error', message: t('The agent bridge could not save its connection file: {v1}', { v1: error instanceof Error ? error.message : error }) }; this.stop(false); }

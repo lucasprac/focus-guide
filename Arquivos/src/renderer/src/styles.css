@@ -1,5 +1,5 @@
 /* Base document styles. Design tokens live in tokens.css. */
-:root { color-scheme: light; font-family: 'Segoe UI', sans-serif; font-synthesis: none; background: var(--background); color: var(--text); }
+:root { color-scheme: light; font-family: 'Segoe UI', system-ui, sans-serif; font-synthesis: none; background: var(--background); color: var(--text); }
 :root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; font-size: var(--text-body); line-height: 1.5; }
@@ -245,8 +245,8 @@ select { padding-right: 24px; }
 .section-heading h2 { font-size: var(--text-heading); font-weight: 400; }
 .section-heading p { color: var(--muted); font-size: var(--text-caption); margin-top: 8px; }
 .scatterplot { width: 100%; height: auto; overflow: visible; }
-.chart-axis { fill: var(--muted); font: 12px 'Segoe UI', sans-serif; }
-.chart-empty { fill: var(--muted); font: 12px 'Segoe UI', sans-serif; }
+.chart-axis { fill: var(--muted); font: 12px 'Segoe UI', system-ui, sans-serif; }
+.chart-empty { fill: var(--muted); font: 12px 'Segoe UI', system-ui, sans-serif; }
 .rho-value { font-size: var(--text-heading); color: var(--accent); font-weight: 300; }
 .correlation-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--text-caption); color: var(--muted); margin: 12px 0 9px; }
 .weekly-panel { margin-top: 27px; }

@@ -5,6 +5,7 @@ import type { Store } from './store';
 import type { TimerEngine } from './timer';
 import { object, number, shortcut } from '../shared/validation';
 import { t } from '../shared/i18n';
+import { getPlatform } from '../shared/platform';
 
 type Packet = Omit<ActivitySample, 'id' | 'sessionId' | 'status'>;
 /* The foreground window at one moment, for the TypeSafe window check. Focus Guide's own windows carry no title. */
@@ -28,7 +29,9 @@ export class BehaviourCollector {
   private appliedShortcut = '';
   private closed = false;
   private stopping = false;
-  constructor(private store: Store, private timer: TimerEngine, executable: string, private onReturn: () => void, private onStatus: () => void) {
+  /* registerShortcut: on macOS the main process registers the return shortcut with the system, so the shortcut does not
+     depend on the helper. It gets the validated shortcut ('' removes it) and returns false when the system refuses it. */
+  constructor(private store: Store, private timer: TimerEngine, executable: string, private onReturn: () => void, private onStatus: () => void, private registerShortcut?: (shortcut: string) => boolean) {
     try {
       this.child = spawn(executable, [String(process.pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false });
       this.child.stdout.setEncoding('utf8'); this.child.stdout.on('data', data => this.receive(String(data)));
@@ -39,11 +42,12 @@ export class BehaviourCollector {
   }
   private write(message: string): void { if (this.child && !this.child.killed && this.ready) this.child.stdin.write(message + '\n'); }
   private fail(): void {
-    this.appliedShortcut = ''; this.status = { ...this.status, effectiveShortcut: '' };
+    // A shortcut that the system holds does not stop with the helper.
+    if (!this.registerShortcut) { this.appliedShortcut = ''; this.status = { ...this.status, effectiveShortcut: '' }; }
     this.ready = false; this.readyReply?.(); this.stopReply?.();
     for (const reply of this.requests.values()) reply(false); this.requests.clear();
     for (const reply of this.windowRequests.values()) reply.reject(new Error(t('Local input helper unavailable.'))); this.windowRequests.clear();
-    this.setStatus('unavailable', t('Local input helper unavailable. Timer and floating return control remain usable.'), 'unavailable');
+    this.setStatus('unavailable', t('Local input helper unavailable. Timer and floating return control remain usable.'), this.registerShortcut ? this.status.shortcut : 'unavailable');
     this.child?.kill(); this.child = null;
   }
   private setStatus(state: CollectorStatus['state'], message: string, hotkey = this.status.shortcut): void {
@@ -74,7 +78,9 @@ export class BehaviourCollector {
         else if (value.type === 'return') this.onReturn();
         else if (value.type === 'started' && value.epoch === this.span?.epoch) {
           this.span!.ready = value.ok === true; this.heartbeat = Date.now();
-          this.setStatus(value.ok === true ? 'recording' : 'unavailable', value.ok === true ? t('Local activity collection is recording.') : t('Input registration failed. Coverage is unavailable.'));
+          this.setStatus(value.ok === true ? 'recording' : 'unavailable', value.ok === true ? t('Local activity collection is recording.')
+            : getPlatform() === 'mac' ? t('macOS did not allow input monitoring. Allow Focus Guide in System Settings > Privacy & Security > Input Monitoring, then restart Focus Guide.')
+            : t('Input registration failed. Coverage is unavailable.'));
         } else if (value.type === 'sample') {
           const end = number(value.endMs, t('Helper time'), 0, Number.MAX_SAFE_INTEGER), duration = number(value.durationMs, t('Helper interval'), 1, Number.MAX_SAFE_INTEGER);
           const epoch = number(value.epoch, t('Helper generation'), 1, Number.MAX_SAFE_INTEGER);
@@ -99,20 +105,27 @@ export class BehaviourCollector {
   async configureShortcut(value: string): Promise<void> {
     const validated = shortcut(value);
     this.status = { ...this.status, requestedShortcut: validated };
-    if (!this.ready) await new Promise<void>(resolve => { this.readyReply = resolve; setTimeout(resolve, 1500); });
-    if (!this.ready) { this.status = { ...this.status, shortcut: 'unavailable', effectiveShortcut: '', shortcutError: validated ? t('Global shortcut unavailable. Use the floating timer.') : undefined }; this.onStatus(); if (!validated) return; throw new Error(this.status.shortcutError); }
+    const system = this.registerShortcut;
+    if (!system) {
+      if (!this.ready) await new Promise<void>(resolve => { this.readyReply = resolve; setTimeout(resolve, 1500); });
+      if (!this.ready) { this.status = { ...this.status, shortcut: 'unavailable', effectiveShortcut: '', shortcutError: validated ? t('Global shortcut unavailable. Use the floating timer.') : undefined }; this.onStatus(); if (!validated) return; throw new Error(this.status.shortcutError); }
+    }
     if (validated === this.appliedShortcut && this.status.shortcut === 'ready') return;
-    const parts = validated.split('+'), key = parts.pop() ?? '';
-    const modifiers = parts.reduce((sum, part) => sum | ({ Alt: 1, Ctrl: 2, Shift: 4, Win: 8 }[part] ?? 0), 0);
-    const code = !key ? 0 : key === 'Space' ? 32 : /^F\d+$/.test(key) ? 111 + Number(key.slice(1)) : key.charCodeAt(0);
-    const request = ++this.requestId;
-    const ok = await new Promise<boolean>(resolve => {
-      const timeout = setTimeout(() => { this.requests.delete(request); resolve(false); }, 1500);
-      this.requests.set(request, success => { clearTimeout(timeout); this.requests.delete(request); resolve(success); });
-      this.write(`hotkey ${request} ${modifiers} ${code}`);
-    });
+    let ok: boolean;
+    if (system) { try { ok = system(validated); } catch { ok = false; } }
+    else {
+      const parts = validated.split('+'), key = parts.pop() ?? '';
+      const modifiers = parts.reduce((sum, part) => sum | ({ Alt: 1, Ctrl: 2, Shift: 4, Win: 8 }[part] ?? 0), 0);
+      const code = !key ? 0 : key === 'Space' ? 32 : /^F\d+$/.test(key) ? 111 + Number(key.slice(1)) : key.charCodeAt(0);
+      const request = ++this.requestId;
+      ok = await new Promise<boolean>(resolve => {
+        const timeout = setTimeout(() => { this.requests.delete(request); resolve(false); }, 1500);
+        this.requests.set(request, success => { clearTimeout(timeout); this.requests.delete(request); resolve(success); });
+        this.write(`hotkey ${request} ${modifiers} ${code}`);
+      });
+    }
     if (!ok) {
-      this.status = { ...this.status, shortcut: this.ready ? 'conflict' : 'unavailable', effectiveShortcut: this.appliedShortcut, shortcutError: t('That shortcut is unavailable or already in use. Change it or choose Retry shortcut.') };
+      this.status = { ...this.status, shortcut: system || this.ready ? 'conflict' : 'unavailable', effectiveShortcut: this.appliedShortcut, shortcutError: t('That shortcut is unavailable or already in use. Change it or choose Retry shortcut.') };
       this.onStatus(); throw new Error(this.status.shortcutError);
     }
     this.appliedShortcut = validated;

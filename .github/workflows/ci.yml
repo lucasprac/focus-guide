@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Run by hand on any branch, for example to get a macOS build without a Mac.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,3 +26,60 @@ jobs:
       # The type check needs no native modules, so install scripts (Electron download, native rebuild) are skipped.
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
+
+  # The macOS app cannot be built on Windows. This job compiles the macOS activity helper, packages the app with an
+  # ad-hoc signature, checks that the packaged files start, and keeps the app as an artifact.
+  macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: Arquivos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Arquivos/package-lock.json
+      # This job needs the install scripts: they download Electron and build better-sqlite3 for it.
+      - run: npm ci
+      - run: npm run typecheck
+      # The statistics module is committed as WebAssembly, so the build needs no Rust target here.
+      - run: npm run package:mac
+      - name: Check the activity helper protocol
+        run: |
+          helper=native/bin/activity-helper
+          lipo -archs "$helper"
+          # The helper closes at the end of its input. perl stops it if it does not.
+          out=$( { printf 'window 1\nstart 1\nstop\n'; sleep 3; } | perl -e 'alarm 30; exec @ARGV' "$helper" $$ )
+          echo "$out"
+          echo "$out" | node -e '
+            const lines = require("node:fs").readFileSync(0, "utf8").trim().split("\n").map(line => JSON.parse(line));
+            const first = type => lines.find(line => line.type === type);
+            if (lines[0].type !== "ready") throw new Error("The first line is not ready.");
+            for (const type of ["window", "started", "stopped", "heartbeat"]) if (!first(type)) throw new Error("No line of type " + type);
+            const reply = first("window");
+            if (reply.request !== 1 || typeof reply.found !== "boolean") throw new Error("The window reply is not valid.");
+            if (reply.found && !reply.own && !(/^\d{1,20}$/.test(reply.hwnd) && typeof reply.app === "string" && typeof reply.title === "string")) throw new Error("The window reply has no window number, program or title.");
+            // The runner has no Input Monitoring permission, so the helper must answer and not record.
+            if (first("started").epoch !== 1 || typeof first("started").ok !== "boolean") throw new Error("The started reply is not valid.");
+          '
+      - name: Check the packaged app
+        run: |
+          app=$(ls -d dist/mac*/"Focus Guide.app")
+          resources="$app/Contents/Resources"
+          test -x "$resources/activity-helper"
+          test -f "$resources/mcp/focus-guide-mcp.cjs"
+          test -f "$resources/THIRD-PARTY-NOTICES.txt"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          # The executable must run as plain Node: this is how an AI client starts the MCP server and the hooks.
+          export ELECTRON_RUN_AS_NODE=1 FOCUS_GUIDE_DATA_DIR="$RUNNER_TEMP/no-data"
+          "$app/Contents/MacOS/Focus Guide" "$resources/mcp/focus-guide-mcp.cjs" --hook session-start
+          # The database module must load in this Electron build.
+          "$app/Contents/MacOS/Focus Guide" -e 'const Database = require(process.argv[1]); const db = new Database(":memory:"); if (db.prepare("select 41 + 1 as value").get().value !== 42) process.exit(1); db.close();' "$PWD/$resources/app.asar/node_modules/better-sqlite3"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/Focus-Guide-macOS.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Focus-Guide-macOS
+          path: ${{ runner.temp }}/Focus-Guide-macOS.zip
+          if-no-files-found: error

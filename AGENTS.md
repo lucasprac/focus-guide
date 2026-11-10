@@ -25,8 +25,8 @@ Focus Guide uses Electron, React, TypeScript, and SQLite.
   - `src/main/`: desktop lifecycle, authoritative timer, persistence, backups, and optional activity collection.
   - `src/preload/` and `src/shared/`: restricted IPC bridge, types, validation, and analytics.
   - `src/renderer/src/`: React pages, shared controls, styles, and `assets/`.
-  - `src/mcp/`: stdio MCP server for a local AI agent; it relays tool calls to the app over a named pipe.
-  - `native/`: Windows C++ activity helper (`bin/` holds the compiled helper).
+  - `src/mcp/`: stdio MCP server for a local AI agent; it relays tool calls to the app over a named pipe (a Unix socket on macOS).
+  - `native/`: C++ activity helpers, one for Windows and one for macOS (`bin/` holds the compiled helper).
   - `scripts/`: helper build script and the software-rendering launcher.
   - `build/`: app icon and third-party notices copied into packages.
 - `Docs/`: user and architecture documentation. Start with `Docs/ARCHITECTURE.md` and `Docs/DEVELOPMENT.md`.
@@ -34,7 +34,7 @@ Focus Guide uses Electron, React, TypeScript, and SQLite.
 Generated `Arquivos/out/` and `Arquivos/dist/` are build outputs. Do not add legacy snapshots, test suites, or reports to the workspace.
 
 ## Build and Development Commands
-Run from `Arquivos/` in PowerShell with Node.js 22+, npm, and Windows x64. Helper builds require MinGW C++; configure `FOCUS_GUIDE_CXX`.
+Run from `Arquivos/` in PowerShell with Node.js 22+, npm, and Windows x64. Helper builds require MinGW C++; configure `FOCUS_GUIDE_CXX`. On macOS (experimental), use `npm` in place of `npm.cmd`; the helper needs the Xcode command line tools.
 
 | Command | Purpose |
 |---|---|
@@ -44,6 +44,7 @@ Run from `Arquivos/` in PowerShell with Node.js 22+, npm, and Windows x64. Helpe
 | `npm.cmd run typecheck` | Check strict TypeScript without emitting files. |
 | `npm.cmd run build` | Compile the helper and application. |
 | `npm.cmd run package` | Package to `Arquivos/dist/win-unpacked`; copy it over `Aplicativo/` after the app is fully quit. |
+| `npm run package:mac` | On macOS only: package `Focus Guide.app` to `Arquivos/dist/mac-arm64` or `Arquivos/dist/mac`. |
 
 ## Coding Style
 Use two-space indentation, single quotes, and semicolons; camelCase for functions/variables and PascalCase for components/types. Keep scripts in CommonJS `.cjs`. Reuse shared validation and `ui.tsx` controls. No formatter or linter is configured; run typechecking.

@@ -18,4 +18,13 @@ export function accessError(access: AgentAccess): string { return access === 'of
 /* The bridge file in the data folder tells a local MCP server where the running app listens. */
 export const AGENT_BRIDGE_FILE = 'agent-bridge.json';
 export interface AgentBridgeFile { version: 1; pipe: string; token: string; pid: number }
+/* Where the app listens: a named pipe on Windows, a Unix socket in the user's temporary folder on other systems.
+   The short socket name keeps the path below the 104-byte limit of macOS. */
+export function agentBridgeAddress(platform: string, temporaryDirectory: string, id: string): string {
+  return platform === 'win32' ? `\\\\.\\pipe\\focus-guide-agent-${id}` : `${temporaryDirectory.replace(/\/+$/, '')}/fg-agent-${id}.sock`;
+}
+export function isAgentBridgeAddress(platform: string, value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  return platform === 'win32' ? value.startsWith('\\\\.\\pipe\\focus-guide-agent-') : /^\/(?:[^/\0]+\/)*fg-agent-[0-9a-f]{16}\.sock$/.test(value);
+}
 export const AGENT_MESSAGE_LIMIT = 64 * 1024;

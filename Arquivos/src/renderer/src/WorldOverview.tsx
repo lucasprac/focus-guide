@@ -5,6 +5,7 @@ import { createWorldCanvas, type WorldCanvas, type WorldGem, type WorldHit, type
 import type { MapArea, WorldMap } from './world-map';
 import type { WorldGoal, WorldStatus } from '../../shared/goal-world';
 import { dateLocale, t } from '../../shared/i18n';
+import { primaryModifier } from '../../shared/platform';
 import { goalStatusLabel } from '../../shared/labels';
 
 const statusTone: Record<WorldStatus, 'accent' | 'success' | 'neutral'> = { active: 'accent', achieved: 'success', paused: 'neutral', draft: 'neutral' };
@@ -120,7 +121,7 @@ export default function WorldOverview({ map, color, paletteName, animation, them
       <div className="world-overview-scene">
         <div className="constellation-meta"><span><i />{paletteName}<small> / {goal ? t('goal view') : area ? t('area view') : t('overview')}</small></span>{live ? <span className="world-live text-caption" role="status"><i style={{ background: live.color }} />{t('Focusing now in {name}', { name: live.name })}</span> : <span className="hint">{replaying ? t('Replaying your journey…') : t('Every mote is a session you finished.')}</span>}</div>
         <div className="constellation-toolbar">
-          <p id={`${id}-help`} className="hint">{t('Drag to move · Ctrl + scroll to zoom · Click a region, goal or golden gem · Arrow keys · Esc for overview')}</p>
+          <p id={`${id}-help`} className="hint">{t('Drag to move · {mod} + scroll to zoom · Click a region, goal or golden gem · Arrow keys · Esc for overview', { mod: primaryModifier() })}</p>
           <div className="constellation-controls" aria-label={t('Neural World view controls')}>
             <button type="button" className="constellation-text-control text-caption" disabled={!motion || !map.sparks.length} onClick={() => replaying ? engine.current?.stopReplay() : engine.current?.replay()}><Icon name={replaying ? 'stop' : 'play'} size={14} />{replaying ? t('Stop replay') : t('Replay')}</button>
             <button type="button" aria-label={t('Zoom out')} onClick={() => engine.current?.zoom(1 / 1.25)}><Icon name="minus" size={16} /></button>

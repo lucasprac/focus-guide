@@ -14,7 +14,7 @@ export function JevSettings({ data, act }: ViewProps) {
   return <Card title={t('TypeSafe judgments (Jev)')} icon="spark" actions={<Badge tone={enabled && status?.keyStored ? 'success' : 'info'}>{enabled && status?.keyStored ? t('Ready') : t('Off')}</Badge>}>
     <p className="hint">{t('TypeSafe Jev can read the notes, parked thoughts and interruption notes of your sessions and suggest the answers you left empty, such as what got in the way most. It only suggests: nothing changes until you choose an answer.')}</p>
     <p className="alert notice" role="note">{t('TypeSafe is a cloud service. When you start a check, the text of the sessions it reads leaves this computer and goes to TypeSafe. Nothing is sent before you start a check. Restoring a backup turns this off.')}</p>
-    {!status ? <p className="hint" role="status">{t('TypeSafe judgments work only in the Windows app.')}</p> : <>
+    {!status ? <p className="hint" role="status">{t('TypeSafe judgments work only in the desktop app.')}</p> : <>
       <label className="toggle-row"><span><strong>{t('Use TypeSafe judgments')}</strong><small>{t('Shows the “Fill missing reflections” check on the Patterns page.')}</small></span><SwitchControl aria-label={t('Use TypeSafe judgments')} checked={enabled} disabled={busy} onChange={e => void run(() => act('settings.update', { ...data.settings, jevAssist: e.target.checked }))} /></label>
       <div className="toggle-row"><span><strong>{t('Window check during focus')}</strong><small>{t('Every 5 minutes of focus, Jev rates how closely the window in front matches the area and the plan of the session. The ratings are kept apart for review and are not used in Patterns yet.')}</small></span>
         <Segments className="segmented" label={t('Window check during focus')} value={data.settings.jevWindowCheck ?? 'off'} onChange={value => { if ((JEV_WINDOW_CHECKS as readonly string[]).includes(value)) void run(() => act('settings.update', { ...data.settings, jevWindowCheck: value as JevWindowCheck })); }}
@@ -22,11 +22,11 @@ export function JevSettings({ data, act }: ViewProps) {
       {(data.settings.jevWindowCheck ?? 'off') !== 'off' && <p className="alert notice" role="note">{t('While a focus session runs, the window check sends the title and program name of the window in front, the session’s area, goal, task and intention, and with “Title and capture” a picture of that window, to TypeSafe. A picture can show private messages or other personal content. Focus Guide skips its own windows and private browsing windows, keeps the title and the ratings on this computer, and never keeps the picture.')}</p>}
       {status.windowCheck?.state === 'stopped' && <p className="hint" role="alert">{status.windowCheck.message}</p>}
       {status.keyStored
-        ? <div className="goal-button-row"><span className="hint" role="status">{t('An API key is saved, encrypted with your Windows account.')}</span><Button size="sm" disabled={busy} onClick={() => void run(() => act('jev.key.clear'))}>{t('Remove key')}</Button></div>
+        ? <div className="goal-button-row"><span className="hint" role="status">{t('An API key is saved, encrypted with your account on this computer.')}</span><Button size="sm" disabled={busy} onClick={() => void run(() => act('jev.key.clear'))}>{t('Remove key')}</Button></div>
         : <form className="goal-button-row" onSubmit={e => { e.preventDefault(); void saveKey(); }}>
           <label className="form-label">{t('TypeSafe API key')}<input type="password" autoComplete="off" spellCheck={false} maxLength={200} value={key} onChange={e => setKey(e.target.value)} disabled={busy || !status.encryption} /></label>
           <Button type="submit" variant="primary" disabled={busy || !key.trim() || !status.encryption}>{t('Save key')}</Button>
-          {!status.encryption && <span className="hint" role="status">{t('Windows cannot encrypt the API key on this computer, so it was not saved.')}</span>}
+          {!status.encryption && <span className="hint" role="status">{t('This computer cannot encrypt the API key, so it was not saved.')}</span>}
         </form>}
       <Fold title={t('What was sent')}>
         <p className="hint">{t('The last 20 requests since Focus Guide started, with the answers. The API key is never shown or kept here.')}</p>

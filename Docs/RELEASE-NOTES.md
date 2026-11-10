@@ -1,5 +1,18 @@
 # Release notes
 
+## Unreleased (3.17.0) — macOS build
+
+- **Focus Guide builds for macOS.** The same source now makes `Focus Guide.app` for macOS 11 or later (`npm run package:mac` on a Mac, or the `macos` job of the CI workflow). The Windows app works as before.
+- **Not yet used on a Mac.** The macOS code was written on Windows. Automatic checks compile and package it, and check that the helper answers, that the signature is valid, that the MCP server starts and that the database module loads. Windows, the menu bar icon, the permission prompts, real input counts, the global shortcut and the Claude Code hooks have not been checked by a person. Treat the macOS build as experimental.
+- **Activity helper for macOS.** A second helper counts key presses, clicks, scrolls, mouse movement and window changes. It needs the **Input Monitoring** permission. Window titles for the TypeSafe window check need **Screen Recording**. Scroll counts from a trackpad are higher than those from a mouse wheel.
+- **Return shortcut on macOS.** The app registers it with the system, so it works without the helper and without a permission. The default shows as **Control+Option+Space**, and it can collide with the macOS input-source shortcut.
+- **AI agent on macOS.** The agent bridge uses a Unix socket in your temporary folder that only your account can open. The plugin that the app writes has hooks for the macOS shell. The plugin from the GitHub marketplace stays for Windows only.
+- **Mac conventions.** Key names show as Cmd and Option, and the task panel opens with **Cmd+Shift+T**. The menu bar icon is a template image. The app has an app, Edit and Window menu. The floating timer follows you to every desktop, but it does not show above an app in full screen.
+- **Unsigned.** The macOS app has an ad-hoc signature and is not notarized. Clear the quarantine flag before the first start (see the user guide). macOS asks for the permissions again after each new build.
+- **Wording.** Twelve texts that named Windows now say "the desktop app", "the system" or "this computer". Both languages have the new text.
+- **Developers:** `AppState.platform` is a new runtime-only field. In the browser preview, `?platform=mac` shows the macOS key names.
+- No change to data, schema, settings or backups. A backup moves between Windows and macOS.
+
 ## Unreleased (3.16.0) — Optional details before the timer
 
 - **Optional details open as a window.** **Begin focus** on the Focus page now opens the **Optional details** window before the timer starts. It holds the activity mode, the goal and roadmap step, the starting energy, **I'm already warm** and **Have you taken medications?**. The fold under the preparation card is gone.

@@ -16,6 +16,29 @@ Design rules that follow from these objectives:
 - If the client uses a cloud model, the data that the agent reads leaves this computer. The settings and the user guide must say this.
 - The app makes one outbound call of its own: TypeSafe Jev judgments (3.9.0). It is off by default, runs only when the user starts a check, and only suggests answers that the user then saves. See [TypeSafe Jev](#typesafe-jev-judgments-390).
 
+## macOS build (3.17.0, unreleased)
+
+Windows is the first platform. The same source builds a macOS app. Each macOS difference is behind a platform check, and the Windows paths did not change. The macOS build was written on Windows: a GitHub Actions job (`macos` in `.github/workflows/ci.yml`) compiles and packages it and checks the packaged files, but no person has used it on a Mac yet.
+
+| Part | Windows | macOS |
+|---|---|---|
+| Activity helper | `native/activity-helper.cpp` (Raw Input, `RegisterHotKey`) | `native/activity-helper-mac.cpp` (listen-only `CGEventTap`, `CGWindowListCopyWindowInfo`) |
+| Return shortcut | The helper registers it | The main process registers it with Electron `globalShortcut` |
+| Agent bridge | Named pipe `\\.\pipe\focus-guide-agent-<uuid>` | Unix socket `fg-agent-<16 hex>.sock` in the user's temporary folder, mode 0600 |
+| Plugin hooks | PowerShell | Default shell, with the variables in front of the command |
+| Marketplace plugin (`Arquivos/agent-plugin/`) | Supported | Not supported. Use the plugin that the app writes. |
+| Tray | Multi-size ICO | Template PNG (`trayTemplate.png`, `trayTemplate@2x.png`) |
+| Package | `win-unpacked`, not signed | `Focus Guide.app`, ad-hoc signature, no notarization |
+
+- **One protocol for both helpers.** The macOS helper reads the same commands and writes the same JSON lines, in the same key order, so `BehaviourCollector` has one parser. The `hwnd` value holds the `CGWindowID`, which is the number in Electron's capture id (`window:<id>:0`). The helper answers `hotkey` with `ok:false`, because it registers no shortcut.
+- **Shortcut.** `BehaviourCollector` takes an optional `registerShortcut` function. On macOS, `index.ts` passes one that calls `globalShortcut.register`. The shortcut then works without the helper and without a permission. The stored value keeps the tokens `Ctrl`, `Alt`, `Shift` and `Win` on every system, so settings and backups move between computers. `shared/platform.ts` maps them to the labels Control, Option, Shift and Cmd, and to the Electron accelerator (`Win` is `Command`).
+- **Permissions.** Input counts need **Input Monitoring**. The helper asks once (`CGRequestListenEventAccess`) and answers `started` with `ok:false` until the user allows it. Window titles and window captures need **Screen Recording**; without it the title is empty and the window check reports no title. An ad-hoc signature changes with each build, so macOS asks again after an update.
+- **Scroll counts.** A trackpad sends many scroll events for one gesture. The helper leaves out the momentum events, but the counts are still higher than those of a mouse wheel on Windows. Do not compare scroll counts between the two systems.
+- **`AppState.platform`** (`'windows'` or `'mac'`) is a runtime-only field, as `graphicsMode` is. It never reaches settings, datasets or backups. The renderer uses it only for key names and for Cmd+Shift+T. In the browser preview, `?platform=mac` shows the macOS names.
+- **Windows.** The main window keeps the native macOS title bar. The app sets a small application menu (app, Edit, Window). The floating timer stays above normal windows and follows the user to every Space, but it does not show above a full-screen app: Electron needs an accessory app for that, and the Dock icon would go away.
+- **Bridge security.** The socket file is in the temporary folder of the user, which other users cannot open, and has mode 0600. A request still needs the 256-bit token from `agent-bridge.json`. `isAgentBridgeAddress` in `shared/agent-tools.ts` rejects any other path in that file.
+- **No change** to the schema, the settings, the backup format or the agent tools.
+
 ## Manual attention states (3.14.0)
 
 The attention state of a focus session is warm-up, sustain or fatigue. `src/shared/attention-phase.ts` holds the states, the automatic cuts (`PHASE_MINUTES`, also `INSIGHT_THRESHOLDS.attentionSpan`), `phaseAt`, `phaseSpans` and `currentAttentionPhase`.
@@ -274,8 +297,8 @@ flowchart LR
     UI -->|agent.proposal.apply / reject over IPC| Queue
 ```
 
-- The MCP server (`src/mcp/server.ts`) holds no data and never opens the database. It reads `agent-bridge.json`, sends one JSON line for each tool call to the named pipe, and returns the reply.
-- `AgentBridge` (`src/main/agent-bridge.ts`) listens only while `settings.agentAccess` is not `off`. Each start makes a new random pipe name and a 256-bit token, and writes them to `agent-bridge.json` in the data folder. A request must carry the token, compared in constant time. Requests are limited to 64 KiB. The bridge accepts only the tools in `src/shared/agent-tools.ts`, never renderer commands. Each call runs in the command queue.
+- The MCP server (`src/mcp/server.ts`) holds no data and never opens the database. It reads `agent-bridge.json`, sends one JSON line for each tool call to the named pipe (a Unix socket on macOS), and returns the reply.
+- `AgentBridge` (`src/main/agent-bridge.ts`) listens only while `settings.agentAccess` is not `off`. Each start makes a new random pipe name (or socket name) and a 256-bit token, and writes them to `agent-bridge.json` in the data folder. A request must carry the token, compared in constant time. Requests are limited to 64 KiB. The bridge accepts only the tools in `src/shared/agent-tools.ts`, never renderer commands. Each call runs in the command queue.
 - `AgentService` (`src/main/agent-service.ts`) checks the access level again (`off` < `read` < `propose` < `edit`). Read tools return copies of records. Propose tools validate a payload against the current records and save an `agentProposals` row. They change nothing else.
 - The user applies a proposal with `agent.proposal.apply`. The service validates the payload again, with the user's edits, then runs the normal commands (`goal.create`, `goal.milestones.sync`, `task.create`, `goal.action.save`, `goal.review.save`) and marks the proposal `applied` in one transaction. A roadmap proposal whose basis fingerprint no longer matches becomes `stale` and needs `confirmStale`.
 - `AppState.agent` is a runtime-only status with the launch command for client configuration. It never reaches settings, datasets or backups.
@@ -287,7 +310,7 @@ flowchart LR
 
 - `agent.plugin.write` (main process only; the preview refuses it) writes a local plugin marketplace to `claude-plugin/` in the data folder: `.claude-plugin/marketplace.json` (`focus-guide-local`) and the plugin `focus-guide/` with `plugin.json`, `.mcp.json`, `hooks/hooks.json` and six skills. The app writes the files, not the package, because the MCP server and the hooks need the absolute path of the executable. The command needs an access level other than `off`. It removes the earlier `focus-guide/` folder first. The files hold no records. The same plugin is also published from the repository: `.claude-plugin/marketplace.json` at the root (marketplace `focus-guide`) points to `Arquivos/agent-plugin/`. Its `.mcp.json` and hooks run `scripts/focus-guide.cmd`, which calls `%APPDATA%\Focus Guide\agent-launch.cmd`; the main process rewrites that file at each start (`writeAgentLauncher`) with the launch paths and environment. Keep the hooks in `Arquivos/agent-plugin/hooks/hooks.json` in step with `hooksConfig` in `agent-plugin.ts`.
 - The skills are Markdown in `Arquivos/agent-plugin/skills/` (`weekly-review`, `pattern-analysis`, `plan-day`, `roadmap`, `commitments`, `get-tutorial`). `get-tutorial` is read-only: it describes the app, the access levels, the tools and the other skills to the agent, then gives the user next steps from `get_overview`, `get_focus_insights` and `get_calendar`. When a page, tool or skill changes, update it too. `src/main/agent-plugin.ts` embeds them at build time with `?raw` imports.
-- The hooks run `focus-guide-mcp.cjs --hook <event>` with the app executable and `ELECTRON_RUN_AS_NODE=1`, through PowerShell (`"shell": "powershell"`), so that no Node.js installation is necessary. `src/mcp/hooks.ts` holds the logic and `src/mcp/client.ts` the bridge client that the server and the hooks share. The hooks match the tools of the manual `focus-guide` entry and of the plugin server (`mcp__plugin_focus-guide_focus-guide__*`).
+- The hooks run `focus-guide-mcp.cjs --hook <event>` with the app executable and `ELECTRON_RUN_AS_NODE=1`, through PowerShell (`"shell": "powershell"`) on Windows and through the default shell on macOS, so that no Node.js installation is necessary. `src/mcp/hooks.ts` holds the logic and `src/mcp/client.ts` the bridge client that the server and the hooks share. The hooks match the tools of the manual `focus-guide` entry and of the plugin server (`mcp__plugin_focus-guide_focus-guide__*`).
   - `SessionStart`: calls `get_overview` with a 3-second limit and gives the agent only the access level and counts (active goals, open proposals, planned actions today), or says that the app is not available.
   - `PreToolUse`: an edit tool without a `rationale` is denied. `update_roadmap` is denied unless its `revision` equals the `roadmapRevision` of the last `get_goal` for that goal in the same Claude Code session (kept in `%TEMP%\focus-guide-agent-hooks`, removed after 7 days). `update_roadmap`, and `update_task` or `update_action` that archive or complete, ask the user first.
   - `PostToolUse` and `PostToolUseFailure`: after a proposal or an edit, the agent gets a reminder to tell the user where to apply or undo it. Every Focus Guide tool call is logged to `agent-hook-log.jsonl` in the data folder (time, first 8 characters of the session id, tool, `ok`/`error`/`denied`/`asked`; never inputs or results), rotated at 1 MiB to `agent-hook-log.jsonl.1`.
@@ -413,7 +436,7 @@ The main interface uses semantic CSS tokens for light mode and dark mode. Action
 
 Chromium can report a hidden native window as visible. For this reason, the native show, hide, minimize and restore events publish a typed visibility event through the existing event subscription. This event controls only renderer motion. It never pauses or records focus time.
 
-The main sculpture uses a bounded Three.js frame loop. Its SVG fallback keeps separate Anime.js scopes for drawing and ambient motion. Cleanup releases scene resources and animation scopes. All paths obey the live motion preferences. `AppState.graphicsMode` is a runtime-only field that reports the launch mode. The app does not put it in settings, datasets or backups.
+The main sculpture uses a bounded Three.js frame loop. Its SVG fallback keeps separate Anime.js scopes for drawing and ambient motion. Cleanup releases scene resources and animation scopes. All paths obey the live motion preferences. `AppState.graphicsMode` is a runtime-only field that reports the launch mode. The app does not put it in settings, datasets or backups. `AppState.platform` follows the same rule.
 
 ### Floating brain
 
@@ -442,13 +465,19 @@ You can use an isolated maintenance launch to inspect a **copy** of a SQLite sna
 
 1. Make a new folder.
 2. Copy the snapshot into the folder. Name the copy `focus-guide.sqlite`.
-3. Open a new PowerShell session in the executable directory.
+3. Open a new PowerShell session in the executable directory. On macOS, use Terminal and the command after these steps.
 4. Run these commands. In the second line, use the path of your new folder.
 
    ```powershell
    $env:FOCUS_GUIDE_TEST_MODE = '1'
    $env:FOCUS_GUIDE_DATA_DIR = 'C:\FocusGuide-Recovery'
    Start-Process -FilePath '.\FocusGuide.exe'
+   ```
+
+   On macOS:
+
+   ```bash
+   FOCUS_GUIDE_TEST_MODE=1 FOCUS_GUIDE_DATA_DIR="$HOME/FocusGuide-Recovery" "/Applications/Focus Guide.app/Contents/MacOS/Focus Guide"
    ```
 
 5. Inspect the copied records.
@@ -545,7 +574,7 @@ This release does not change IPC, the schema, the backup format, the timer engin
 
 ### Native helper
 
-`native/activity-helper.cpp` is a Windows x64 helper with static links. `scripts/build-helper.cjs` compiles it with MinGW. It does not need administrator rights or network access.
+`native/activity-helper.cpp` is a Windows x64 helper with static links. `scripts/build-helper.cjs` compiles it with MinGW. It does not need administrator rights or network access. The macOS helper is `native/activity-helper-mac.cpp`; see [macOS build](#macos-build-3170-unreleased). The points below describe the Windows helper.
 
 - Electron starts the helper hidden, from an absolute path in the packaged resources. It sends bounded commands through a pipe.
 - A message-only window uses [Raw Input](https://learn.microsoft.com/en-us/windows/win32/inputdev/using-raw-input) for optional background totals of keyboard and mouse activity.

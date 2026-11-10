@@ -1,6 +1,6 @@
 # Focus Guide — user guide
 
-Version 2.0.0 · Windows x64 · English · local records · AI agent support
+Version 2.0.0 · Windows x64 · macOS (not yet tested on a Mac) · English · local records · AI agent support
 
 Focus Guide records your focus sessions, goals, tasks and behaviour. It finds patterns in your development, and it can connect to an AI agent. The app and the agent analyse four areas: focus, goals, workflow and behaviour. They tell you which behaviours to keep or change to get more focus time and reach more goals. Your records stay on this computer. You control what an agent can read or change. See [Connect an AI agent (MCP)](#connect-an-ai-agent-mcp).
 
@@ -36,6 +36,44 @@ Behaviour insights upgrade the database to schema 10. The app saves a `before-sc
 The session preparation answers upgrade the database to schema 11. The app saves a `before-schema-v11` snapshot first. Version 3.1.0 and earlier cannot open a schema 11 database, and they cannot restore a version 11 backup.
 
 Commitments upgrade the database to schema 13. The app saves a `before-schema-v13` snapshot first. Version 3.12.0 and earlier cannot open a schema 13 database, and they cannot restore a version 12 backup. Before you update, save a full JSON backup with your current version.
+
+## Use the app on macOS
+
+Version 3.17.0 adds a macOS build. It was written and checked by automatic tests only. No person has used it on a Mac yet, so expect defects and report them.
+
+This guide describes the Windows app. On macOS, these points are different.
+
+### Install on macOS
+
+1. Get **Focus Guide.app**. There is no public macOS download yet. Build it from the source, or use the build of the **CI** workflow (see [Development](DEVELOPMENT.md)).
+2. Move **Focus Guide.app** to the **Applications** folder.
+3. The app has no Apple signature, so macOS refuses a downloaded copy. Open **Terminal** and run this command one time:
+
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/Focus Guide.app"
+   ```
+
+4. Open **Focus Guide** from Applications.
+
+To replace the app with a new build, select **Quit (save and pause)** on the menu bar icon, replace **Focus Guide.app**, and do step 3 again.
+
+### Differences from Windows
+
+| Topic | macOS |
+|---|---|
+| Data folder | `~/Library/Application Support/Focus Guide`. Settings shows the exact folder. |
+| Tray | The icon is in the menu bar. The app also stays in the Dock. To close the app fully, use **Quit (save and pause)** or **Cmd+Q**. |
+| Keys | Use **Cmd** where this guide says **Ctrl**, and **Option** where it says **Alt**. The task panel opens with **Cmd+Shift+T**. |
+| **I'm back** shortcut | The default is **Control+Option+Space**. macOS uses the same keys to change the input source when you have more than one keyboard language. If the shortcut does nothing, change it in Settings. |
+| Keyboard and mouse totals | macOS asks for the **Input Monitoring** permission the first time a session starts with collection on. Allow Focus Guide in **System Settings > Privacy & Security > Input Monitoring**, then quit and open the app again. Until then, Settings shows that macOS did not allow input monitoring. |
+| Scroll counts | A trackpad gives many more scroll events than a mouse wheel. Do not compare scroll counts with those from a Windows computer. |
+| TypeSafe window check | The window title and the window picture need the **Screen Recording** permission, in the same Privacy & Security page. Without it, a check has no title. |
+| Permissions after an update | macOS asks for these permissions again after each new build, because the build has no Apple signature. |
+| Floating timer | It follows you to every desktop (Space). It does not show above an app in full screen. |
+| AI agent | Use **Write plugin files** in **Settings > AI agent** and the commands that the app shows. The plugin from the GitHub marketplace (`/plugin marketplace add lucasprac/focus-guide`) is for Windows only. |
+| Graphics problems | Start the app with software rendering: `open -a "Focus Guide" --args --software-rendering`. |
+
+A backup from Windows restores on macOS, and the reverse, without a change.
 
 ## Learn with goals
 

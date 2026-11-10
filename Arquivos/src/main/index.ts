@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification, powerMonitor, dialog, protocol, net, safeStorage } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, Tray, Menu, nativeImage, Notification, powerMonitor, dialog, protocol, net, safeStorage } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mkdirSync, readdirSync, unlinkSync } from 'node:fs';
@@ -25,8 +25,12 @@ import type { AgentPluginStatus, AppEvent, AppState, BackupFile, Command, FloatB
 import { isFloatBarPosition } from '../shared/types';
 import * as v from '../shared/validation';
 import { t, setLanguage } from '../shared/i18n';
+import { setPlatform, shortcutAccelerator } from '../shared/platform';
 
 app.setName('Focus Guide');
+// Windows is the first platform. Each macOS difference is behind this flag.
+const mac = process.platform === 'darwin';
+setPlatform(mac ? 'mac' : 'windows');
 // Explicit compatibility mode is evaluated before Electron starts its GPU process.
 const graphicsMode = process.argv.includes('--software-rendering') ? 'software' as const : 'auto' as const;
 if (graphicsMode === 'software') app.disableHardwareAcceleration();
@@ -69,7 +73,18 @@ let checkpointInterval: NodeJS.Timeout;
 let backupInterval: NodeJS.Timeout;
 const csp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'";
 // Multi-size ICO: Windows picks the tray (16-32 px) and taskbar (32-256 px) frame for the display scale.
-const applicationIcon = join(__dirname, '../renderer/icon.ico');
+// macOS cannot read an ICO. It takes the window and Dock icon from the app bundle, so the PNG serves notifications only.
+const applicationIcon = join(__dirname, mac ? '../renderer/icon.png' : '../renderer/icon.ico');
+/* On macOS the main process owns the return shortcut: Electron registers it with the system, which needs no helper and
+   no permission. The new combination is registered before the earlier one is removed, as the Windows helper does. */
+let systemShortcut = '';
+function registerSystemShortcut(value: string, onPress: () => void): boolean {
+  if (value === systemShortcut) return true;
+  if (value && !globalShortcut.register(shortcutAccelerator(value), onPress)) return false;
+  if (systemShortcut) globalShortcut.unregister(shortcutAccelerator(systemShortcut));
+  systemShortcut = value;
+  return true;
+}
 
 function notify(mode: 'focus' | 'break'): void {
   if (Notification.isSupported()) new Notification({ title: mode === 'focus' ? timer?.current?.autoOvertime ? t('Your timer ended — overtime is recording') : t('Focus session complete') : t('Your break is complete'), body: mode === 'focus' ? timer?.current?.autoOvertime ? t('Extra time stays in this session. Finish when you are ready.') : t('Take a breath. Your session has been saved.') : t('Choose your next intention when you are ready.'), silent: !store.getSettings().sound, icon: applicationIcon }).show();
@@ -103,7 +118,7 @@ function pollWindowCheck(): void {
     finally { windowJudgeBusy = false; }
   })();
 }
-function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, jev: jevStatus(), dataPath: store.directory, backupStatus: status(), graphicsMode }; }
+function state(): AppState { const all = store.all(); setLanguage(all.settings.language); return { ...all, timer: timer.snapshot(), probe: probes?.pending ?? null, floatBarPosition: barPosition(), collector: collector?.status, agent: bridge ? { ...bridge.status, plugin: agentPlugin } : undefined, jev: jevStatus(), dataPath: store.directory, backupStatus: status(), graphicsMode, platform: mac ? 'mac' : 'windows' }; }
 function publish(event: AppEvent): void { for (const w of [mainWindow, floatingWindow]) if (w && !w.isDestroyed()) w.webContents.send('focus-guide:event', event); }
 function changed(): void { if (!transitions?.busy && !transitions?.needsRecovery) collector?.reconcile(); layoutFloating(); publish({ type: 'state', state: state() }); updateTray(); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : t('An unexpected error occurred.'); }
@@ -211,6 +226,9 @@ function showFloating(inactive = false): void {
   floatLayoutBar = null;
   floatingWindow = new BrowserWindow({ ...bounds, minWidth: bounds.width, minHeight: bounds.height, maxWidth: bounds.width, maxHeight: bounds.height, frame: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, show: false, backgroundColor: '#00000000', icon: applicationIcon,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
+  // macOS: stay above normal windows and follow the user to every Space. visibleOnFullScreen is not used, because
+  // Electron then turns the app into an accessory app and its Dock icon goes away.
+  if (mac) { floatingWindow.setAlwaysOnTop(true, 'floating'); floatingWindow.setVisibleOnAllWorkspaces(true, { skipTransformProcessType: true }); }
   if (!inactive) showWhenLoaded(floatingWindow);
   observeVisibility(floatingWindow);
   layoutFloating();
@@ -415,7 +433,7 @@ app.on('before-quit', e => {
     } catch (error) { quitPending = false; showMain(); report(error); changed(); }
   })();
 });
-app.on('will-quit', () => { clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); insightsWorker.stop(); bridge?.stop(); tray?.destroy(); store?.close(); });
+app.on('will-quit', () => { if (mac && app.isReady()) globalShortcut.unregisterAll(); clearInterval(updateInterval); clearInterval(checkpointInterval); clearInterval(backupInterval); insightsWorker.stop(); bridge?.stop(); tray?.destroy(); store?.close(); });
 app.on('window-all-closed', () => { /* The tray owns the application lifetime. */ });
 
 if (locked) void app.whenReady().then(async () => {
@@ -436,16 +454,18 @@ if (locked) void app.whenReady().then(async () => {
     atomicWrite(file, serializeBackup(store.all(true)));
     backupStatus = kind === 'goal' ? t('A recovery backup was saved before goal deletion.') : t('A recovery backup was saved before area deletion.');
   }, probes);
-  collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, 'activity-helper.exe') : resolve(__dirname, '../../native/bin/activity-helper.exe'),
-    () => {
-      if (shortcutCaptureUntil > Date.now() && mainWindow?.isFocused()) {
-        shortcutCaptureUntil = 0;
-        mainWindow.webContents.send('focus-guide:event', { type: 'shortcut-captured', shortcut: collector.status.effectiveShortcut ?? '' } satisfies AppEvent);
-        return;
-      }
-      if (timer.snapshot().mode === 'focus' && timer.snapshot().running) void enqueue(async () => { const value = service.run('attention.return', { source: 'shortcut' }); collector.flush(); acknowledgeReturn(value); changed(); });
-    },
-    () => { if (mainWindow) publish({ type: 'state', state: state() }); });
+  const helperName = mac ? 'activity-helper' : 'activity-helper.exe';
+  const onReturn = () => {
+    if (shortcutCaptureUntil > Date.now() && mainWindow?.isFocused()) {
+      shortcutCaptureUntil = 0;
+      mainWindow.webContents.send('focus-guide:event', { type: 'shortcut-captured', shortcut: collector.status.effectiveShortcut ?? '' } satisfies AppEvent);
+      return;
+    }
+    if (timer.snapshot().mode === 'focus' && timer.snapshot().running) void enqueue(async () => { const value = service.run('attention.return', { source: 'shortcut' }); collector.flush(); acknowledgeReturn(value); changed(); });
+  };
+  collector = new BehaviourCollector(store, timer, app.isPackaged ? join(process.resourcesPath, helperName) : resolve(__dirname, '../../native/bin', helperName), onReturn,
+    () => { if (mainWindow) publish({ type: 'state', state: state() }); },
+    mac ? value => registerSystemShortcut(value, onReturn) : undefined);
   try { await collector.configureShortcut(store.getSettings().returnShortcut ?? 'Ctrl+Alt+Space'); } catch { /* Status exposes a conflict; the floating button still works. */ }
   transitions = new TransitionCoordinator(timer, collector);
   // The MCP server runs as plain Node.js inside this executable, so no separate Node.js installation is needed.
@@ -460,7 +480,7 @@ if (locked) void app.whenReady().then(async () => {
       return value;
     }) });
   bridge.sync();
-  if (bridge.status.launch) try { writeAgentLauncher(store.directory, bridge.status.launch); } catch { /* Only the marketplace plugin needs this file. */ }
+  if (!mac && bridge.status.launch) try { writeAgentLauncher(store.directory, bridge.status.launch); } catch { /* Only the marketplace plugin needs this file, and that plugin is for Windows. */ }
   agentPlugin =bridge.status.launch && readAgentPlugin(store.directory, bridge.status.launch);
   collector.reconcile();
   const rendererRoot = resolve(__dirname, '../renderer');
@@ -474,10 +494,15 @@ if (locked) void app.whenReady().then(async () => {
     return net.fetch(pathToFileURL(asset).toString());
   });
   app.on('activate', showMain);
+  // macOS always shows a menu bar. This one keeps the app menu (Quit), Edit (copy and paste) and Window, without the developer menus.
+  if (mac) Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]));
   createMain();
   mainWindow!.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   if (app.isPackaged || !process.env.ELECTRON_RENDERER_URL) mainWindow!.webContents.session.webRequest.onHeadersReceived((details, callback) => callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] } }));
-  tray = new Tray(nativeImage.createFromPath(applicationIcon)); tray.on('double-click', showMain); updateTray();
+  // macOS menu bar: a template image (black with alpha) that the system colours for the light and dark menu bar. Electron loads the @2x file with it.
+  const trayIcon = nativeImage.createFromPath(mac ? join(__dirname, '../renderer/trayTemplate.png') : applicationIcon);
+  if (mac) trayIcon.setTemplateImage(true);
+  tray = new Tray(trayIcon); tray.on('double-click', showMain); updateTray();
   const systemPause = (reason: string) => {
     try {
       // Freeze time synchronously: the OS may suspend before a queued drain runs.

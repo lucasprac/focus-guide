@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Button, cn } from './ui';
 import { Modal } from './components';
 import { t } from '../../shared/i18n';
+import { primaryModifier, shortcutLabel } from '../../shared/platform';
 
 export type TutorialTarget = 'Settings' | 'Patterns' | 'Goals' | 'Calendar';
 interface TutorialStep { title: string; body: ReactNode; target?: TutorialTarget; goLabel?: string }
@@ -21,7 +22,7 @@ const tutorialSteps = (): TutorialStep[] => [
     <p>{t('Check-ins are off by default. To turn them on, use')}{' '}<strong>{t('Attention check-ins')}</strong>{' '}{t('in Settings. To turn them off, clear it and save.')}</p>
     <p>{t('The first check-in comes after 8 to 20 active minutes. The next ones come 15 to 35 minutes apart. If you do not answer in 45 seconds, the app saves it as missed. There are no check-ins in Offline mode, during a pause or during a break.')}</p></> },
   { get title() { return t('Mark when you come back'); }, body: <>
-    <p>{t('When you notice that your mind drifted, press')}{' '}<strong>Ctrl+Alt+Space</strong>{t('. You can also use the small check button on the floating timer.')}</p>
+    <p>{t('When you notice that your mind drifted, press')}{' '}<strong>{shortcutLabel('Ctrl+Alt+Space')}</strong>{t('. You can also use the small check button on the floating timer.')}</p>
     <p>{t('This saves an')}{' '}<strong>{t('I’m back')}</strong>{t(' marker. Insights use these markers to see how long you focus before a drift. You can change the shortcut in Settings.')}</p></> },
   { get title() { return t('Follow your attention state'); }, target: 'Settings', get goLabel() { return t('Open Settings'); }, body: <>
     <p>{t('During focus, the Focus page and the floating timer show the state of the session:')}{' '}<strong>{t('Warm-up')}</strong>, <strong>{t('Sustain')}</strong>{' '}{t('or')}{' '}<strong>{t('Fatigue')}</strong>.</p>
@@ -35,7 +36,7 @@ const tutorialSteps = (): TutorialStep[] => [
   { get title() { return t('Plan focus blocks'); }, target: 'Calendar', get goLabel() { return t('Open Calendar'); }, body: <>
     <p>{t('A commitment is a block of focus time on the Calendar, for a task, a goal step, an area or free focus. In the day or week view, click an empty time, or select')}{' '}<strong>{t('New commitment')}</strong>.</p>
     <p>{t('Select the block, then')}{' '}<strong>{t('Start focus')}</strong>{t('. The session gets the block’s goal, step, task and minutes. A block with a finished session is done. A block whose time passed without a session is missed: a gap in the plan, not a failure.')}</p>
-    <p>{t('Open the task panel from any page with')}{' '}<strong>{t('Tasks')}</strong>{' '}{t('at the top of the window or')}{' '}<strong>Ctrl+Shift+T</strong>{t('. Tasks with a due date also show on the Calendar.')}</p></> },
+    <p>{t('Open the task panel from any page with')}{' '}<strong>{t('Tasks')}</strong>{' '}{t('at the top of the window or')}{' '}<strong>{primaryModifier()}+Shift+T</strong>{t('. Tasks with a due date also show on the Calendar.')}</p></> },
   { get title() { return t('Read the Insights tab'); }, target: 'Patterns', get goLabel() { return t('Open Patterns'); }, body: <>
     <p>{t('In Patterns, open the')}{' '}<strong>Insights</strong>{t(' tab. The date range, area and goal filters apply to it.')}</p>
     <p>{t('At the top,')}{' '}<strong>{t('The data behind these insights')}</strong>{' '}{t('shows how many sessions and ratings the analysis uses.')}</p>

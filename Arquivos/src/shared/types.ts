@@ -2,6 +2,7 @@ import type { AgentAccess, GoalData } from './goal-types';
 import type { Language } from './i18n';
 import type { Commitment } from './commitments';
 import type { AttentionPhaseMode } from './attention-phase';
+import type { Platform } from './platform';
 export type { Language } from './i18n';
 export * from './goal-types';
 export type { Commitment, CommitmentState, CommitmentStatus } from './commitments';
@@ -115,7 +116,7 @@ export interface AgentPluginStatus { path: string; version: string; current: boo
 export interface PendingProbe { id: string; sessionId: string; shownAt: string; expiresAt: string }
 /* Runtime state of TypeSafe Jev; it never reaches settings, datasets or backups. The key itself never leaves the main process. */
 export interface JevStatus { keyStored: boolean; encryption: boolean; windowCheck?: { state: 'off' | 'ready' | 'stopped'; message: string } }
-export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
+export interface AppState extends Dataset { graphicsMode?: 'auto' | 'software'; platform?: Platform; jev?: JevStatus; timer: TimerSnapshot; dataPath: string; backupStatus: string; collector?: CollectorStatus; agent?: AgentBridgeStatus; probe?: PendingProbe | null; floatBarPosition?: FloatBarPosition }
 export type BackupFile = Dataset & GoalData & { commitments: Commitment[]; format: 'focus-guide'; schemaVersion: 13; exportedAt: string };
 export interface BackupPreview { token: string; exportedAt: string; sessions: number; fields: number; tasks: number; events: number; goals?: number; goalOccurrences?: number; goalProgress?: number; commitments?: number }
 export type Command =

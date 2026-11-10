@@ -7,12 +7,12 @@ import { REFLECTION_QUESTION_SET, readReflection, reflectionRequest } from './je
 import { decideDetractor, type JevReflectionGap, type ReflectionText } from '../shared/jev-decisions';
 import { t } from '../shared/i18n';
 
-/* The TypeSafe API key is the only stored credential. It is encrypted with Windows (safeStorage) in its own file in the
+/* The TypeSafe API key is the only stored credential. It is encrypted by the system (safeStorage: the Windows account, or the macOS Keychain) in its own file in the
    data folder, and never reaches settings, datasets, backups, the renderer or the request log. */
 const keyFile = (directory: string) => join(directory, 'typesafe-key.bin');
 export function jevKeyStored(directory: string): boolean { return existsSync(keyFile(directory)); }
 export function saveJevKey(directory: string, key: string): void {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error(t('Windows cannot encrypt the API key on this computer, so it was not saved.'));
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(t('This computer cannot encrypt the API key, so it was not saved.'));
   atomicWrite(keyFile(directory), safeStorage.encryptString(key).toString('base64'));
 }
 export function clearJevKey(directory: string): void { rmSync(keyFile(directory), { force: true }); }

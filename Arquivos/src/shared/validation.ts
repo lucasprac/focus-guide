@@ -2,6 +2,7 @@ import type { AgentAccess, FloatingStyle, FocusVisual, Settings, TimeFormat } fr
 import { ACTIVITY_MODES, CHALLENGES, DETRACTORS, JEV_WINDOW_CHECKS, MEDICATION_ANSWERS, PROBE_ANSWERS, WARM_UPS, type ActivityMode, type Challenge, type Detractor, type JevWindowCheck, type Medication, type ProbeAnswer, type WarmUp } from './types';
 import { ACHIEVEMENT_IDS, PALETTE_IDS } from './achievements';
 import { t, isLanguage, type Language } from './i18n';
+import { shortcutLabel } from './platform';
 import { isAttentionPhase, type AttentionPhase, type AttentionPhaseMode } from './attention-phase';
 
 export function activityMode(value: unknown): ActivityMode {
@@ -40,7 +41,7 @@ export function probeAnswer(value: unknown): ProbeAnswer {
 export function shortcut(value: unknown): string {
   const result = text(value, t('Return shortcut'), 80);
   if (!result) return ''; // An empty shortcut explicitly disables the global control.
-  if (!/^(?:(?:Ctrl|Alt|Shift|Win)\+)+(?:Space|[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(result)) throw new Error(t('Use modifiers and one key, such as Ctrl+Alt+Space.'));
+  if (!/^(?:(?:Ctrl|Alt|Shift|Win)\+)+(?:Space|[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(result)) throw new Error(t('Use modifiers and one key, such as {example}.', { example: shortcutLabel('Ctrl+Alt+Space') }));
   const parts = result.split('+');
   if (new Set(parts).size !== parts.length) throw new Error(t('Shortcut modifiers cannot repeat.'));
   return result;

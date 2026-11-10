@@ -24,11 +24,15 @@ const json = (value: unknown) => JSON.stringify(value, null, 2) + '\n';
 const mcpConfig = (launch: Launch) => ({ mcpServers: { [PLUGIN]: { type: 'stdio', command: launch.command, args: launch.args, env: launch.env } } });
 
 /* Hooks run in PowerShell, which every Windows computer has, so that the environment variables can be set
-   before the executable starts. Without ELECTRON_RUN_AS_NODE the executable would open the app instead. */
-function hooksConfig(launch: Launch) {
-  const quote = (text: string) => `'${text.replace(/'/g, "''")}'`;
-  const command = (event: string) => `${Object.entries(launch.env).map(([name, value]) => `$env:${name} = ${quote(value)}`).join('; ')}; & ${quote(launch.command)} ${launch.args.map(quote).join(' ')} --hook ${event}; exit $LASTEXITCODE`;
-  const hook = (event: string) => [{ type: 'command', shell: 'powershell', command: command(event), timeout: 15 }];
+   before the executable starts. Without ELECTRON_RUN_AS_NODE the executable would open the app instead.
+   On macOS the hooks run in the default shell, with the variables set in front of the command. */
+function hooksConfig(launch: Launch, platform: string = process.platform) {
+  const windows = platform === 'win32';
+  const quote = (text: string) => windows ? `'${text.replace(/'/g, "''")}'` : `'${text.replace(/'/g, `'\\''`)}'`;
+  const command = (event: string) => windows
+    ? `${Object.entries(launch.env).map(([name, value]) => `$env:${name} = ${quote(value)}`).join('; ')}; & ${quote(launch.command)} ${launch.args.map(quote).join(' ')} --hook ${event}; exit $LASTEXITCODE`
+    : `${Object.entries(launch.env).map(([name, value]) => `${name}=${quote(value)}`).join(' ')} ${quote(launch.command)} ${launch.args.map(quote).join(' ')} --hook ${event}`;
+  const hook = (event: string) => [{ type: 'command', ...(windows ? { shell: 'powershell' } : {}), command: command(event), timeout: 15 }];
   const tools = 'mcp__(plugin_focus-guide_)?focus-guide__.*';
   return {
     description: 'Focus Guide: status at session start, checks before agent edits, reminders after proposals and edits, and a local log of tool calls.',
@@ -43,7 +47,8 @@ function hooksConfig(launch: Launch) {
 
 /* The plugin in the GitHub marketplace (.claude-plugin/marketplace.json at the repository root) cannot know where
    this executable is. Its scripts/focus-guide.cmd calls agent-launch.cmd in the data folder, which the app writes
-   at each start. The file holds paths only, no personal records. */
+   at each start. The file holds paths only, no personal records. That plugin is for Windows only: on macOS the
+   user installs the plugin that writeAgentPlugin writes. */
 export function writeAgentLauncher(dataDirectory: string, launch: Launch) {
   const text = (value: string) => value.replace(/%/g, '%%');
   const lines = ['@echo off', ...Object.entries(launch.env).map(([name, value]) => `set "${name}=${text(value)}"`),

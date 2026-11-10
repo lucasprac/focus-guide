@@ -22,6 +22,7 @@ import BehaviourTutorial from './BehaviourTutorial';
 import { AttentionPhaseControl } from './AttentionPhaseControl';
 import FloatingBar from './FloatingBar';
 import { t, dateLocale, setLanguage } from '../../shared/i18n';
+import { primaryModifier, primaryModifierPressed, setPlatform } from '../../shared/platform';
 
 export type Action = (command: Command, input?: Record<string, unknown>) => Promise<CommandResult>;
 export interface SessionPreparation { fieldId: string; checklistIds: string[]; primaryTaskId: string | null; goalId?: string | null; milestoneId?: string | null; occurrenceId?: string | null; occurrenceDate?: string; commitmentId?: string | null; intention?: string; durationMinutes?: number; activityMode?: ActivityMode; preparedAt?: string }
@@ -36,6 +37,8 @@ export default function App() {
   // Every text of this render, and of the children rendered after it, is in the saved language.
   const language = data?.settings.language ?? 'en';
   setLanguage(language);
+  // The same rule for the key names: Cmd and Option on a Mac, Ctrl and Alt on Windows.
+  setPlatform(data?.platform);
   const [settingsVisited, setSettingsVisited] = useState(false), [tutorialOpen, setTutorialOpen] = useState(false);
   const [tasksOpen,setTasksOpen] = useState(false), [activeGoalId,setActiveGoalId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('Goals'), [review, setReview] = useState<FocusSession | null>(null), [focus, setFocus] = useState<number | null>(null), [note, setNote] = useState('');
@@ -54,7 +57,7 @@ export default function App() {
   }, [data?.tasks, data?.fields, data?.goals, data?.timer.sessionId]);
   const previous = useRef<string | null>(null), root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!window.focusGuide) { setError(t('Open FocusGuide.exe to connect to your local dataset.')); return; }
+    if (!window.focusGuide) { setError(t('Open the Focus Guide app to connect to your local dataset.')); return; }
     let mounted = true;
     const remove = window.focusGuide.onEvent(event => {
       if (!mounted) return;
@@ -90,10 +93,10 @@ export default function App() {
     const scope = createScope({ root }).add(() => { animate('.page-heading', { opacity: [0, 1], y: [8, 0], duration: 280, ease: 'outQuad' }); });
     return () => scope.revert();
   }, [page, motion, mini]);
-  // Ctrl+Shift+T opens the task panel; it is a key of this window only, not a global shortcut.
+  // Ctrl+Shift+T (Cmd+Shift+T on a Mac) opens the task panel; it is a key of this window only, not a global shortcut.
   useEffect(() => {
     if (mini) return;
-    const key = (e: KeyboardEvent) => { if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyT') { e.preventDefault(); setTasksOpen(open => !open); } };
+    const key = (e: KeyboardEvent) => { if (primaryModifierPressed(e) && e.shiftKey && !e.altKey && e.code === 'KeyT') { e.preventDefault(); setTasksOpen(open => !open); } };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [mini]);
@@ -169,12 +172,12 @@ export default function App() {
       <div className="sidebar-world"><div className="tiny-label text-caption">{t('Recorded focus')}</div><div className="sidebar-world-value text-display font-light tabular-nums">{minutesLabel(totalMinutes(data))}</div></div>
       <div className="sidebar-footer text-caption"><Icon name="shield" size={14} />{' '}{t('Local & personal')}</div>
     </aside>
-    <main className="main-content">{import.meta.env.DEV && new URLSearchParams(location.search).has('preview') && <div className="demo-banner" role="status"><strong>{t('Demo preview')}</strong>{' '}{t('· Synthetic local data. Native floating windows, tray, system pauses, and file dialogs are available in the Windows app.')}</div>}<div className="topbar"><span className="text-caption">{new Date(`${today}T12:00:00Z`).toLocaleDateString(dateLocale(), { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' })}</span><div>
+    <main className="main-content">{import.meta.env.DEV && new URLSearchParams(location.search).has('preview') && <div className="demo-banner" role="status"><strong>{t('Demo preview')}</strong>{' '}{t('· Synthetic local data. Native floating windows, tray, system pauses, and file dialogs are available in the desktop app.')}</div>}<div className="topbar"><span className="text-caption">{new Date(`${today}T12:00:00Z`).toLocaleDateString(dateLocale(), { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' })}</span><div>
         {data.timer.mode !== 'idle' && <div className="flex items-center gap-1">
           <button className="timer-chip inline-flex items-center gap-2 rounded-pill border border-line bg-surface px-3 py-1.5 text-caption text-ink tabular-nums transition-colors duration-150 ease-standard hover:bg-accent-soft" onClick={() => setPage('Focus')} aria-label={t('Open Focus. {timerLabel}', { timerLabel: timerLabel(data.timer) })}><span className={`status-light m-0 ${data.timer.running ? 'running' : ''}`} />{data.timer.phase === 'overtime' ? '+' : ''}{time(displayedTime(data.timer))}<span className="text-ink-muted">{!data.timer.running ? t('paused') : data.timer.phase === 'overtime' ? t('overtime') : data.timer.phase === 'stopwatch' ? t('stopwatch') : data.timer.mode === 'break' ? t('break') : t('focusing')}</span></button>
           <IconButton icon={data.timer.running ? 'pause' : 'play'} label={data.timer.running ? t('Pause timer') : t('Resume timer')} onClick={() => void act(data.timer.running ? 'session.pause' : 'session.resume')} />
         </div>}
-        <Button variant="ghost" size="sm" icon="check" aria-haspopup="dialog" aria-expanded={tasksOpen} title={t('Tasks (Ctrl+Shift+T)')} onClick={() => setTasksOpen(true)}>{t('Tasks')}{dueTasks > 0 && <span className="task-due-count" aria-label={t('{length} due', { length: dueTasks })}>{dueTasks}</span>}</Button>
+        <Button variant="ghost" size="sm" icon="check" aria-haspopup="dialog" aria-expanded={tasksOpen} title={t('Tasks ({shortcut})', { shortcut: `${primaryModifier()}+Shift+T` })} onClick={() => setTasksOpen(true)}>{t('Tasks')}{dueTasks > 0 && <span className="task-due-count" aria-label={t('{length} due', { length: dueTasks })}>{dueTasks}</span>}</Button>
         <IconButton className="theme-toggle" icon={data.settings.theme === 'dark' ? 'sun' : 'moon'} label={data.settings.theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')} onClick={() => void act('settings.update', { ...data.settings, theme: data.settings.theme === 'dark' ? 'light' : 'dark' })} />
         <Button variant="ghost" size="sm" icon="float" onClick={() => void act('window.float')}>{t('Floating timer')}</Button>
       </div>{data.probe && <ProbePrompt key={data.probe.id} probe={data.probe} act={act} />}</div>

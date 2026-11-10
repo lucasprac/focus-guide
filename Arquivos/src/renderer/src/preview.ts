@@ -8,6 +8,7 @@ import { exampleDataset } from '../../shared/demo';
 import { settings } from '../../shared/validation';
 import { addDays, localDay } from '../../shared/analytics';
 import { t } from '../../shared/i18n';
+import type { Platform } from '../../shared/platform';
 
 const key = 'focus-guide-isolated-demo-v2';
 function seed(): Dataset {
@@ -222,13 +223,16 @@ export function installPreview(): void {
       store.save();
     })();
   };
-  const state = () => ({ graphicsMode: 'auto' as const, ...store.all(), timer: timer.snapshot(), probe: probes.pending, dataPath: t('Isolated browser demo — your Windows data is not connected'), collector: { state: store.getSettings().collectActivity && timer.snapshot().running ? 'recording' as const : 'disabled' as const, shortcut: 'unavailable' as const, message: t('Synthetic activity preview · global shortcuts and native collection require Windows.') }, backupStatus: t('Demo changes stay in this browser profile.') });
+  // ?platform=mac shows the macOS key names in any browser; without it the browser's own system decides.
+  const platformParameter = new URLSearchParams(location.search).get('platform');
+  const platform: Platform = platformParameter === 'mac' || (platformParameter !== 'windows' && /Mac/i.test(navigator.platform)) ? 'mac' : 'windows';
+  const state = () => ({ graphicsMode: 'auto' as const, platform, ...store.all(), timer: timer.snapshot(), probe: probes.pending, dataPath: t('Isolated browser demo — your personal data is not connected'), collector: { state: store.getSettings().collectActivity && timer.snapshot().running ? 'recording' as const : 'disabled' as const, shortcut: 'unavailable' as const, message: t('Synthetic activity preview · global shortcuts and native collection require the desktop app.') }, backupStatus: t('Demo changes stay in this browser profile.') });
   window.focusGuide = {
     getState: async () => state(),
     command: async (command, input = {}) => {
       try {
         if (command === 'shortcut.capture') return { ok: true };
-        if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.') || command === 'agent.plugin.write' || command.startsWith('jev.')) throw new Error(t('This native feature is available in the Windows app. The demo is isolated from your files.'));
+        if (command.startsWith('window.') || command.startsWith('export.') || command.startsWith('backup.') || command === 'agent.plugin.write' || command.startsWith('jev.')) throw new Error(t('This native feature is available in the desktop app. The demo is isolated from your files.'));
         if (command === 'session.pause' || command === 'session.finish' || command === 'settings.update' || command === 'field.delete' || command === 'goal.delete' || command === 'activity.delete') { timer.checkpoint(); simulate(); }
         const value = service.run(command, input);
         if (command === 'attention.return' && value) { const marker = value as SessionEvent; emit({ type: 'attention-return', sessionId: marker.sessionId, eventId: marker.id, savedAt: marker.startedAt }); }
